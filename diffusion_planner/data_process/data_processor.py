@@ -79,7 +79,7 @@ class DataProcessor(object):
     # Use for data preprocess
     def work(self, scenarios):
 
-        for scenario in tqdm(scenarios):
+        for scenario in scenarios:
             map_name = scenario._map_name
             token = scenario.token
             map_api = scenario.map_api        

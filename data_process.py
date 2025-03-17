@@ -9,6 +9,8 @@ from nuplan.planning.scenario_builder.scenario_filter import ScenarioFilter
 from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario_builder import NuPlanScenarioBuilder
 from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario_utils import ScenarioMapping
 
+from tqdm.contrib.concurrent import process_map
+
 def get_filter_parameters(num_scenarios_per_type=None, limit_total_scenarios=None, shuffle=True, scenario_tokens=None, log_names=None):
 
     scenario_types = None
@@ -64,17 +66,26 @@ if __name__ == "__main__":
         log_names = json.load(file)
 
     map_version = "nuplan-maps-v1.0"    
+    print("prepare builder")
     builder = NuPlanScenarioBuilder(args.data_path, args.map_path, sensor_root, db_files, map_version)
+    print("prepare scenario_filter")
     scenario_filter = ScenarioFilter(*get_filter_parameters(args.scenarios_per_type, args.total_scenarios, args.shuffle_scenarios, log_names=log_names))
 
+    print("prepare worker")
     worker = SingleMachineParallelExecutor(use_process_pool=True)
+    print("get scenarios")
     scenarios = builder.get_scenarios(scenario_filter, worker)
     print(f"Total number of scenarios: {len(scenarios)}")
 
     # process data
     del worker, builder, scenario_filter
-    processor = DataProcessor(args)
-    processor.work(scenarios)
+    def process_scenario(scenario):
+        processor = DataProcessor(args)
+        processor.work([scenario])
+
+    num_workers = os.cpu_count() // 2
+    chunksize = 10
+    process_map(process_scenario, scenarios, max_workers=num_workers, chunksize=chunksize)
 
     npz_files = [f for f in os.listdir(args.save_path) if f.endswith('.npz')]
 
