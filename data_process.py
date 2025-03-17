@@ -83,7 +83,7 @@ if __name__ == "__main__":
         processor = DataProcessor(args)
         processor.work([scenario])
 
-    num_workers = os.cpu_count() // 2
+    num_workers = os.cpu_count() // 4
     chunksize = 10
     process_map(process_scenario, scenarios, max_workers=num_workers, chunksize=chunksize)
 
