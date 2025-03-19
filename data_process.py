@@ -1,6 +1,7 @@
 import os
 import argparse
 import json
+import pickle
 
 from diffusion_planner.data_process.data_processor import DataProcessor
 
@@ -58,32 +59,44 @@ if __name__ == "__main__":
     # create save folder
     os.makedirs(args.save_path, exist_ok=True)
 
-    sensor_root = None
-    db_files = None
+    pickle_path = args.save_path + "/../scenarios.pkl"
+    if os.path.exists(pickle_path):
+        with open(pickle_path, 'rb') as f:
+            scenarios = pickle.load(f)
+        print(f"Loaded {len(scenarios)} scenarios from pickle file: {pickle_path}")
 
-    # Only preprocess the training data
-    with open('./nuplan_train.json', "r", encoding="utf-8") as file:
-        log_names = json.load(file)
+    else:
+        sensor_root = None
+        db_files = None
 
-    map_version = "nuplan-maps-v1.0"    
-    print("prepare builder")
-    builder = NuPlanScenarioBuilder(args.data_path, args.map_path, sensor_root, db_files, map_version)
-    print("prepare scenario_filter")
-    scenario_filter = ScenarioFilter(*get_filter_parameters(args.scenarios_per_type, args.total_scenarios, args.shuffle_scenarios, log_names=log_names))
+        # Only preprocess the training data
+        with open('./nuplan_train.json', "r", encoding="utf-8") as file:
+            log_names = json.load(file)
 
-    print("prepare worker")
-    worker = SingleMachineParallelExecutor(use_process_pool=True)
-    print("get scenarios")
-    scenarios = builder.get_scenarios(scenario_filter, worker)
-    print(f"Total number of scenarios: {len(scenarios)}")
+        map_version = "nuplan-maps-v1.0"    
+        print("prepare builder")
+        builder = NuPlanScenarioBuilder(args.data_path, args.map_path, sensor_root, db_files, map_version)
+        print("prepare scenario_filter")
+        scenario_filter = ScenarioFilter(*get_filter_parameters(args.scenarios_per_type, args.total_scenarios, args.shuffle_scenarios, log_names=log_names))
+
+        print("prepare worker")
+        worker = SingleMachineParallelExecutor(use_process_pool=True)
+        print("get scenarios")
+        scenarios = builder.get_scenarios(scenario_filter, worker)
+        print(f"Total number of scenarios: {len(scenarios)}")
+
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(scenarios, f)
+        print(f"Saved {len(scenarios)} scenarios to pickle file: {pickle_path}")
+
+        del worker, builder, scenario_filter
 
     # process data
-    del worker, builder, scenario_filter
     def process_scenario(scenario):
         processor = DataProcessor(args)
         processor.work([scenario])
 
-    num_workers = os.cpu_count() // 8
+    num_workers = os.cpu_count() // 4
     chunksize = 10
     process_map(process_scenario, scenarios, max_workers=num_workers, chunksize=chunksize)
 
