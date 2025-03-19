@@ -55,6 +55,10 @@ cd ~/work/Diffusion-Planner/
 pip install -e .
 pip install -r requirements_torch.txt
 
+# 修正
+pip uninstall torch torchvision -y
+pip install torch==2.0.0+cu118 torchvision==0.15.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+
 # torchの確認
 python3 -c "import torch"
 ```
