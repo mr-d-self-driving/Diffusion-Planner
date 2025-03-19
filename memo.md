@@ -53,10 +53,8 @@ pip install -r requirements.txt
 # Diffusion-Planner
 cd ~/work/Diffusion-Planner/
 pip install -e .
-pip install -r requirements_torch.txt
-
-# 修正
-pip uninstall torch torchvision -y
+# バージョンの兼ね合いにより分けて入れる必要がある
+pip install tensorboard==2.11.2 timm==1.0.10 mmengine wandb
 pip install torch==2.0.0+cu118 torchvision==0.15.1+cu118 --index-url https://download.pytorch.org/whl/cu118
 
 # torchの確認
