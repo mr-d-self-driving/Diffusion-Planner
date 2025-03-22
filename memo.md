@@ -60,3 +60,10 @@ pip install torch==2.0.0+cu118 torchvision==0.15.1+cu118 --index-url https://dow
 # torchの確認
 python3 -c "import torch"
 ```
+
+偶数行だけ残す
+
+```bash
+#!/bin/bash
+awk 'NR % 2 == 1' diffusion_planner_training.json > even_lines.json
+```
