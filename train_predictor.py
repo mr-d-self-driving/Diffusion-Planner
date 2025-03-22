@@ -122,7 +122,7 @@ def model_training(args):
         else:
             from datetime import datetime
             time = datetime.now()
-            time = time.strftime("%Y-%m-%d-%H:%M:%S")
+            time = time.strftime("%Y%m%d-%H%M%S")
 
             save_path = f"{args.save_dir}/training_log/{args.name}/{time}/"
             os.makedirs(save_path, exist_ok=True)
