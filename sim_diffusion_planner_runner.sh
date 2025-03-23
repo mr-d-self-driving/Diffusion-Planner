@@ -15,19 +15,20 @@ export NUPLAN_EXP_ROOT="REPLACE_WITH_EXP_DIR" # nuplan experiment absolute path 
 #   - "test14-random"
 #   - "test14-hard"
 #   - "val14"
-SPLIT="REPLACE_WITH_SPLIT"  # e.g., "val14"
+SPLIT="val14"  # e.g., "val14"
 
 # Challenge type
 # Options: 
 #   - "closed_loop_nonreactive_agents"
 #   - "closed_loop_reactive_agents"
-CHALLENGE="REPLACE_WITH_CHALLENGE"  # e.g., "closed_loop_nonreactive_agents"
+CHALLENGE="closed_loop_nonreactive_agents"  # e.g., "closed_loop_nonreactive_agents"
 ###################################
 
 
 BRANCH_NAME=diffusion_planner_release
-ARGS_FILE=./checkpoints/args.json
-CKPT_FILE=./checkpoints/model.pth
+BASE_DIR=/media/shintarosakoda/5EA85517A854EF51/diffusion_planner_training_result/2025-03-20-180651/
+ARGS_FILE=$BASE_DIR/args.json
+CKPT_FILE=$BASE_DIR/latest.pth
 
 if [ "$SPLIT" == "val14" ]; then
     SCENARIO_BUILDER="nuplan"
