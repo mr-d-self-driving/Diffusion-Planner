@@ -48,7 +48,7 @@ python $NUPLAN_DEVKIT_ROOT/nuplan/planning/script/run_simulation.py \
     planner.diffusion_planner.ckpt_path=$CKPT_FILE \
     scenario_builder=$SCENARIO_BUILDER \
     scenario_filter=$SPLIT \
-    experiment_uid=$PLANNER/$SPLIT/$BRANCH_NAME/${FILENAME_WITHOUT_EXTENSION}_$(date "+%Y-%m-%d-%H-%M-%S") \
+    experiment_uid=$PLANNER/$SPLIT/$BRANCH_NAME/${FILENAME_WITHOUT_EXTENSION}_$(date "+%Y%m%d-%H%M%S") \
     verbose=true \
     worker=ray_distributed \
     worker.threads_per_node=128 \
