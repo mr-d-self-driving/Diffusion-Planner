@@ -109,6 +109,7 @@ def model_training(args):
 
     # init ddp
     global_rank, rank, _ = ddp.ddp_setup_universal(True, args)
+    print(f"{global_rank=}, {rank=}")
 
     if global_rank == 0:
         # Logging
