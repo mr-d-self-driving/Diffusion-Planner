@@ -48,10 +48,12 @@ pip install --upgrade "pip<24.1"  # ダウングレードしないとomegaconf�
 # nuplan-devkit
 git clone https://github.com/motional/nuplan-devkit.git && cd nuplan-devkit
 pip install -e .
-pip install -r requirements.txt
+# pip install -r requirements.txt
 
 # Diffusion-Planner
 cd ~/work/Diffusion-Planner/
+pip install -r requirements_nuplan-devkit_fixed_opencv.txt
+pip install --upgrade setuptools
 pip install -e .
 # バージョンの兼ね合いにより分けて入れる必要がある
 pip install pytorch_lightning==2.0.1 tensorboard==2.11.2 timm==1.0.10 mmengine wandb
@@ -72,6 +74,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-a
 sudo apt update
 sudo apt upgrade -y
 sudo apt install -y ros-humble-ros-base
+sudo apt install -y python3-colcon-common-extensions
 ```
 
 ## Tip: 偶数行だけ残す
