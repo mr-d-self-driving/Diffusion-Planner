@@ -218,7 +218,6 @@ def get_args():
     parser.add_argument(
         "--train_epochs", type=int, help="epochs of training", default=500
     )
-    parser.add_argument("--save_utd", type=int, help="save frequency", default=20)
     parser.add_argument(
         "--batch_size", type=int, help="batch size (default: 2048)", default=2048
     )

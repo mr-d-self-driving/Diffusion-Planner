@@ -67,7 +67,6 @@ def get_args():
     # Training
     parser.add_argument('--seed', type=int, help='fix random seed', default=3407)
     parser.add_argument('--train_epochs', type=int, help='epochs of training', default=500)
-    parser.add_argument('--save_utd', type=int, help='save frequency', default=20)
     parser.add_argument('--batch_size', type=int, help='batch size (default: 2048)', default=2048)
     parser.add_argument('--learning_rate', type=float, help='learning rate (default: 5e-4)', default=5e-4)
     parser.add_argument('--warm_up_epoch', type=int, help='number of warm up', default=5)
@@ -143,6 +142,7 @@ def model_training(args):
     # training parameters
     train_epochs = args.train_epochs
     batch_size = args.batch_size
+    save_utd = max(train_epochs // 25, 1)
     
     # set up data loaders
     aug = StatePerturbation(augment_prob=args.augment_prob, device=args.device) if args.use_data_augment else None
@@ -205,7 +205,7 @@ def model_training(args):
             wandb_logger.log_metrics({f"train_loss/{k}": v for k, v in train_loss.items()}, step=epoch+1)
             wandb_logger.log_metrics({f"lr/{k}": v for k, v in lr_dict.items()}, step=epoch+1)
 
-            if (epoch+1) % args.save_utd == 0:
+            if (epoch + 1) % save_utd == 0:
                 # save model at the end of epoch
                 save_model(diffusion_planner, optimizer, scheduler, save_path, epoch, train_total_loss, wandb_logger.id, model_ema.ema)
                 print(f"Model saved in {save_path}\n")
