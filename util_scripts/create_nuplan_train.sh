@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eux
+set -eu
 
 # This script convert the dataset to a list.
 # 2021.06.07.11.59.52_veh-35_00008_00083.db

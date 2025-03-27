@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eux
+set -eu
 
 # This script convert the dataset to a list.
 # $ ls -1
