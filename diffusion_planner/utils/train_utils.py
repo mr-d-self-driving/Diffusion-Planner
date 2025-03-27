@@ -55,7 +55,7 @@ def save_model(model, optimizer, scheduler, save_path, epoch, train_loss, wandb_
 
     with io.BytesIO() as f:
         torch.save(save_model, f)
-        fileio.put(f.getvalue(), f'{save_path}/model_epoch_{epoch+1}_trainloss_{train_loss:.4f}.pth')
+        fileio.put(f.getvalue(), f'{save_path}/model_epoch_{epoch+1:06d}_trainloss_{train_loss:.4f}.pth')
         fileio.put(f.getvalue(), f"{save_path}/latest.pth")
 
 def resume_model(path: str, model, optimizer, scheduler, ema, device):
