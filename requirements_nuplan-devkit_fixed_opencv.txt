@@ -17,7 +17,7 @@ hypothesis
 joblib
 jupyter  # Used to show the notebook
 jupyterlab
-matplotlib  # Used for rendering
+matplotlib==3.10.1  # Used for rendering
 mock
 moto
 nest_asyncio  # Used to nest event loops when running nuBoard/jupyter
