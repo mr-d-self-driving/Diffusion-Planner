@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from nav_msgs.msg import Odometry
+from autoware_perception_msgs.msg import DetectedObjects
 
 
 class DiffusionPlannerNode(Node):
@@ -17,14 +18,24 @@ class DiffusionPlannerNode(Node):
             self.cb_kinematic_state,
             10,
         )
+        self.detected_objects_sub = self.create_subscription(
+            DetectedObjects,
+            "/perception/object_recognition/detection/objects",
+            self.cb_detected_objects,
+            10,
+        )
+
+        self.latest_kinematic_state = None
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
 
     def cb_kinematic_state(self, msg):
-        self.get_logger().info(
-            f"Received kinematic state. Position: [{msg.pose.pose.position.x}, {msg.pose.pose.position.y}, {msg.pose.pose.position.z}]"
-        )
+        self.latest_kinematic_state = msg
 
+    def cb_detected_objects(self, msg):
+        self.get_logger().info(
+            f"Received detected objects. Number of objects: {len(msg.objects)}"
+        )
 
 def main(args=None):
     rclpy.init(args=args)
