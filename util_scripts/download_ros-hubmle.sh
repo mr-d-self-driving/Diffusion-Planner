@@ -10,3 +10,4 @@ sudo apt update
 sudo apt upgrade -y
 sudo apt install -y ros-humble-ros-base
 sudo apt install -y python3-colcon-common-extensions
+sudo apt install -y python3-rosdep

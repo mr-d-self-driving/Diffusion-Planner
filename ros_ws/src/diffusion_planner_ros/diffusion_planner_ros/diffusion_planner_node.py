@@ -4,8 +4,15 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import (
+    QoSProfile,
+    QoSDurabilityPolicy,
+    QoSReliabilityPolicy,
+    QoSHistoryPolicy,
+)
 from nav_msgs.msg import Odometry
 from autoware_perception_msgs.msg import DetectedObjects
+from autoware_map_msgs.msg import LaneletMapBin
 
 
 class DiffusionPlannerNode(Node):
@@ -24,8 +31,21 @@ class DiffusionPlannerNode(Node):
             self.cb_detected_objects,
             10,
         )
+        map_qos = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.vector_map_sub = self.create_subscription(
+            LaneletMapBin,
+            "/map/vector_map",
+            self.cb_vector_map,
+            map_qos,
+        )
 
         self.latest_kinematic_state = None
+        self.vector_map = None
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
 
@@ -36,6 +56,11 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info(
             f"Received detected objects. Number of objects: {len(msg.objects)}"
         )
+
+    def cb_vector_map(self, msg):
+        self.vector_map = msg
+        self.get_logger().info("Received vector map")
+
 
 def main(args=None):
     rclpy.init(args=args)
