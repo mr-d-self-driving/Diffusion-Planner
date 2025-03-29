@@ -14,6 +14,8 @@ from nav_msgs.msg import Odometry
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_map_msgs.msg import LaneletMapBin
 from autoware_planning_msgs.msg import LaneletRoute
+import tf2_ros
+from geometry_msgs.msg import TransformStamped
 
 
 class DiffusionPlannerNode(Node):
@@ -50,6 +52,9 @@ class DiffusionPlannerNode(Node):
             self.cb_route,
             transient_qos,
         )
+
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.latest_kinematic_state = None
         self.vector_map = None
