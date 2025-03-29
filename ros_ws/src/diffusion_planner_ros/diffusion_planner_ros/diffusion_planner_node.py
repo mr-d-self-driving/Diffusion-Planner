@@ -13,6 +13,7 @@ from rclpy.qos import (
 from nav_msgs.msg import Odometry
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_map_msgs.msg import LaneletMapBin
+from autoware_planning_msgs.msg import LaneletRoute
 
 
 class DiffusionPlannerNode(Node):
@@ -31,7 +32,7 @@ class DiffusionPlannerNode(Node):
             self.cb_detected_objects,
             10,
         )
-        map_qos = QoSProfile(
+        transient_qos = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1,
             reliability=QoSReliabilityPolicy.RELIABLE,
@@ -41,11 +42,18 @@ class DiffusionPlannerNode(Node):
             LaneletMapBin,
             "/map/vector_map",
             self.cb_vector_map,
-            map_qos,
+            transient_qos,
+        )
+        self.route_sub = self.create_subscription(
+            LaneletRoute,
+            "/planning/mission_planning/route",
+            self.cb_route,
+            transient_qos,
         )
 
         self.latest_kinematic_state = None
         self.vector_map = None
+        self.route = None
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
 
@@ -53,6 +61,7 @@ class DiffusionPlannerNode(Node):
         self.latest_kinematic_state = msg
 
     def cb_detected_objects(self, msg):
+        return
         self.get_logger().info(
             f"Received detected objects. Number of objects: {len(msg.objects)}"
         )
@@ -61,6 +70,11 @@ class DiffusionPlannerNode(Node):
         self.vector_map = msg
         self.get_logger().info("Received vector map")
 
+    def cb_route(self, msg):
+        self.route = msg
+        self.get_logger().info(
+            f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
+        )
 
 def main(args=None):
     rclpy.init(args=args)
