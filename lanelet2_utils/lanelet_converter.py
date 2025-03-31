@@ -179,9 +179,9 @@ def _get_boundary_type(linestring: lanelet2.core.LineString3d) -> BoundaryType:
     elif _is_roadline_linestring(line_type, line_subtype):
         return MAP_TYPE_MAPPING[line_subtype]
     else:
-        logging.warning(
-            f"[Boundary]: id={linestring.id}, type={line_type}, subtype={line_subtype}, MapType.UNKNOWN is used.",
-        )
+        # logging.warning(
+        #     f"[Boundary]: id={linestring.id}, type={line_type}, subtype={line_subtype}, MapType.UNKNOWN is used.",
+        # )
         return MapType.UNKNOWN
 
 
@@ -382,7 +382,7 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
             )
             crosswalk_segments[lanelet.id] = CrosswalkSegment(lanelet.id, polygon)
         else:
-            logging.warning(f"[Lanelet]: {lanelet_subtype} is unsupported and skipped.")
+            # logging.warning(f"[Lanelet]: {lanelet_subtype} is unsupported and skipped.")
             continue
 
     boundary_segments: dict[int, BoundarySegment] = {}
