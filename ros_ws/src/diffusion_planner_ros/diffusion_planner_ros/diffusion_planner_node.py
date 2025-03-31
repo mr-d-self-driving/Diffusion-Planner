@@ -21,6 +21,7 @@ from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 import json
 import torch
 from diffusion_planner.utils.config import Config
+import time
 
 
 class DiffusionPlannerNode(Node):
@@ -41,6 +42,7 @@ class DiffusionPlannerNode(Node):
         config_obj = Config(config_json_path)
         self.diffusion_planner = Diffusion_Planner(config_obj)
         self.diffusion_planner.eval()
+        self.diffusion_planner.cuda()
         self.diffusion_planner.decoder.decoder.training = False
         print(f"{config_obj.state_normalizer=}")
 
@@ -161,20 +163,31 @@ class DiffusionPlannerNode(Node):
         self.latest_kinematic_state = msg
 
     def cb_detected_objects(self, msg):
+        dev = self.diffusion_planner.parameters().__next__().device
         input_dict = {
-            "ego_current_state": torch.zeros((1, 10)),
-            "neighbor_agents_past": torch.zeros((1, 32, 21, 11)),
-            "lanes": torch.zeros((1, 70, 20, 12)),
-            "lanes_speed_limit": torch.zeros((1, 70, 1)),
-            "lanes_has_speed_limit": torch.zeros((1, 70, 1), dtype=torch.bool),
-            "route_lanes": torch.zeros((1, 25, 20, 12)),
-            "route_lanes_speed_limit": torch.zeros((1, 25, 1)),
-            "route_lanes_has_speed_limit": torch.zeros((1, 25, 1), dtype=torch.bool),
-            "static_objects": torch.zeros((1, 5, 10)),
-            "sampled_trajectories": torch.zeros((1, 11, 81, 4)),
-            "diffusion_time": torch.zeros((1, 11, 81, 4)),
+            "ego_current_state": torch.zeros((1, 10), device=dev),
+            "neighbor_agents_past": torch.zeros((1, 32, 21, 11), device=dev),
+            "lanes": torch.zeros((1, 70, 20, 12), device=dev),
+            "lanes_speed_limit": torch.zeros((1, 70, 1), device=dev),
+            "lanes_has_speed_limit": torch.zeros(
+                (1, 70, 1), dtype=torch.bool, device=dev
+            ),
+            "route_lanes": torch.zeros((1, 25, 20, 12), device=dev),
+            "route_lanes_speed_limit": torch.zeros((1, 25, 1), device=dev),
+            "route_lanes_has_speed_limit": torch.zeros(
+                (1, 25, 1), dtype=torch.bool, device=dev
+            ),
+            "static_objects": torch.zeros((1, 5, 10), device=dev),
+            "sampled_trajectories": torch.zeros((1, 11, 81, 4), device=dev),
+            "diffusion_time": torch.zeros((1, 11, 81, 4), device=dev),
         }
+        start = time.time()
         out = self.diffusion_planner(input_dict)[1]
+        end = time.time()
+        elapsed_msec = (end - start) * 1000
+        self.get_logger().info(
+            f"Diffusion planner inference time: {elapsed_msec:.4f} msec"
+        )
         pred = out["prediction"]
         print(f"{pred.shape=}")
 
