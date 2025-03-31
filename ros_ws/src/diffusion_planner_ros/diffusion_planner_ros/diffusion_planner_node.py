@@ -13,7 +13,7 @@ from rclpy.qos import (
 from nav_msgs.msg import Odometry
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_map_msgs.msg import LaneletMapBin
-from autoware_planning_msgs.msg import LaneletRoute
+from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
 from .lanelet2_utils.lanelet_converter import convert_lanelet
@@ -22,6 +22,8 @@ import json
 import torch
 from diffusion_planner.utils.config import Config
 import time
+import numpy as np
+from builtin_interfaces.msg import Duration
 
 
 class DiffusionPlannerNode(Node):
@@ -150,6 +152,34 @@ class DiffusionPlannerNode(Node):
             transient_qos,
         )
 
+        """
+        Trajectory.msg
+            std_msgs/Header header
+            autoware_planning_msgs/TrajectoryPoint[] points
+        TrajectoryPoint.msg
+            builtin_interfaces/Duration time_from_start
+            geometry_msgs/Pose pose
+            float32 longitudinal_velocity_mps
+            float32 lateral_velocity_mps
+            # acceleration_mps2 increases/decreases based on absolute vehicle motion and does not consider vehicle direction (forward/backward)
+            float32 acceleration_mps2
+            float32 heading_rate_rps
+            float32 front_wheel_angle_rad
+            float32 rear_wheel_angle_rad
+        ```
+        """
+        self.pub_trajectory = self.create_publisher(
+            Trajectory,
+            # "/planning/scenario_planning/lane_driving/trajectory",
+            "/diffusion_planner/trajectory",
+            QoSProfile(
+                history=QoSHistoryPolicy.KEEP_LAST,
+                depth=1,
+                reliability=QoSReliabilityPolicy.RELIABLE,
+                durability=QoSDurabilityPolicy.VOLATILE,
+            ),
+        )
+
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
@@ -189,7 +219,34 @@ class DiffusionPlannerNode(Node):
             f"Diffusion planner inference time: {elapsed_msec:.4f} msec"
         )
         pred = out["prediction"]
-        print(f"{pred.shape=}")
+        print(f"{pred.shape=}")  # ([1, 11, 80, 4])
+        pred = pred[0, 0].detach().cpu().numpy().astype(np.float64)  # T, 4
+        heading = np.arctan2(pred[:, 3], pred[:, 2])[..., None]
+        pred = np.concatenate([pred[..., :2], heading], axis=-1)  # T, 3(x, y, heading)
+        # Convert to Trajectory message
+        trajectory_msg = Trajectory()
+        trajectory_msg.header.stamp = self.get_clock().now().to_msg()
+        trajectory_msg.header.frame_id = "map"
+        trajectory_msg.points = []
+        dt = 0.1
+        for i in range(pred.shape[0]):
+            point = TrajectoryPoint()
+            total_seconds = float(i * dt)
+            secs = int(total_seconds)
+            nanosec = int((total_seconds - secs) * 1e9)
+            point.time_from_start = Duration()
+            point.time_from_start.sec = secs
+            point.time_from_start.nanosec = nanosec
+            point.pose.position.x = pred[i, 0]
+            point.pose.position.y = pred[i, 1]
+            point.pose.position.z = 0.0
+            point.pose.orientation.w = np.cos(pred[i, 2] / 2)
+            point.pose.orientation.x = 0.0
+            point.pose.orientation.y = 0.0
+            point.pose.orientation.z = np.sin(pred[i, 2] / 2)
+            trajectory_msg.points.append(point)
+        # Publish the trajectory
+        self.pub_trajectory.publish(trajectory_msg)
 
     def cb_vector_map(self, msg):
         self.vector_map = msg
