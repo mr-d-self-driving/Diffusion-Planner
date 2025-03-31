@@ -17,15 +17,32 @@ from autoware_planning_msgs.msg import LaneletRoute
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
 from .lanelet2_utils.lanelet_converter import convert_lanelet
+from diffusion_planner.model.diffusion_planner import Diffusion_Planner
+import json
+import torch
+from diffusion_planner.utils.config import Config
 
 
 class DiffusionPlannerNode(Node):
     def __init__(self):
         super().__init__("diffusion_planner_node")
 
-        vector_map_path = self.declare_parameter("vector_map_path").value
+        vector_map_path = self.declare_parameter("vector_map_path", value="None").value
         self.get_logger().info(f"Vector map path: {vector_map_path}")
         self.static_map = convert_lanelet(vector_map_path)
+
+        config_json_path = self.declare_parameter(
+            "config_json_path", value="None"
+        ).value
+        self.get_logger().info(f"Config JSON: {config_json_path}")
+        with open(config_json_path, "r") as f:
+            config_json = json.load(f)
+        self.get_logger().info(f"Config JSON: {config_json}")
+        config_obj = Config(config_json_path)
+        self.diffusion_planner = Diffusion_Planner(config_obj)
+        self.diffusion_planner.eval()
+        self.diffusion_planner.decoder.decoder.training = False
+        print(f"{config_obj.state_normalizer=}")
 
         self.kinematic_state_sub = self.create_subscription(
             Odometry,
@@ -144,10 +161,22 @@ class DiffusionPlannerNode(Node):
         self.latest_kinematic_state = msg
 
     def cb_detected_objects(self, msg):
-        return
-        self.get_logger().info(
-            f"Received detected objects. Number of objects: {len(msg.objects)}"
-        )
+        input_dict = {
+            "ego_current_state": torch.zeros((1, 10)),
+            "neighbor_agents_past": torch.zeros((1, 32, 21, 11)),
+            "lanes": torch.zeros((1, 70, 20, 12)),
+            "lanes_speed_limit": torch.zeros((1, 70, 1)),
+            "lanes_has_speed_limit": torch.zeros((1, 70, 1), dtype=torch.bool),
+            "route_lanes": torch.zeros((1, 25, 20, 12)),
+            "route_lanes_speed_limit": torch.zeros((1, 25, 1)),
+            "route_lanes_has_speed_limit": torch.zeros((1, 25, 1), dtype=torch.bool),
+            "static_objects": torch.zeros((1, 5, 10)),
+            "sampled_trajectories": torch.zeros((1, 11, 81, 4)),
+            "diffusion_time": torch.zeros((1, 11, 81, 4)),
+        }
+        out = self.diffusion_planner(input_dict)[1]
+        pred = out["prediction"]
+        print(f"{pred.shape=}")
 
     def cb_vector_map(self, msg):
         self.vector_map = msg
