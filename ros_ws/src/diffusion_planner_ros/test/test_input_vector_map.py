@@ -3,7 +3,7 @@ from __future__ import annotations
 from autoware_lanelet2_extension_python.projection import MGRSProjector
 import lanelet2
 import argparse
-from lanelet_converter import convert_lanelet
+from diffusion_planner_ros.lanelet2_utils.lanelet_converter import convert_lanelet
 import matplotlib.pyplot as plt
 
 

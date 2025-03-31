@@ -1,5 +1,5 @@
-from base import LabelBaseType
-from context import ContextType
+from .base import LabelBaseType
+from .context import ContextType
 
 
 class AgentType(LabelBaseType):

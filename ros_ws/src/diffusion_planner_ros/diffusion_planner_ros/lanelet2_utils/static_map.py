@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from typing_extensions import Self
 
-from polyline import Polyline
+from .polyline import Polyline
 
-from map import MapType
+from .map import MapType
 
 if TYPE_CHECKING:
-    from typing import NDArrayF32
+    from .typing import NDArrayF32
 
 __all__ = ("AWMLStaticMap", "LaneSegment", "BoundarySegment", "CrosswalkSegment")
 

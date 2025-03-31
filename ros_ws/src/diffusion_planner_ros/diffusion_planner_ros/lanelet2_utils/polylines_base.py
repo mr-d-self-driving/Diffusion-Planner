@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
-from base import LabelBaseType
-from context import ContextType
+from .base import LabelBaseType
+from .context import ContextType
 
 __all__ = ("PolylineType", "LaneType", "BoundaryType", "SignalType")
 

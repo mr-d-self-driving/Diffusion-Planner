@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import sys
 
 import numpy as np
@@ -16,18 +15,18 @@ except ImportError as e:
     print(e)  # noqa: T201
     sys.exit(1)
 
-from polylines_base import BoundaryType
+from .polylines_base import BoundaryType
 from numpy.typing import NDArray
-from uuid import uuid
-from static_map import (
+from .uuid import uuid
+from .static_map import (
     AWMLStaticMap,
     BoundarySegment,
     CrosswalkSegment,
     LaneSegment,
     Polyline,
 )
-from map import MapType
-from constant import MAP_TYPE_MAPPING, T4_LANE, T4_ROADEDGE, T4_ROADLINE
+from .map import MapType
+from .constant import MAP_TYPE_MAPPING, T4_LANE, T4_ROADEDGE, T4_ROADLINE
 
 # cspell: ignore MGRS
 

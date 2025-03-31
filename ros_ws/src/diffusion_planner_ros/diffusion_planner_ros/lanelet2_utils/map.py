@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from enum import unique
 
-from base import LabelBaseType
-from context import ContextType
+from .base import LabelBaseType
+from .context import ContextType
 
 __all__ = ["MapType"]
 

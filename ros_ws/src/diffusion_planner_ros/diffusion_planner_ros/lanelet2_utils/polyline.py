@@ -8,9 +8,9 @@ import numpy as np
 from attr import define, field
 from typing_extensions import Self
 
-from map import MapType
+from .map import MapType
 
-from utils import to_np_f32
+from .utils import to_np_f32
 
 if TYPE_CHECKING:
     from typing import NDArray, NDArrayF32
