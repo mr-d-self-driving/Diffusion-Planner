@@ -11,3 +11,4 @@ exp/
 cache/
 checkpoints/
 training_log/
+*.png
