@@ -38,6 +38,10 @@ if __name__ == "__main__":
         print(elements, mean)
         epoch_list.append(epoch)
         score_list.append(mean)
+    
+    df = pd.DataFrame({"epoch": epoch_list, "mean_score": score_list})
+    df = df.sort_values(by="epoch")
+    df.to_csv(root_dir / "mean_score.csv", index=False)
 
     save_dir = root_dir / "aggregated_score_graphs_dir"
     save_dir.mkdir(exist_ok=True)
