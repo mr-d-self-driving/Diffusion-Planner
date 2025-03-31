@@ -9,7 +9,11 @@ import matplotlib.pyplot as plt
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("map_path", type=str)
+    parser.add_argument(
+        "--map_path",
+        type=str,
+        default="/home/shintarosakoda/data/misc/20250329_psim_rosbag/map/lanelet2_map.osm",
+    )
     return parser.parse_args()
 
 

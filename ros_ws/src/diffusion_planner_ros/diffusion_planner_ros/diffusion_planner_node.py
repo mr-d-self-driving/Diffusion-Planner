@@ -16,11 +16,16 @@ from autoware_map_msgs.msg import LaneletMapBin
 from autoware_planning_msgs.msg import LaneletRoute
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
+from .lanelet2_utils.lanelet_converter import convert_lanelet
 
 
 class DiffusionPlannerNode(Node):
     def __init__(self):
         super().__init__("diffusion_planner_node")
+
+        vector_map_path = self.declare_parameter("vector_map_path").value
+        self.get_logger().info(f"Vector map path: {vector_map_path}")
+        self.static_map = convert_lanelet(vector_map_path)
 
         self.kinematic_state_sub = self.create_subscription(
             Odometry,
@@ -153,6 +158,7 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info(
             f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
         )
+
 
 def main(args=None):
     rclpy.init(args=args)
