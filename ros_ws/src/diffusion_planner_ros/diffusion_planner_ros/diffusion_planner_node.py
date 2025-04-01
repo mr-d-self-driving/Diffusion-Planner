@@ -16,7 +16,7 @@ from autoware_map_msgs.msg import LaneletMapBin
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
-from .lanelet2_utils.lanelet_converter import convert_lanelet
+from .lanelet2_utils.lanelet_converter import convert_lanelet, process_segment
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 import json
 import torch
@@ -24,6 +24,7 @@ from diffusion_planner.utils.config import Config
 import time
 import numpy as np
 from builtin_interfaces.msg import Duration
+from scipy.spatial.transform import Rotation
 
 
 class DiffusionPlannerNode(Node):
@@ -184,6 +185,7 @@ class DiffusionPlannerNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.latest_kinematic_state = None
+        self.inv_transform_matrix_4x4 = None
         self.vector_map = None
         self.route = None
 
@@ -191,6 +193,23 @@ class DiffusionPlannerNode(Node):
 
     def cb_kinematic_state(self, msg):
         self.latest_kinematic_state = msg
+        ego_x = msg.pose.pose.position.x
+        ego_y = msg.pose.pose.position.y
+        ego_z = msg.pose.pose.position.z
+        ego_qx = msg.pose.pose.orientation.x
+        ego_qy = msg.pose.pose.orientation.y
+        ego_qz = msg.pose.pose.orientation.z
+        ego_qw = msg.pose.pose.orientation.w
+        rot = Rotation.from_quat([ego_qx, ego_qy, ego_qz, ego_qw])
+        translation = np.array([ego_x, ego_y, ego_z])
+        transform_matrix = rot.as_matrix()
+        transform_matrix_4x4 = np.eye(4)
+        transform_matrix_4x4[:3, :3] = transform_matrix
+        transform_matrix_4x4[:3, 3] = translation
+        inv_transform_matrix_4x4 = np.eye(4)
+        inv_transform_matrix_4x4[:3, :3] = transform_matrix.T
+        inv_transform_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
+        self.inv_transform_matrix_4x4 = inv_transform_matrix_4x4
 
     def cb_detected_objects(self, msg):
         dev = self.diffusion_planner.parameters().__next__().device
@@ -215,11 +234,9 @@ class DiffusionPlannerNode(Node):
         out = self.diffusion_planner(input_dict)[1]
         end = time.time()
         elapsed_msec = (end - start) * 1000
-        self.get_logger().info(
-            f"Diffusion planner inference time: {elapsed_msec:.4f} msec"
-        )
+        # self.get_logger().info(f"inference time: {elapsed_msec:.4f} msec")
         pred = out["prediction"]
-        print(f"{pred.shape=}")  # ([1, 11, 80, 4])
+        # print(f"{pred.shape=}")  # ([1, 11, 80, 4])
         pred = pred[0, 0].detach().cpu().numpy().astype(np.float64)  # T, 4
         heading = np.arctan2(pred[:, 3], pred[:, 2])[..., None]
         pred = np.concatenate([pred[..., :2], heading], axis=-1)  # T, 3(x, y, heading)
@@ -257,6 +274,23 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info(
             f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
         )
+
+        for i in range(len(msg.segments)):
+            self.get_logger().info(f"{msg.segments[i]=}")
+            ll2_id = msg.segments[i].preferred_primitive.id
+            print(f"{ll2_id=}")
+            if ll2_id in self.static_map.lane_segments:
+                self.get_logger().info(
+                    f"Lanelet ID {ll2_id} is in the static map"
+                )
+                curr_result = process_segment(
+                    self.static_map.lane_segments[ll2_id],
+                    self.inv_transform_matrix_4x4,
+                    mask_range=100
+                )
+                print(f"{curr_result.shape=}")
+            assert ll2_id not in self.static_map.crosswalk_segments
+            assert ll2_id not in self.static_map.boundary_segments
 
 
 def main(args=None):
