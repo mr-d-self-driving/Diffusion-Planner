@@ -11,3 +11,5 @@ sudo apt upgrade -y
 sudo apt install -y ros-humble-desktop ros-humble-ros-base
 sudo apt install -y python3-colcon-common-extensions
 sudo apt install -y python3-rosdep
+pip install lanelet2
+sudo rosdep init
