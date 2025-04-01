@@ -41,8 +41,8 @@ if __name__ == "__main__":
     for i in range(len(result_list)):
         result = result_list[i]
         plt.plot(result[:, 0], result[:, 1], "r-")
-        plt.plot(result[:, 4], result[:, 5], "g-")
-        plt.plot(result[:, 6], result[:, 7], "b-")
+        plt.plot(result[:, 4] + result[:, 0], result[:, 5] + result[:, 1], "g-")
+        plt.plot(result[:, 6] + result[:, 0], result[:, 7] + result[:, 1], "b-")
 
     plt.xlabel("x[m]")
     plt.ylabel("y[m]")

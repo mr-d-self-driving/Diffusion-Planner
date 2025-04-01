@@ -504,6 +504,9 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
     left_boundaries = resample_waypoints(left_boundaries, 20)
     right_boundaries = resample_waypoints(right_boundaries, 20)
 
+    left_boundaries -= filtered_centerlines
+    right_boundaries -= filtered_centerlines
+
     diff_centerlines = filtered_centerlines[1:] - filtered_centerlines[:-1]
     diff_centerlines = np.insert(diff_centerlines, diff_centerlines.shape[0], 0, axis=0)
 
