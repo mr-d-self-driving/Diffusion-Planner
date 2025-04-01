@@ -16,7 +16,11 @@ from autoware_map_msgs.msg import LaneletMapBin
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
-from .lanelet2_utils.lanelet_converter import convert_lanelet, process_segment
+from .lanelet2_utils.lanelet_converter import (
+    convert_lanelet,
+    get_input_feature,
+    process_segment,
+)
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 import json
 import torch
@@ -216,15 +220,31 @@ class DiffusionPlannerNode(Node):
 
     def cb_detected_objects(self, msg):
         dev = self.diffusion_planner.parameters().__next__().device
+
+        result_list = get_input_feature(
+            self.static_map,
+            ego_x=self.latest_kinematic_state.pose.pose.position.x,
+            ego_y=self.latest_kinematic_state.pose.pose.position.y,
+            ego_z=self.latest_kinematic_state.pose.pose.position.z,
+            ego_qx=self.latest_kinematic_state.pose.pose.orientation.x,
+            ego_qy=self.latest_kinematic_state.pose.pose.orientation.y,
+            ego_qz=self.latest_kinematic_state.pose.pose.orientation.z,
+            ego_qw=self.latest_kinematic_state.pose.pose.orientation.w,
+            mask_range=100,
+        )
+        lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
+        for i, result in enumerate(result_list):
+            lanes_tensor[0, i] = torch.from_numpy(result).cuda()
+
         input_dict = {
             "ego_current_state": torch.zeros((1, 10), device=dev),
             "neighbor_agents_past": torch.zeros((1, 32, 21, 11), device=dev),
-            "lanes": torch.zeros((1, 70, 20, 12), device=dev),
+            "lanes": lanes_tensor,
             "lanes_speed_limit": torch.zeros((1, 70, 1), device=dev),
             "lanes_has_speed_limit": torch.zeros(
                 (1, 70, 1), dtype=torch.bool, device=dev
             ),
-            "route_lanes": torch.zeros((1, 25, 20, 12), device=dev),
+            "route_lanes": self.route_tensor,
             "route_lanes_speed_limit": torch.zeros((1, 25, 1), device=dev),
             "route_lanes_has_speed_limit": torch.zeros(
                 (1, 25, 1), dtype=torch.bool, device=dev
