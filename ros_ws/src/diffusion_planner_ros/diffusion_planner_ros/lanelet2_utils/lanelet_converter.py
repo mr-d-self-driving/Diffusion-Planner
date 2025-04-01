@@ -540,4 +540,8 @@ def get_input_feature(
 
         result.append(curr_data)
 
+    # 先頭の距離でソート
+    result = sorted(result, key=lambda x: np.linalg.norm(x[0, :2]))
+    result = result[0:70]
+
     return result
