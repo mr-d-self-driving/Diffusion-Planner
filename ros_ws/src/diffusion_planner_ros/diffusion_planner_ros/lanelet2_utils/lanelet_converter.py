@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 from scipy.interpolate import interp1d
+from scipy.spatial.transform import Rotation
 
 try:
     import lanelet2
@@ -400,3 +401,47 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
         crosswalk_segments=crosswalk_segments,
         boundary_segments=boundary_segments,
     )
+
+
+def get_input_feature(
+    map: AWMLStaticMap,
+    ego_x: float,
+    ego_y: float,
+    ego_z: float,
+    ego_qx: float,
+    ego_qy: float,
+    ego_qz: float,
+    ego_qw: float,
+    mask_range: float,
+) -> list[np.ndarray]:
+    # 自車中心に座標変換するための行列を作成
+    rot = Rotation.from_quat([ego_qx, ego_qy, ego_qz, ego_qw])
+    translation = np.array([ego_x, ego_y, ego_z])
+    transform_matrix = rot.as_matrix()
+    transform_matrix_4x4 = np.eye(4)
+    transform_matrix_4x4[:3, :3] = transform_matrix
+    transform_matrix_4x4[:3, 3] = translation
+    inv_transform_matrix_4x4 = np.eye(4)
+    inv_transform_matrix_4x4[:3, :3] = transform_matrix.T
+    inv_transform_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
+
+    # Plot the map
+    waypoints_list = []
+    for segment_id, segment in map.lane_segments.items():
+        waypoints = segment.polyline.waypoints
+        # 自車座標系に変換
+        waypoints_4xN = np.vstack((waypoints.T, np.ones(waypoints.shape[0])))
+        waypoints_ego = inv_transform_matrix_4x4 @ waypoints_4xN
+        waypoints = waypoints_ego[:3, :].T
+
+        # x, yがegoからmask_range内のものだけを抽出
+        mask = (
+            (waypoints[:, 0] > -mask_range)
+            & (waypoints[:, 0] < mask_range)
+            & (waypoints[:, 1] > -mask_range)
+            & (waypoints[:, 1] < mask_range)
+        )
+        filtered_waypoints = waypoints[mask]
+        waypoints_list.append(filtered_waypoints)
+
+    return waypoints_list
