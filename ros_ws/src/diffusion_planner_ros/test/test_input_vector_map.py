@@ -36,7 +36,6 @@ if __name__ == "__main__":
 
     result_list = get_input_feature(result, ego_x, ego_y, ego_z, ego_qx, ego_qy, ego_qz, ego_qw, RANGE)
     print(f"{len(result_list)=}")
-    result_list = [w for w in result_list if w.shape[0] > 0]
 
     plt.figure(figsize=(10, 8))
     for i in range(len(result_list)):
