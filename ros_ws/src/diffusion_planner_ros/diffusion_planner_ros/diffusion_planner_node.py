@@ -187,8 +187,8 @@ class DiffusionPlannerNode(Node):
         """
         self.pub_trajectory = self.create_publisher(
             Trajectory,
-            # "/planning/scenario_planning/lane_driving/trajectory",
-            "/diffusion_planner/trajectory",
+            "/planning/scenario_planning/lane_driving/trajectory",
+            # "/diffusion_planner/trajectory",
             QoSProfile(
                 history=QoSHistoryPolicy.KEEP_LAST,
                 depth=1,
@@ -235,6 +235,7 @@ class DiffusionPlannerNode(Node):
     def cb_detected_objects(self, msg):
         dev = self.diffusion_planner.parameters().__next__().device
 
+        start = time.time()
         result_list = get_input_feature(
             self.static_map,
             ego_x=self.latest_kinematic_state.pose.pose.position.x,
@@ -249,6 +250,9 @@ class DiffusionPlannerNode(Node):
         lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
         for i, result in enumerate(result_list):
             lanes_tensor[0, i] = torch.from_numpy(result).cuda()
+        end = time.time()
+        elapsed = end - start
+        self.get_logger().info(f"get_input_feature time: {elapsed:.4f} sec")
 
         input_dict = {
             "ego_current_state": torch.zeros((1, 10), device=dev),
@@ -269,14 +273,15 @@ class DiffusionPlannerNode(Node):
         }
         print(f"{self.config_obj.observation_normalizer=}")
         input_dict = self.config_obj.observation_normalizer(input_dict)
-        visualize_inputs(
-            input_dict, self.config_obj.observation_normalizer, "./input.png"
-        )
+        # visualize_inputs(
+        #     input_dict, self.config_obj.observation_normalizer, "./input.png"
+        # )
         start = time.time()
-        out = self.diffusion_planner(input_dict)[1]
+        with torch.no_grad():
+            out = self.diffusion_planner(input_dict)[1]
         end = time.time()
         elapsed_msec = (end - start) * 1000
-        # self.get_logger().info(f"inference time: {elapsed_msec:.4f} msec")
+        self.get_logger().info(f"inference time: {elapsed_msec:.4f} msec")
         pred = out["prediction"]
         # print(f"{pred.shape=}")  # ([1, 11, 80, 4])
         pred = pred[0, 0].detach().cpu().numpy().astype(np.float64)  # T, 4
@@ -292,7 +297,7 @@ class DiffusionPlannerNode(Node):
             curr_x = pred[i, 0]
             curr_y = pred[i, 1]
             curr_heading = pred[i, 2]
-            self.get_logger().info(f"Predicted position: {curr_x}, {curr_y}, {curr_heading}")
+            # self.get_logger().info(f"Predicted position: {curr_x}, {curr_y}, {curr_heading}")
             # transform to map frame
             vec3d = [curr_x, curr_y, 0.0]
             vec3d = self.transform_mmatrix_4x4 @ np.array([*vec3d, 1.0])
