@@ -507,12 +507,16 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
     diff_centerlines = filtered_centerlines[1:] - filtered_centerlines[:-1]
     diff_centerlines = np.insert(diff_centerlines, diff_centerlines.shape[0], 0, axis=0)
 
+    traffic_light = [0, 0, 0, 1]  # (green, yellow, red, unknown)
+    traffic_light = np.tile(traffic_light, (filtered_centerlines.shape[0], 1))
+
     curr_data = np.concatenate(
         (
             filtered_centerlines[:, 0:2],  # xyのみ
             diff_centerlines[:, 0:2],  # xyのみ
             left_boundaries[:, 0:2],  # xyのみ
             right_boundaries[:, 0:2],  # xyのみ
+            traffic_light,
         ),
         axis=1,
     )
