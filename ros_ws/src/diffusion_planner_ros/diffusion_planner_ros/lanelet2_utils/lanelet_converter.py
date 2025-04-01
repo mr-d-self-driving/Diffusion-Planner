@@ -403,6 +403,63 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
     )
 
 
+def resample_waypoints(waypoints: NDArray, num_points: int) -> NDArray:
+    """
+    n点のウェイポイントを指定したm点に均等に変換する関数
+
+    Parameters:
+    -----------
+    waypoints : NDArray
+        n点の元のウェイポイント。形状は (n, dim) で、dimは座標の次元数（通常は2または3）
+    num_points : int
+        出力するウェイポイントの数 m
+
+    Returns:
+    --------
+    NDArray
+        m点の新しいウェイポイント。形状は (m, dim)
+    """
+    # 入力チェック
+    if num_points < 2:
+        raise ValueError("出力ポイント数は2以上である必要があります")
+
+    n_points = len(waypoints)
+    if n_points < 2:
+        raise ValueError("入力ウェイポイントは少なくとも2点必要です")
+
+    # 既に希望の点数である場合はそのまま返す
+    if n_points == num_points:
+        return waypoints
+
+    # 累積距離（弧長）の計算
+    distances = np.zeros(n_points)
+    for i in range(1, n_points):
+        distances[i] = distances[i - 1] + np.linalg.norm(
+            waypoints[i] - waypoints[i - 1]
+        )
+
+    # 総距離が0の場合（全点が同じ位置の場合）
+    if np.isclose(distances[-1], 0):
+        return np.tile(waypoints[0], (num_points, 1))
+
+    # 新しい弧長を均等に生成
+    new_distances = np.linspace(0, distances[-1], num_points)
+
+    # 各次元ごとに補間
+    dim = waypoints.shape[1]
+    new_waypoints = np.zeros((num_points, dim))
+
+    for d in range(dim):
+        interp_func = interp1d(distances, waypoints[:, d], kind="linear")
+        new_waypoints[:, d] = interp_func(new_distances)
+
+    # 最初と最後のポイントを確実に正確に保持
+    new_waypoints[0] = waypoints[0]
+    new_waypoints[-1] = waypoints[-1]
+
+    return new_waypoints
+
+
 def get_input_feature(
     map: AWMLStaticMap,
     ego_x: float,
@@ -431,6 +488,11 @@ def get_input_feature(
         centerlines = segment.polyline.waypoints
         left_boundaries = segment.left_boundaries[0].polyline.waypoints
         right_boundaries = segment.right_boundaries[0].polyline.waypoints
+        n = centerlines.shape[0]
+        if left_boundaries.shape[0] != n:
+            left_boundaries = resample_waypoints(left_boundaries, n)
+        if right_boundaries.shape[0] != n:
+            right_boundaries = resample_waypoints(right_boundaries, n)
 
         # 自車座標系に変換
         centerlines_4xN = np.vstack((centerlines.T, np.ones(centerlines.shape[0])))
@@ -455,6 +517,8 @@ def get_input_feature(
             & (centerlines[:, 1] < mask_range)
         )
         filtered_centerlines = centerlines[mask]
+        left_boundaries = left_boundaries[mask]
+        right_boundaries = right_boundaries[mask]
 
         # 数が20以下になるように間引く
         n = filtered_centerlines.shape[0]
@@ -462,7 +526,18 @@ def get_input_feature(
             continue
         div = max(1, (n + 19) // 20)
         filtered_centerlines = filtered_centerlines[::div]
+        left_boundaries = left_boundaries[::div]
+        right_boundaries = right_boundaries[::div]
 
-        result.append(filtered_centerlines)
+        curr_data = np.concatenate(
+            (
+                filtered_centerlines[:, 0:2],  # xyのみ
+                left_boundaries[:, 0:2],  # xyのみ
+                right_boundaries[:, 0:2],  # xyのみ
+            ),
+            axis=1,
+        )
+
+        result.append(curr_data)
 
     return result
