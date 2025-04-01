@@ -201,6 +201,7 @@ class DiffusionPlannerNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.latest_kinematic_state = None
+        self.transform_mmatrix_4x4 = None
         self.inv_transform_matrix_4x4 = None
         self.vector_map = None
         self.route = None
@@ -225,6 +226,7 @@ class DiffusionPlannerNode(Node):
         transform_matrix_4x4 = np.eye(4)
         transform_matrix_4x4[:3, :3] = transform_matrix
         transform_matrix_4x4[:3, 3] = translation
+        self.transform_mmatrix_4x4 = transform_matrix_4x4
         inv_transform_matrix_4x4 = np.eye(4)
         inv_transform_matrix_4x4[:3, :3] = transform_matrix.T
         inv_transform_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
@@ -287,6 +289,16 @@ class DiffusionPlannerNode(Node):
         trajectory_msg.points = []
         dt = 0.1
         for i in range(pred.shape[0]):
+            curr_x = pred[i, 0]
+            curr_y = pred[i, 1]
+            curr_heading = pred[i, 2]
+            self.get_logger().info(f"Predicted position: {curr_x}, {curr_y}, {curr_heading}")
+            # transform to map frame
+            vec3d = [curr_x, curr_y, 0.0]
+            vec3d = self.transform_mmatrix_4x4 @ np.array([*vec3d, 1.0])
+            rot = Rotation.from_euler("z", curr_heading, degrees=False).as_matrix()
+            rot = self.transform_mmatrix_4x4[0:3, 0:3] @ rot
+            quat = Rotation.from_matrix(rot).as_quat()
             point = TrajectoryPoint()
             total_seconds = float(i * dt)
             secs = int(total_seconds)
@@ -294,13 +306,13 @@ class DiffusionPlannerNode(Node):
             point.time_from_start = Duration()
             point.time_from_start.sec = secs
             point.time_from_start.nanosec = nanosec
-            point.pose.position.x = pred[i, 0]
-            point.pose.position.y = pred[i, 1]
-            point.pose.position.z = 0.0
-            point.pose.orientation.w = np.cos(pred[i, 2] / 2)
-            point.pose.orientation.x = 0.0
-            point.pose.orientation.y = 0.0
-            point.pose.orientation.z = np.sin(pred[i, 2] / 2)
+            point.pose.position.x = vec3d[0]
+            point.pose.position.y = vec3d[1]
+            point.pose.position.z = vec3d[2]
+            point.pose.orientation.x = quat[0]
+            point.pose.orientation.y = quat[1]
+            point.pose.orientation.z = quat[2]
+            point.pose.orientation.w = quat[3]
             trajectory_msg.points.append(point)
         # Publish the trajectory
         self.pub_trajectory.publish(trajectory_msg)
