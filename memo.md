@@ -30,7 +30,8 @@ pip install -r requirements_nuplan-devkit_fixed.txt
 pip install --upgrade setuptools
 pip install -e .
 # バージョンの兼ね合いにより分けて入れる必要がある
-pip install pytorch_lightning==2.0.1 tensorboard==2.11.2 timm==1.0.10 mmengine wandb
+pip install protobuf==5.26.1
+pip install pytorch_lightning==2.0.1 tensorboard==2.12.0 timm==1.0.10 mmengine wandb
 pip install torch==2.0.0+cu118 torchvision==0.15.1+cu118 --index-url https://download.pytorch.org/whl/cu118
 
 # torchの確認
