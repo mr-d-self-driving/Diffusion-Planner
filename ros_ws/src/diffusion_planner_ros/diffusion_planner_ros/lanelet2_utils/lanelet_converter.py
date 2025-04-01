@@ -460,6 +460,62 @@ def resample_waypoints(waypoints: NDArray, num_points: int) -> NDArray:
     return new_waypoints
 
 
+def process_segment(segment, inv_transform_matrix_4x4, mask_range):
+    centerlines = segment.polyline.waypoints
+    left_boundaries = segment.left_boundaries[0].polyline.waypoints
+    right_boundaries = segment.right_boundaries[0].polyline.waypoints
+    n = centerlines.shape[0]
+    if left_boundaries.shape[0] != n:
+        left_boundaries = resample_waypoints(left_boundaries, n)
+    if right_boundaries.shape[0] != n:
+        right_boundaries = resample_waypoints(right_boundaries, n)
+
+    # 自車座標系に変換
+    centerlines_4xN = np.vstack((centerlines.T, np.ones(centerlines.shape[0])))
+    centerlines_ego = inv_transform_matrix_4x4 @ centerlines_4xN
+    centerlines = centerlines_ego[:3, :].T
+    left_boundaries_4xN = np.vstack(
+        (left_boundaries.T, np.ones(left_boundaries.shape[0]))
+    )
+    left_boundaries_ego = inv_transform_matrix_4x4 @ left_boundaries_4xN
+    left_boundaries = left_boundaries_ego[:3, :].T
+    right_boundaries_4xN = np.vstack(
+        (right_boundaries.T, np.ones(right_boundaries.shape[0]))
+    )
+    right_boundaries_ego = inv_transform_matrix_4x4 @ right_boundaries_4xN
+    right_boundaries = right_boundaries_ego[:3, :].T
+
+    # x, yがegoからmask_range内のものだけを抽出
+    mask = (
+        (centerlines[:, 0] > -mask_range)
+        & (centerlines[:, 0] < mask_range)
+        & (centerlines[:, 1] > -mask_range)
+        & (centerlines[:, 1] < mask_range)
+    )
+    filtered_centerlines = centerlines[mask]
+    left_boundaries = left_boundaries[mask]
+    right_boundaries = right_boundaries[mask]
+
+    # 数が20以下になるように間引く
+    n = filtered_centerlines.shape[0]
+    if n == 0:
+        return None
+    div = max(1, (n + 19) // 20)
+    filtered_centerlines = filtered_centerlines[::div]
+    left_boundaries = left_boundaries[::div]
+    right_boundaries = right_boundaries[::div]
+
+    curr_data = np.concatenate(
+        (
+            filtered_centerlines[:, 0:2],  # xyのみ
+            left_boundaries[:, 0:2],  # xyのみ
+            right_boundaries[:, 0:2],  # xyのみ
+        ),
+        axis=1,
+    )
+    return curr_data
+
+
 def get_input_feature(
     map: AWMLStaticMap,
     ego_x: float,
@@ -485,59 +541,11 @@ def get_input_feature(
     # Plot the map
     result = []
     for segment_id, segment in map.lane_segments.items():
-        centerlines = segment.polyline.waypoints
-        left_boundaries = segment.left_boundaries[0].polyline.waypoints
-        right_boundaries = segment.right_boundaries[0].polyline.waypoints
-        n = centerlines.shape[0]
-        if left_boundaries.shape[0] != n:
-            left_boundaries = resample_waypoints(left_boundaries, n)
-        if right_boundaries.shape[0] != n:
-            right_boundaries = resample_waypoints(right_boundaries, n)
-
-        # 自車座標系に変換
-        centerlines_4xN = np.vstack((centerlines.T, np.ones(centerlines.shape[0])))
-        centerlines_ego = inv_transform_matrix_4x4 @ centerlines_4xN
-        centerlines = centerlines_ego[:3, :].T
-        left_boundaries_4xN = np.vstack(
-            (left_boundaries.T, np.ones(left_boundaries.shape[0]))
+        curr_data = process_segment(
+            segment, inv_transform_matrix_4x4, mask_range
         )
-        left_boundaries_ego = inv_transform_matrix_4x4 @ left_boundaries_4xN
-        left_boundaries = left_boundaries_ego[:3, :].T
-        right_boundaries_4xN = np.vstack(
-            (right_boundaries.T, np.ones(right_boundaries.shape[0]))
-        )
-        right_boundaries_ego = inv_transform_matrix_4x4 @ right_boundaries_4xN
-        right_boundaries = right_boundaries_ego[:3, :].T
-
-        # x, yがegoからmask_range内のものだけを抽出
-        mask = (
-            (centerlines[:, 0] > -mask_range)
-            & (centerlines[:, 0] < mask_range)
-            & (centerlines[:, 1] > -mask_range)
-            & (centerlines[:, 1] < mask_range)
-        )
-        filtered_centerlines = centerlines[mask]
-        left_boundaries = left_boundaries[mask]
-        right_boundaries = right_boundaries[mask]
-
-        # 数が20以下になるように間引く
-        n = filtered_centerlines.shape[0]
-        if n == 0:
+        if curr_data is None:
             continue
-        div = max(1, (n + 19) // 20)
-        filtered_centerlines = filtered_centerlines[::div]
-        left_boundaries = left_boundaries[::div]
-        right_boundaries = right_boundaries[::div]
-
-        curr_data = np.concatenate(
-            (
-                filtered_centerlines[:, 0:2],  # xyのみ
-                left_boundaries[:, 0:2],  # xyのみ
-                right_boundaries[:, 0:2],  # xyのみ
-            ),
-            axis=1,
-        )
-
         result.append(curr_data)
 
     # 先頭の距離でソート
