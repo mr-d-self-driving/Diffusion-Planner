@@ -34,18 +34,20 @@ if __name__ == "__main__":
     ego_qw = 0.9668934685700217
     RANGE = 100
 
-    waypoints_list = get_input_feature(result, ego_x, ego_y, ego_z, ego_qx, ego_qy, ego_qz, ego_qw, RANGE)
-    print(f"{len(waypoints_list)=}")
+    result_list = get_input_feature(result, ego_x, ego_y, ego_z, ego_qx, ego_qy, ego_qz, ego_qw, RANGE)
+    print(f"{len(result_list)=}")
+    result_list = [w for w in result_list if w.shape[0] > 0]
 
-    plt.figure()
-    for i in range(len(waypoints_list)):
-        filtered_waypoints = waypoints_list[i]
-        plt.plot(filtered_waypoints[:, 0], filtered_waypoints[:, 1], "r-")
+    plt.figure(figsize=(10, 8))
+    for i in range(len(result_list)):
+        result = result_list[i]
+        plt.plot(result[:, 0], result[:, 1], "r-")
 
     plt.xlabel("x[m]")
     plt.ylabel("y[m]")
     plt.xlim(-RANGE, RANGE)
     plt.ylim(-RANGE, RANGE)
+    plt.grid(alpha=0.3)
     save_path = "./test_input_vector_map.png"
     plt.savefig(save_path, bbox_inches="tight", pad_inches=0.05)
     print(f"Saved plot to {save_path}")

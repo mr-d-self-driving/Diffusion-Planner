@@ -426,22 +426,43 @@ def get_input_feature(
     inv_transform_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
 
     # Plot the map
-    waypoints_list = []
+    result = []
     for segment_id, segment in map.lane_segments.items():
-        waypoints = segment.polyline.waypoints
+        centerlines = segment.polyline.waypoints
+        left_boundaries = segment.left_boundaries[0].polyline.waypoints
+        right_boundaries = segment.right_boundaries[0].polyline.waypoints
+
         # 自車座標系に変換
-        waypoints_4xN = np.vstack((waypoints.T, np.ones(waypoints.shape[0])))
-        waypoints_ego = inv_transform_matrix_4x4 @ waypoints_4xN
-        waypoints = waypoints_ego[:3, :].T
+        centerlines_4xN = np.vstack((centerlines.T, np.ones(centerlines.shape[0])))
+        centerlines_ego = inv_transform_matrix_4x4 @ centerlines_4xN
+        centerlines = centerlines_ego[:3, :].T
+        left_boundaries_4xN = np.vstack(
+            (left_boundaries.T, np.ones(left_boundaries.shape[0]))
+        )
+        left_boundaries_ego = inv_transform_matrix_4x4 @ left_boundaries_4xN
+        left_boundaries = left_boundaries_ego[:3, :].T
+        right_boundaries_4xN = np.vstack(
+            (right_boundaries.T, np.ones(right_boundaries.shape[0]))
+        )
+        right_boundaries_ego = inv_transform_matrix_4x4 @ right_boundaries_4xN
+        right_boundaries = right_boundaries_ego[:3, :].T
 
         # x, yがegoからmask_range内のものだけを抽出
         mask = (
-            (waypoints[:, 0] > -mask_range)
-            & (waypoints[:, 0] < mask_range)
-            & (waypoints[:, 1] > -mask_range)
-            & (waypoints[:, 1] < mask_range)
+            (centerlines[:, 0] > -mask_range)
+            & (centerlines[:, 0] < mask_range)
+            & (centerlines[:, 1] > -mask_range)
+            & (centerlines[:, 1] < mask_range)
         )
-        filtered_waypoints = waypoints[mask]
-        waypoints_list.append(filtered_waypoints)
+        filtered_centerlines = centerlines[mask]
 
-    return waypoints_list
+        # 数が20以下になるように間引く
+        n = filtered_centerlines.shape[0]
+        if n == 0:
+            continue
+        div = max(1, (n + 19) // 20)
+        filtered_centerlines = filtered_centerlines[::div]
+
+        result.append(filtered_centerlines)
+
+    return result
