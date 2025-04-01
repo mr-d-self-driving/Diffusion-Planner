@@ -25,6 +25,7 @@ pip install -e .
 
 # Diffusion-Planner
 cd ~/work/Diffusion-Planner/
+python -m pip install pip==24.1
 pip install -r requirements_nuplan-devkit_fixed_opencv.txt
 pip install --upgrade setuptools
 pip install -e .
