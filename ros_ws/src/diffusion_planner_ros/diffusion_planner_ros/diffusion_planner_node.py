@@ -30,6 +30,8 @@ import time
 import numpy as np
 from builtin_interfaces.msg import Duration
 from scipy.spatial.transform import Rotation
+from mmengine import fileio
+import io
 
 
 class DiffusionPlannerNode(Node):
@@ -53,6 +55,15 @@ class DiffusionPlannerNode(Node):
         self.diffusion_planner.cuda()
         self.diffusion_planner.decoder.decoder.training = False
         print(f"{self.config_obj.state_normalizer=}")
+
+        ckpt_path = self.declare_parameter("ckpt_path", value="None").value
+        self.get_logger().info(f"Checkpoint path: {ckpt_path}")
+        ckpt = fileio.get(ckpt_path)
+        with io.BytesIO(ckpt) as f:
+            ckpt = torch.load(f)
+        state_dict = ckpt["model"]
+        new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+        self.diffusion_planner.load_state_dict(new_state_dict)
 
         self.kinematic_state_sub = self.create_subscription(
             Odometry,
