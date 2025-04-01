@@ -34,4 +34,9 @@ pip install torch==2.0.0+cu118 torchvision==0.15.1+cu118 --index-url https://dow
 
 # torchの確認
 python3 -c "import torch"
+
+# rosの導入
+./util_scripts/download_ros-hubmle.sh
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+echo "export ROS_LOCALHOST_ONLY=1" >> ~/.bashrc
 ```
