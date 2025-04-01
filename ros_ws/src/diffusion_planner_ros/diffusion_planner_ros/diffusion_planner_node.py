@@ -188,6 +188,9 @@ class DiffusionPlannerNode(Node):
         self.inv_transform_matrix_4x4 = None
         self.vector_map = None
         self.route = None
+        self.route_tensor = torch.zeros(
+            (1, 25, 20, 12), dtype=torch.float32, device="cuda"
+        )
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
 
@@ -275,20 +278,23 @@ class DiffusionPlannerNode(Node):
             f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
         )
 
+        self.route_tensor = torch.zeros(
+            (1, 25, 20, 12), dtype=torch.float32, device="cuda"
+        )
+
         for i in range(len(msg.segments)):
             self.get_logger().info(f"{msg.segments[i]=}")
             ll2_id = msg.segments[i].preferred_primitive.id
             print(f"{ll2_id=}")
             if ll2_id in self.static_map.lane_segments:
-                self.get_logger().info(
-                    f"Lanelet ID {ll2_id} is in the static map"
-                )
+                self.get_logger().info(f"Lanelet ID {ll2_id} is in the static map")
                 curr_result = process_segment(
                     self.static_map.lane_segments[ll2_id],
                     self.inv_transform_matrix_4x4,
-                    mask_range=100
+                    mask_range=100,
                 )
                 print(f"{curr_result.shape=}")
+                self.route_tensor[0, i] = torch.from_numpy(curr_result).cuda()
             assert ll2_id not in self.static_map.crosswalk_segments
             assert ll2_id not in self.static_map.boundary_segments
 
