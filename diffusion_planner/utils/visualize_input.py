@@ -2,17 +2,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from pathlib import Path
-import json
+from diffusion_planner.utils.normalizer import ObservationNormalizer
+from copy import deepcopy
 
 
-def visualize_inputs(inputs: dict, save_path: Path):
+def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_path: Path):
     """
     draw the input data of the diffusion_planner model on the xy plane
     """
-
-    with open("normalization.json", "r") as f:
-        normalization_info = json.load(f)
-    print(f"{normalization_info=}")
+    inputs = deepcopy(inputs)
+    inputs = obs_noramlizer.inverse(inputs)
 
     # Function to convert PyTorch tensors to NumPy arrays
     def to_numpy(tensor):
@@ -44,8 +43,6 @@ def visualize_inputs(inputs: dict, save_path: Path):
     # ==== Ego ====
     ego_state = inputs["ego_current_state"][0]  # Use the first sample in the batch
     ego_x, ego_y = ego_state[0], ego_state[1]
-    ego_x *= normalization_info["ego"]["std"][0]
-    ego_y *= normalization_info["ego"]["std"][1]
     ego_heading = np.arctan2(ego_state[3], ego_state[2])
 
     # Ego vehicle's length and width
@@ -81,8 +78,6 @@ def visualize_inputs(inputs: dict, save_path: Path):
             continue
 
         n_x, n_y = neighbor[0], neighbor[1]
-        n_x *= normalization_info["neighbor"]["std"][0]
-        n_y *= normalization_info["neighbor"]["std"][1]
         n_heading = np.arctan2(neighbor[3], neighbor[2])
 
         # Set color and shape dimensions based on the vehicle type
@@ -109,8 +104,6 @@ def visualize_inputs(inputs: dict, save_path: Path):
             ]
             if valid_points:
                 past_x, past_y = zip(*valid_points)
-                past_x *= normalization_info["neighbor"]["std"][0]
-                past_y *= normalization_info["neighbor"]["std"][1]
                 ax.plot(past_x, past_y, color=color, alpha=0.9, linestyle="--")
 
         # Draw the current position as an arrow
@@ -140,8 +133,6 @@ def visualize_inputs(inputs: dict, save_path: Path):
             continue
 
         obj_x, obj_y = obj[0], obj[1]
-        obj_x *= normalization_info["static_objects"]["std"][0]
-        obj_y *= normalization_info["static_objects"]["std"][1]
         obj_heading = np.arctan2(obj[3], obj[2])
         obj_width = obj[4] if obj.shape[0] > 4 else 1.0
         obj_length = obj[5] if obj.shape[0] > 5 else 1.0
@@ -164,10 +155,6 @@ def visualize_inputs(inputs: dict, save_path: Path):
 
     # ==== Lanes ====
     lanes = inputs["lanes"][0]  # Use the first sample in the batch
-    lanes[:, :, 0] *= normalization_info["lanes"]["std"][0]
-    lanes[:, :, 1] *= normalization_info["lanes"]["std"][1]
-    lanes[:, :, 4:8:2] *= normalization_info["lanes"]["std"][0]
-    lanes[:, :, 5:8:2] *= normalization_info["lanes"]["std"][1]
 
     for i in range(lanes.shape[0]):
         for j in range(lanes.shape[1]):

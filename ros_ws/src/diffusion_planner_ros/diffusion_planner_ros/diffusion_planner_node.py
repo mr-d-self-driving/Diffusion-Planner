@@ -22,6 +22,7 @@ from .lanelet2_utils.lanelet_converter import (
     process_segment,
 )
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
+from diffusion_planner.utils.visualize_input import visualize_inputs
 import json
 import torch
 from diffusion_planner.utils.config import Config
@@ -46,12 +47,12 @@ class DiffusionPlannerNode(Node):
         with open(config_json_path, "r") as f:
             config_json = json.load(f)
         self.get_logger().info(f"Config JSON: {config_json}")
-        config_obj = Config(config_json_path)
-        self.diffusion_planner = Diffusion_Planner(config_obj)
+        self.config_obj = Config(config_json_path)
+        self.diffusion_planner = Diffusion_Planner(self.config_obj)
         self.diffusion_planner.eval()
         self.diffusion_planner.cuda()
         self.diffusion_planner.decoder.decoder.training = False
-        print(f"{config_obj.state_normalizer=}")
+        print(f"{self.config_obj.state_normalizer=}")
 
         self.kinematic_state_sub = self.create_subscription(
             Odometry,
@@ -253,6 +254,11 @@ class DiffusionPlannerNode(Node):
             "sampled_trajectories": torch.zeros((1, 11, 81, 4), device=dev),
             "diffusion_time": torch.zeros((1, 11, 81, 4), device=dev),
         }
+        print(f"{self.config_obj.observation_normalizer=}")
+        input_dict = self.config_obj.observation_normalizer(input_dict)
+        visualize_inputs(
+            input_dict, self.config_obj.observation_normalizer, "./input.png"
+        )
         start = time.time()
         out = self.diffusion_planner(input_dict)[1]
         end = time.time()
