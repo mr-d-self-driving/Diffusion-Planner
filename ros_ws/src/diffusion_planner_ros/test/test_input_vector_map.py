@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from autoware_lanelet2_extension_python.projection import MGRSProjector
-import lanelet2
 import argparse
 from diffusion_planner_ros.lanelet2_utils.lanelet_converter import convert_lanelet
 import matplotlib.pyplot as plt
@@ -17,14 +15,6 @@ def parse_args():
         default="/home/shintarosakoda/data/misc/20250329_psim_rosbag/map/lanelet2_map.osm",
     )
     return parser.parse_args()
-
-
-def test_projection():
-    return MGRSProjector(lanelet2.io.Origin(0.0, 0.0))
-
-
-def test_io(map_path, projection):
-    return lanelet2.io.load(str(map_path), projection)
 
 
 if __name__ == "__main__":
