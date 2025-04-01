@@ -496,14 +496,13 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
     left_boundaries = left_boundaries[mask]
     right_boundaries = right_boundaries[mask]
 
-    # 数が20以下になるように間引く
+    # 点数が20になるように修正する
     n = filtered_centerlines.shape[0]
-    if n == 0:
+    if n < 2:
         return None
-    div = max(1, (n + 19) // 20)
-    filtered_centerlines = filtered_centerlines[::div]
-    left_boundaries = left_boundaries[::div]
-    right_boundaries = right_boundaries[::div]
+    filtered_centerlines = resample_waypoints(filtered_centerlines, 20)
+    left_boundaries = resample_waypoints(left_boundaries, 20)
+    right_boundaries = resample_waypoints(right_boundaries, 20)
 
     curr_data = np.concatenate(
         (
@@ -541,9 +540,7 @@ def get_input_feature(
     # Plot the map
     result = []
     for segment_id, segment in map.lane_segments.items():
-        curr_data = process_segment(
-            segment, inv_transform_matrix_4x4, mask_range
-        )
+        curr_data = process_segment(segment, inv_transform_matrix_4x4, mask_range)
         if curr_data is None:
             continue
         result.append(curr_data)
