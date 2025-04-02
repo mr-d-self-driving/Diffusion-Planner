@@ -39,6 +39,4 @@ python3 -c "import torch"
 
 # rosの導入
 ./util_scripts/download_ros-hubmle.sh
-echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
-echo "export ROS_LOCALHOST_ONLY=1" >> ~/.bashrc
 ```

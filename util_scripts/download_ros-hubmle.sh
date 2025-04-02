@@ -13,3 +13,6 @@ sudo apt install -y python3-colcon-common-extensions
 sudo apt install -y python3-rosdep
 pip install lanelet2
 sudo rosdep init
+rosdep update
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+echo "export ROS_LOCALHOST_ONLY=1" >> ~/.bashrc
