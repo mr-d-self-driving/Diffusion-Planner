@@ -285,7 +285,6 @@ class DiffusionPlannerNode(Node):
             "sampled_trajectories": torch.zeros((1, 11, 81, 4), device=dev),
             "diffusion_time": torch.zeros((1, 11, 81, 4), device=dev),
         }
-        print(f"{self.config_obj.observation_normalizer=}")
         input_dict = self.config_obj.observation_normalizer(input_dict)
         # visualize_inputs(
         #     input_dict, self.config_obj.observation_normalizer, "./input.png"
