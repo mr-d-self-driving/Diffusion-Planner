@@ -245,6 +245,8 @@ class DiffusionPlannerNode(Node):
         self.inv_transform_matrix_4x4 = inv_transform_matrix_4x4
 
     def cb_detected_objects(self, msg):
+        if self.latest_kinematic_state is None:
+            return
         dev = self.diffusion_planner.parameters().__next__().device
 
         start = time.time()
@@ -344,6 +346,8 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info("Received vector map")
 
     def cb_route(self, msg):
+        if self.latest_kinematic_state is None:
+            return
         self.route = msg
         self.get_logger().info(
             f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
