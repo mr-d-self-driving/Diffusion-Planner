@@ -498,11 +498,19 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
 
     # 点数が20になるように修正する
     n = filtered_centerlines.shape[0]
-    if n < 2:
+    if n == 0:
+        # print(f"{n=}")
+        # print(f"{centerlines.shape=}")
+        # print(f"{inv_transform_matrix_4x4=}")
         return None
-    filtered_centerlines = resample_waypoints(filtered_centerlines, 20)
-    left_boundaries = resample_waypoints(left_boundaries, 20)
-    right_boundaries = resample_waypoints(right_boundaries, 20)
+    elif n == 1:
+        filtered_centerlines = np.tile(filtered_centerlines, (20, 1))
+        left_boundaries = np.tile(left_boundaries, (20, 1))
+        right_boundaries = np.tile(right_boundaries, (20, 1))
+    else:
+        filtered_centerlines = resample_waypoints(filtered_centerlines, 20)
+        left_boundaries = resample_waypoints(left_boundaries, 20)
+        right_boundaries = resample_waypoints(right_boundaries, 20)
 
     left_boundaries -= filtered_centerlines
     right_boundaries -= filtered_centerlines
