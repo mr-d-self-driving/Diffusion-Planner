@@ -3,7 +3,7 @@
 
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.qos import (
     QoSProfile,
     QoSDurabilityPolicy,
@@ -480,13 +480,14 @@ class DiffusionPlannerNode(Node):
 
         return marker_array
 
+
 def main(args=None):
     rclpy.init(args=args)
 
     planner_node = DiffusionPlannerNode()
 
     # Use multi-threaded executor to handle multiple callbacks
-    executor = MultiThreadedExecutor()
+    executor = SingleThreadedExecutor()
     executor.add_node(planner_node)
 
     try:
