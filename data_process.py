@@ -54,13 +54,18 @@ if __name__ == "__main__":
 
     parser.add_argument('--route_len', type=int, help='number of route lane point', default=20)
     parser.add_argument('--route_num', type=int, help='number of route lanes', default=25)
+
+    parser.add_argument('--test_mode', action='store_true', help='test mode')
     args = parser.parse_args()
+
+    if args.test_mode:
+        args.total_scenarios = 100
 
     # create save folder
     os.makedirs(args.save_path, exist_ok=True)
 
     pickle_path = args.save_path + "/../scenarios.pkl"
-    if os.path.exists(pickle_path):
+    if os.path.exists(pickle_path) and not args.test_mode:
         with open(pickle_path, 'rb') as f:
             scenarios = pickle.load(f)
         print(f"Loaded {len(scenarios)} scenarios from pickle file: {pickle_path}")
@@ -72,6 +77,9 @@ if __name__ == "__main__":
         # Only preprocess the training data
         with open('./nuplan_train.json', "r", encoding="utf-8") as file:
             log_names = json.load(file)
+
+        if args.test_mode:
+            log_names = log_names[:5]
 
         map_version = "nuplan-maps-v1.0"    
         print("prepare builder")
