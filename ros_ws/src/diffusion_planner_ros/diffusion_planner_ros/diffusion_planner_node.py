@@ -170,6 +170,16 @@ class DiffusionPlannerNode(Node):
             self.cb_route,
             transient_qos,
         )
+        self.pub_route_marker = self.create_publisher(
+            MarkerArray,
+            "/diffusion_planner/debug/route_marker",
+            QoSProfile(
+                history=QoSHistoryPolicy.KEEP_LAST,
+                depth=10,
+                reliability=QoSReliabilityPolicy.RELIABLE,
+                durability=QoSDurabilityPolicy.VOLATILE,
+            ),
+        )
 
         """
         Trajectory.msg
@@ -371,6 +381,42 @@ class DiffusionPlannerNode(Node):
                 self.route_tensor[0, i] = torch.from_numpy(curr_result).cuda()
             assert ll2_id not in self.static_map.crosswalk_segments
             assert ll2_id not in self.static_map.boundary_segments
+
+        marker_array = MarkerArray()
+        centerline_marker = Marker()
+        centerline_marker.header.stamp = self.get_clock().now().to_msg()
+        centerline_marker.header.frame_id = "map"
+        centerline_marker.ns = "route"
+        centerline_marker.id = 0
+        centerline_marker.type = Marker.LINE_STRIP
+        centerline_marker.action = Marker.ADD
+        centerline_marker.pose.orientation.w = 1.0
+        centerline_marker.scale.x = 0.6
+        centerline_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)
+        centerline_marker.lifetime = Duration(sec=1000, nanosec=0)
+        centerline_marker.points = []
+        for j in range(len(msg.segments)):
+            centerline_in_base_link = self.route_tensor[0, j, :, :2].cpu().numpy()
+            centerline_in_base_link = np.concatenate(
+                [
+                    centerline_in_base_link,
+                    np.zeros((centerline_in_base_link.shape[0], 1)),
+                    np.ones((centerline_in_base_link.shape[0], 1)),
+                ],
+                axis=1,
+            )
+            centerline_in_map = (self.transform_mmatrix_4x4 @ centerline_in_base_link.T).T
+            # Create a marker for the centerline
+            for point in centerline_in_map:
+                p = Point()
+                p.x = point[0]
+                p.y = point[1]
+                p.z = point[2]
+                print(f"{p.x=}, {p.y=}, {p.z=}")
+                centerline_marker.points.append(p)
+        self.get_logger().info("Publishing route markers")
+        marker_array.markers.append(centerline_marker)
+        self.pub_route_marker.publish(marker_array)
 
     def create_trajectory_marker(self, trajectory_msg):
         """
