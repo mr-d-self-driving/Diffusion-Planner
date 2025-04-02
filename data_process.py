@@ -111,7 +111,7 @@ if __name__ == "__main__":
     npz_files = [f for f in os.listdir(args.save_path) if f.endswith('.npz')]
 
     # Save the list to a JSON file
-    with open('./diffusion_planner_training.json', 'w') as json_file:
+    with open(f'{args.save_path}/../diffusion_planner_training.json', 'w') as json_file:
         json.dump(npz_files, json_file, indent=4)
 
     print(f"Saved {len(npz_files)} .npz file names")
