@@ -257,7 +257,15 @@ class DiffusionPlannerNode(Node):
     def cb_detected_objects(self, msg):
         if self.latest_kinematic_state is None:
             return
+        if self.route is None:
+            return
         dev = self.diffusion_planner.parameters().__next__().device
+
+        start = time.time()
+        self.process_route(self.route)
+        end = time.time()
+        elapsed_msec = (end - start) * 1000
+        self.get_logger().info(f"    route time: {elapsed_msec:.4f} msec")
 
         start = time.time()
         result_list = get_input_feature(
@@ -362,22 +370,19 @@ class DiffusionPlannerNode(Node):
             f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
         )
 
+    def process_route(self, msg):
         self.route_tensor = torch.zeros(
             (1, 25, 20, 12), dtype=torch.float32, device="cuda"
         )
 
         for i in range(len(msg.segments)):
-            self.get_logger().info(f"{msg.segments[i]=}")
             ll2_id = msg.segments[i].preferred_primitive.id
-            print(f"{ll2_id=}")
             if ll2_id in self.static_map.lane_segments:
-                self.get_logger().info(f"Lanelet ID {ll2_id} is in the static map")
                 curr_result = process_segment(
                     self.static_map.lane_segments[ll2_id],
                     self.inv_transform_matrix_4x4,
                     mask_range=100,
                 )
-                print(f"{curr_result.shape=}")
                 self.route_tensor[0, i] = torch.from_numpy(curr_result).cuda()
             assert ll2_id not in self.static_map.crosswalk_segments
             assert ll2_id not in self.static_map.boundary_segments
@@ -393,7 +398,7 @@ class DiffusionPlannerNode(Node):
         centerline_marker.pose.orientation.w = 1.0
         centerline_marker.scale.x = 0.6
         centerline_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)
-        centerline_marker.lifetime = Duration(sec=1000, nanosec=0)
+        centerline_marker.lifetime = Duration(sec=0, nanosec=int(1e8))
         centerline_marker.points = []
         for j in range(len(msg.segments)):
             centerline_in_base_link = self.route_tensor[0, j, :, :2].cpu().numpy()
@@ -412,7 +417,6 @@ class DiffusionPlannerNode(Node):
                 p.x = point[0]
                 p.y = point[1]
                 p.z = point[2]
-                print(f"{p.x=}, {p.y=}, {p.z=}")
                 centerline_marker.points.append(p)
         self.get_logger().info("Publishing route markers")
         marker_array.markers.append(centerline_marker)
