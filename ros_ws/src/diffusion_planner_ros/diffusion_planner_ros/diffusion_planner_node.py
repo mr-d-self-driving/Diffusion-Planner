@@ -265,8 +265,8 @@ class DiffusionPlannerNode(Node):
         for i, result in enumerate(result_list):
             lanes_tensor[0, i] = torch.from_numpy(result).cuda()
         end = time.time()
-        elapsed = end - start
-        self.get_logger().info(f"get_input_feature time: {elapsed:.4f} sec")
+        elapsed_msec = (end - start) * 1000
+        self.get_logger().info(f"get_input time: {elapsed_msec:.4f} msec")
 
         input_dict = {
             "ego_current_state": torch.zeros((1, 10), device=dev),
