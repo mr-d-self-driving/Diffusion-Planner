@@ -191,7 +191,7 @@ class DiffusionPlannerNode(Node):
             # "/diffusion_planner/trajectory",
             QoSProfile(
                 history=QoSHistoryPolicy.KEEP_LAST,
-                depth=1,
+                depth=10,
                 reliability=QoSReliabilityPolicy.RELIABLE,
                 durability=QoSDurabilityPolicy.VOLATILE,
             ),
