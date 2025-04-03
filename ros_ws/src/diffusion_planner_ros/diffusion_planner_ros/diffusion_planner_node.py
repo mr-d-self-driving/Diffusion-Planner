@@ -286,8 +286,42 @@ class DiffusionPlannerNode(Node):
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"get_input time: {elapsed_msec:.4f} msec")
 
+        # get current velocity
+        ego_twist_linear = self.latest_kinematic_state.twist.twist.linear
+        ego_twist_angular = self.latest_kinematic_state.twist.twist.angular
+        ego_twist_linear = np.array(
+            [ego_twist_linear.x, ego_twist_linear.y, ego_twist_linear.z]
+        )
+        ego_twist_angular = np.array(
+            [ego_twist_angular.x, ego_twist_angular.y, ego_twist_angular.z]
+        )
+        ego_twist_linear = self.inv_transform_matrix_4x4[0:3, 0:3] @ ego_twist_linear
+        ego_twist_angular = self.inv_transform_matrix_4x4[0:3, 0:3] @ ego_twist_angular
+        linear_vel_norm = np.linalg.norm(ego_twist_linear)
+        if abs(linear_vel_norm) < 0.2:
+            yaw_rate = 0.0  # if the car is almost stopped, the yaw rate is unreliable
+            steering_angle = 0.0
+        else:
+            yaw_rate = ego_twist_angular[2]
+            wheel_base = 4.0
+            steering_angle = np.arctan(yaw_rate * wheel_base / abs(linear_vel_norm))
+            steering_angle = np.clip(steering_angle, -2 / 3 * np.pi, 2 / 3 * np.pi)
+            yaw_rate = np.clip(yaw_rate, -0.95, 0.95)
+
+        ego_current_state = torch.zeros((1, 10), device=dev)
+        ego_current_state[0, 0] = 0  # x in base_link is always 0
+        ego_current_state[0, 1] = 0  # y in base_link is always 0
+        ego_current_state[0, 2] = 1  # heading cos in base_link is always 1
+        ego_current_state[0, 3] = 0  # heading sin in base_link is always 0
+        ego_current_state[0, 4] = ego_twist_linear[0]  # velocity x
+        ego_current_state[0, 5] = ego_twist_linear[1]  # velocity y
+        ego_current_state[0, 6] = 0  # acceleration x (TODO)
+        ego_current_state[0, 7] = 0  # acceleration y (TODO)
+        ego_current_state[0, 8] = steering_angle  # steering angle
+        ego_current_state[0, 9] = yaw_rate  # yaw rate
+
         input_dict = {
-            "ego_current_state": torch.zeros((1, 10), device=dev),
+            "ego_current_state": ego_current_state,
             "neighbor_agents_past": torch.zeros((1, 32, 21, 11), device=dev),
             "lanes": lanes_tensor,
             "lanes_speed_limit": torch.zeros((1, 70, 1), device=dev),
