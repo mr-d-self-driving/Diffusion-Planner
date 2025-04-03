@@ -12,12 +12,11 @@ from rclpy.qos import (
 )
 from nav_msgs.msg import Odometry
 from autoware_perception_msgs.msg import DetectedObjects
-from autoware_map_msgs.msg import LaneletMapBin
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import ColorRGBA
 import tf2_ros
-from geometry_msgs.msg import TransformStamped, Point
+from geometry_msgs.msg import Point
 from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     get_input_feature,
@@ -40,10 +39,12 @@ class DiffusionPlannerNode(Node):
     def __init__(self):
         super().__init__("diffusion_planner_node")
 
+        # get vector_map
         vector_map_path = self.declare_parameter("vector_map_path", value="None").value
         self.get_logger().info(f"Vector map path: {vector_map_path}")
         self.static_map = convert_lanelet(vector_map_path)
 
+        # get config
         config_json_path = self.declare_parameter(
             "config_json_path", value="None"
         ).value
@@ -58,6 +59,7 @@ class DiffusionPlannerNode(Node):
         self.diffusion_planner.decoder.decoder.training = False
         print(f"{self.config_obj.state_normalizer=}")
 
+        # Load the model checkpoint
         ckpt_path = self.declare_parameter("ckpt_path", value="None").value
         self.get_logger().info(f"Checkpoint path: {ckpt_path}")
         ckpt = fileio.get(ckpt_path)
@@ -67,136 +69,39 @@ class DiffusionPlannerNode(Node):
         new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         self.diffusion_planner.load_state_dict(new_state_dict)
 
+        # sub(1) kinematic_state
         self.kinematic_state_sub = self.create_subscription(
             Odometry,
             "/localization/kinematic_state",
             self.cb_kinematic_state,
             10,
         )
+
+        # sub(2) detected_objects
         # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_perception_msgs/msg/DetectedObjects.msg
-        """
-        DetectedObjects.msg
-            std_msgs/Header header
-            DetectedObject[] objects
-        DetectedObject.msg
-            float32 existence_probability
-            ObjectClassification[] classification
-            DetectedObjectKinematics kinematics
-            Shape shape
-        DetectedObjectKinematics.msg
-            # Only position is available, orientation is empty. Note that the shape can be an oriented
-            # bounding box but the direction the object is facing is unknown, in which case
-            # orientation should be empty.
-            uint8 UNAVAILABLE=0
-
-            # The orientation is determined only up to a sign flip. For instance, assume that cars are
-            # longer than they are wide, and the perception pipeline can accurately estimate the
-            # dimensions of a car. It should set the orientation to coincide with the major axis, with
-            # the sign chosen arbitrarily, and use this tag to signify that the orientation could
-            # point to the front or the back.
-            uint8 SIGN_UNKNOWN=1
-
-            # The full orientation is available. Use e.g. for machine-learning models that can
-            # differentiate between the front and back of a vehicle.
-            uint8 AVAILABLE=2
-
-            geometry_msgs/PoseWithCovariance pose_with_covariance
-
-            bool has_position_covariance
-            uint8 orientation_availability
-
-            geometry_msgs/TwistWithCovariance twist_with_covariance
-
-            bool has_twist
-            bool has_twist_covariance        
-        """
         self.detected_objects_sub = self.create_subscription(
             DetectedObjects,
             "/perception/object_recognition/detection/objects",
             self.cb_detected_objects,
             10,
         )
+
+        # sub(3) route
+        # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_planning_msgs/msg/LaneletRoute.msg
         transient_qos = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1,
             reliability=QoSReliabilityPolicy.RELIABLE,
             durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
         )
-        # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_map_msgs/msg/LaneletMapBin.msg
-        """
-        LaneletMapBin.msg
-            # Lanelet map message
-            # This message contains the binary data of a Lanelet map.
-            # Also contains the map name, version and format.
-
-            # Header with timestamp when the message is published
-            # And frame of the Lanelet Map origin (probably just "map")
-            std_msgs/Header header
-
-            # Version of the map format (optional)
-            # Example: "1.1.1"
-            string version_map_format
-
-            # Version of the map (encouraged, optional)
-            # Example: "1.0.0"
-            string version_map
-
-            # Name of the map (encouraged, optional)
-            # Example: "florence-prato-city-center"
-            string name_map
-
-            # Binary map data
-            uint8[] data
-        """
-        # self.vector_map_sub = self.create_subscription(
-        #     LaneletMapBin,
-        #     "/map/vector_map",
-        #     self.cb_vector_map,
-        #     transient_qos,
-        # )
-        # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_planning_msgs/msg/LaneletRoute.msg
-        """
-        LaneletRoute.msg
-            std_msgs/Header header
-            geometry_msgs/Pose start_pose
-            geometry_msgs/Pose goal_pose
-            autoware_planning_msgs/LaneletSegment[] segments
-            unique_identifier_msgs/UUID uuid
-            bool allow_modification
-        """
         self.route_sub = self.create_subscription(
             LaneletRoute,
             "/planning/mission_planning/route",
             self.cb_route,
             transient_qos,
         )
-        self.pub_route_marker = self.create_publisher(
-            MarkerArray,
-            "/diffusion_planner/debug/route_marker",
-            QoSProfile(
-                history=QoSHistoryPolicy.KEEP_LAST,
-                depth=10,
-                reliability=QoSReliabilityPolicy.RELIABLE,
-                durability=QoSDurabilityPolicy.VOLATILE,
-            ),
-        )
 
-        """
-        Trajectory.msg
-            std_msgs/Header header
-            autoware_planning_msgs/TrajectoryPoint[] points
-        TrajectoryPoint.msg
-            builtin_interfaces/Duration time_from_start
-            geometry_msgs/Pose pose
-            float32 longitudinal_velocity_mps
-            float32 lateral_velocity_mps
-            # acceleration_mps2 increases/decreases based on absolute vehicle motion and does not consider vehicle direction (forward/backward)
-            float32 acceleration_mps2
-            float32 heading_rate_rps
-            float32 front_wheel_angle_rad
-            float32 rear_wheel_angle_rad
-        ```
-        """
+        # pub(1)[main] trajectory
         self.pub_trajectory = self.create_publisher(
             Trajectory,
             "/planning/scenario_planning/lane_driving/trajectory",
@@ -208,6 +113,20 @@ class DiffusionPlannerNode(Node):
                 durability=QoSDurabilityPolicy.VOLATILE,
             ),
         )
+
+        # pub(2)[debug] route_marker
+        self.pub_route_marker = self.create_publisher(
+            MarkerArray,
+            "/diffusion_planner/debug/route_marker",
+            QoSProfile(
+                history=QoSHistoryPolicy.KEEP_LAST,
+                depth=10,
+                reliability=QoSReliabilityPolicy.RELIABLE,
+                durability=QoSDurabilityPolicy.VOLATILE,
+            ),
+        )
+
+        # pub(3)[debug] trajectory_marker
         self.pub_trajectory_marker = self.create_publisher(
             MarkerArray,
             "/diffusion_planner/debug/trajectory_marker",
@@ -219,9 +138,7 @@ class DiffusionPlannerNode(Node):
             ),
         )
 
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-
+        # members
         self.latest_kinematic_state = None
         self.transform_mmatrix_4x4 = None
         self.inv_transform_matrix_4x4 = None
