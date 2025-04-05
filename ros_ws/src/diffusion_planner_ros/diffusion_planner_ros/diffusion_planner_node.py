@@ -69,6 +69,10 @@ class DiffusionPlannerNode(Node):
         new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         self.diffusion_planner.load_state_dict(new_state_dict)
 
+        # get wheel_base
+        self.wheel_base = self.declare_parameter("wheel_base", value=5.0).value
+        self.get_logger().info(f"Wheel base: {self.wheel_base}")
+
         # sub(1) kinematic_state
         self.kinematic_state_sub = self.create_subscription(
             Odometry,
@@ -220,8 +224,9 @@ class DiffusionPlannerNode(Node):
             steering_angle = 0.0
         else:
             yaw_rate = ego_twist_angular[2]
-            wheel_base = 4.0
-            steering_angle = np.arctan(yaw_rate * wheel_base / abs(linear_vel_norm))
+            steering_angle = np.arctan(
+                yaw_rate * self.wheel_base / abs(linear_vel_norm)
+            )
             steering_angle = np.clip(steering_angle, -2 / 3 * np.pi, 2 / 3 * np.pi)
             yaw_rate = np.clip(yaw_rate, -0.95, 0.95)
 
