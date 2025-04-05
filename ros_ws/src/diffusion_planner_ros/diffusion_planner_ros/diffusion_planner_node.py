@@ -15,7 +15,6 @@ from autoware_perception_msgs.msg import DetectedObjects
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import ColorRGBA
-import tf2_ros
 from geometry_msgs.msg import Point
 from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
@@ -33,6 +32,7 @@ from builtin_interfaces.msg import Duration
 from scipy.spatial.transform import Rotation
 from mmengine import fileio
 import io
+from .utils import create_trajectory_marker
 
 
 class DiffusionPlannerNode(Node):
@@ -280,9 +280,11 @@ class DiffusionPlannerNode(Node):
         trajectory_msg.header.frame_id = "map"
         trajectory_msg.points = []
         dt = 0.1
+        prev_x = prev_y = 0
         for i in range(pred.shape[0]):
             curr_x = pred[i, 0]
             curr_y = pred[i, 1]
+            distance = np.sqrt((curr_x - prev_x) ** 2 + (curr_y - prev_y) ** 2)
             curr_heading = pred[i, 2]
             # self.get_logger().info(f"Predicted position: {curr_x}, {curr_y}, {curr_heading}")
             # transform to map frame
@@ -305,13 +307,15 @@ class DiffusionPlannerNode(Node):
             point.pose.orientation.y = quat[1]
             point.pose.orientation.z = quat[2]
             point.pose.orientation.w = quat[3]
-            point.longitudinal_velocity_mps = 8.333333015441895
+            point.longitudinal_velocity_mps = distance / dt
             trajectory_msg.points.append(point)
+            prev_x = curr_x
+            prev_y = curr_y
         # Publish the trajectory
         self.pub_trajectory.publish(trajectory_msg)
 
         # Publish the trajectory marker
-        marker_array = self.create_trajectory_marker(trajectory_msg)
+        marker_array = create_trajectory_marker(trajectory_msg)
         self.pub_trajectory_marker.publish(marker_array)
 
     def cb_vector_map(self, msg):
