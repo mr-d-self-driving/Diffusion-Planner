@@ -76,7 +76,6 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
 
         # Skip zero vectors (masked objects)
         if np.sum(np.abs(neighbor[:4])) < 1e-6:
-            print(f"Agent {i} is skpped.")
             continue
         print(f"Agent {i} {neighbor}")
 
@@ -162,42 +161,51 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
     # ==== Lanes ====
     lanes = inputs["lanes"][0]  # Use the first sample in the batch
 
+    print(f"{lanes.shape=}")
+
     for i in range(lanes.shape[0]):
         for j in range(lanes.shape[1]):
             lane_point = lanes[i, j]
+            traffic_light = lane_point[8:12]
+            color = None
+            if traffic_light[0] == 1:
+                color = "green"
+            elif traffic_light[1] == 1:
+                color = "yellow"
+            elif traffic_light[2] == 1:
+                color = "red"
+            elif traffic_light[3] == 1:
+                color = "gray"
 
             # Skip zero vectors (masked objects)
             if np.sum(np.abs(lane_point[:4])) < 1e-6:
+                print(f"Skip lane {i} {j}")
                 continue
 
-            # Draw the lane boundaries
-            if np.sum(np.abs(lane_point[4:8])) > 1e-6:
-                left_x = lane_point[0] + lane_point[4]
-                left_y = lane_point[1] + lane_point[5]
-                ax.plot([lane_point[0], left_x], [lane_point[1], left_y], "y-", alpha=0.1)
+            # the lane boundaries
+            left_x = lane_point[0] + lane_point[4]
+            left_y = lane_point[1] + lane_point[5]
 
-                right_x = lane_point[0] + lane_point[6]
-                right_y = lane_point[1] + lane_point[7]
-                ax.plot([lane_point[0], right_x], [lane_point[1], right_y], "y-", alpha=0.1)
+            right_x = lane_point[0] + lane_point[6]
+            right_y = lane_point[1] + lane_point[7]
 
-            # Draw the lane centerline
-            if j + 1 < lanes.shape[1] and np.sum(np.abs(lanes[i, j + 1, :4])) > 1e-6:
+            if j + 1 < lanes.shape[1]:
                 next_point = lanes[i, j + 1]
                 ax.plot(
                     [lane_point[0], next_point[0]],
                     [lane_point[1], next_point[1]],
-                    "r-",
                     alpha=0.1,
                     linewidth=1,
+                    color=color,
                 )
                 next_left_x = next_point[0] + next_point[4]
                 next_left_y = next_point[1] + next_point[5]
                 ax.plot(
                     [left_x, next_left_x],
                     [left_y, next_left_y],
-                    "k-",
                     alpha=0.25,
                     linewidth=1,
+                    color=color,
                 )
 
                 next_right_x = next_point[0] + next_point[6]
@@ -205,11 +213,10 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
                 ax.plot(
                     [right_x, next_right_x],
                     [right_y, next_right_y],
-                    "k-",
                     alpha=0.25,
                     linewidth=1,
+                    color=color,
                 )
-
 
     # プロットの装飾
     ax.set_xlabel("X [m]")
@@ -218,7 +225,7 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
     ax.grid(True, alpha=0.3)
 
     # エゴ車両中心の表示範囲を設定
-    view_range = 100
+    view_range = 110
     ax.set_xlim(ego_x - view_range, ego_x + view_range)
     ax.set_ylim(ego_y - view_range, ego_y + view_range)
 
