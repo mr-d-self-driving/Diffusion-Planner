@@ -42,6 +42,7 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
 
     # ==== Ego ====
     ego_state = inputs["ego_current_state"][0]  # Use the first sample in the batch
+    print(f"{ego_state=}")
     ego_x, ego_y = ego_state[0], ego_state[1]
     ego_heading = np.arctan2(ego_state[3], ego_state[2])
 
@@ -75,7 +76,9 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
 
         # Skip zero vectors (masked objects)
         if np.sum(np.abs(neighbor[:4])) < 1e-6:
+            print(f"Agent {i} is skpped.")
             continue
+        print(f"Agent {i} {neighbor}")
 
         n_x, n_y = neighbor[0], neighbor[1]
         n_heading = np.arctan2(neighbor[3], neighbor[2])
@@ -96,15 +99,9 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
             shape_width = 0.5
 
         # Draw the past trajectory as a dashed line
-        if last_timestep > 0:
-            past_x = [neighbors[i, t, 0] for t in range(last_timestep + 1)]
-            past_y = [neighbors[i, t, 1] for t in range(last_timestep + 1)]
-            valid_points = [
-                (x, y) for x, y in zip(past_x, past_y) if abs(x) > 1e-6 or abs(y) > 1e-6
-            ]
-            if valid_points:
-                past_x, past_y = zip(*valid_points)
-                ax.plot(past_x, past_y, color=color, alpha=0.9, linestyle="--")
+        past_x = [neighbors[i, t, 0] for t in range(last_timestep + 1)]
+        past_y = [neighbors[i, t, 1] for t in range(last_timestep + 1)]
+        ax.plot(past_x, past_y, color=color, alpha=0.9, linestyle="--")
 
         # Draw the current position as an arrow
         dx = shape_length / 2 * np.cos(n_heading)
@@ -120,6 +117,15 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
             fc=color,
             ec=color,
             alpha=0.5,
+        )
+        ax.text(
+            n_x + 10,
+            n_y,
+            f"Agent {i}",
+            fontsize=8,
+            color=color,
+            ha="center",
+            va="center",
         )
 
     # ==== Static objects ====
