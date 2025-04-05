@@ -160,8 +160,12 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
 
     # ==== Lanes ====
     lanes = inputs["lanes"][0]  # Use the first sample in the batch
+    lanes_speed_limit = inputs["lanes_speed_limit"][0]
+    lanes_has_speed_limit = inputs["lanes_has_speed_limit"][0]
 
     print(f"{lanes.shape=}")
+    print(f"{lanes_speed_limit.shape=}")
+    print(f"{lanes_has_speed_limit.shape=}")
 
     for i in range(lanes.shape[0]):
         for j in range(lanes.shape[1]):
@@ -217,6 +221,14 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
                     linewidth=1,
                     color=color,
                 )
+        # print speed limit
+        # ax.text(
+        #     (left_x + next_left_x) / 2,
+        #     (left_y + next_left_y) / 2,
+        #     f"Limit({lanes_has_speed_limit[i][0]})={lanes_speed_limit[i][0]:.1f}",
+        #     fontsize=8,
+        #     color=color,
+        # )
 
     # プロットの装飾
     ax.set_xlabel("X [m]")
