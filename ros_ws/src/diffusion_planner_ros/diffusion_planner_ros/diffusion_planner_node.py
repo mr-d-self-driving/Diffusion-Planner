@@ -144,8 +144,8 @@ class DiffusionPlannerNode(Node):
 
         # members
         self.latest_kinematic_state = None
-        self.transform_mmatrix_4x4 = None
-        self.inv_transform_matrix_4x4 = None
+        self.bl2map_matrix_4x4 = None
+        self.map2bl_matrix_4x4 = None
         self.vector_map = None
         self.route = None
         self.route_tensor = torch.zeros(
@@ -166,14 +166,14 @@ class DiffusionPlannerNode(Node):
         rot = Rotation.from_quat([ego_qx, ego_qy, ego_qz, ego_qw])
         translation = np.array([ego_x, ego_y, ego_z])
         transform_matrix = rot.as_matrix()
-        transform_matrix_4x4 = np.eye(4)
-        transform_matrix_4x4[:3, :3] = transform_matrix
-        transform_matrix_4x4[:3, 3] = translation
-        self.transform_mmatrix_4x4 = transform_matrix_4x4
-        inv_transform_matrix_4x4 = np.eye(4)
-        inv_transform_matrix_4x4[:3, :3] = transform_matrix.T
-        inv_transform_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
-        self.inv_transform_matrix_4x4 = inv_transform_matrix_4x4
+
+        self.bl2map_matrix_4x4 = np.eye(4)
+        self.bl2map_matrix_4x4[:3, :3] = transform_matrix
+        self.bl2map_matrix_4x4[:3, 3] = translation
+
+        self.map2bl_matrix_4x4 = np.eye(4)
+        self.map2bl_matrix_4x4[:3, :3] = transform_matrix.T
+        self.map2bl_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
 
     def cb_detected_objects(self, msg):
         if self.latest_kinematic_state is None:
@@ -216,8 +216,8 @@ class DiffusionPlannerNode(Node):
         ego_twist_angular = np.array(
             [ego_twist_angular.x, ego_twist_angular.y, ego_twist_angular.z]
         )
-        ego_twist_linear = self.inv_transform_matrix_4x4[0:3, 0:3] @ ego_twist_linear
-        ego_twist_angular = self.inv_transform_matrix_4x4[0:3, 0:3] @ ego_twist_angular
+        ego_twist_linear = self.map2bl_matrix_4x4[0:3, 0:3] @ ego_twist_linear
+        ego_twist_angular = self.map2bl_matrix_4x4[0:3, 0:3] @ ego_twist_angular
         linear_vel_norm = np.linalg.norm(ego_twist_linear)
         if abs(linear_vel_norm) < 0.2:
             yaw_rate = 0.0  # if the car is almost stopped, the yaw rate is unreliable
@@ -289,9 +289,9 @@ class DiffusionPlannerNode(Node):
             # self.get_logger().info(f"Predicted position: {curr_x}, {curr_y}, {curr_heading}")
             # transform to map frame
             vec3d = [curr_x, curr_y, 0.0]
-            vec3d = self.transform_mmatrix_4x4 @ np.array([*vec3d, 1.0])
+            vec3d = self.bl2map_matrix_4x4 @ np.array([*vec3d, 1.0])
             rot = Rotation.from_euler("z", curr_heading, degrees=False).as_matrix()
-            rot = self.transform_mmatrix_4x4[0:3, 0:3] @ rot
+            rot = self.bl2map_matrix_4x4[0:3, 0:3] @ rot
             quat = Rotation.from_matrix(rot).as_quat()
             point = TrajectoryPoint()
             total_seconds = float(i * dt)
@@ -323,8 +323,6 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info("Received vector map")
 
     def cb_route(self, msg):
-        if self.latest_kinematic_state is None:
-            return
         self.route = msg
         self.get_logger().info(
             f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
@@ -340,7 +338,7 @@ class DiffusionPlannerNode(Node):
             if ll2_id in self.static_map.lane_segments:
                 curr_result = process_segment(
                     self.static_map.lane_segments[ll2_id],
-                    self.inv_transform_matrix_4x4,
+                    self.map2bl_matrix_4x4,
                     mask_range=100,
                 )
                 if curr_result is None:
@@ -393,9 +391,7 @@ class DiffusionPlannerNode(Node):
                 ],
                 axis=1,
             )
-            centerline_in_map = (
-                self.transform_mmatrix_4x4 @ centerline_in_base_link.T
-            ).T
+            centerline_in_map = (self.bl2map_matrix_4x4 @ centerline_in_base_link.T).T
             # Create a marker for the centerline
             for i, point in enumerate(centerline_in_map):
                 p = Point()
@@ -409,7 +405,6 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info("Publishing route markers")
         marker_array.markers.append(centerline_marker)
         self.pub_route_marker.publish(marker_array)
-
 
 
 def main(args=None):
