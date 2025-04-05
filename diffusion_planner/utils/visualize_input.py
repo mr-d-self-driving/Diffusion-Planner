@@ -21,7 +21,6 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
 
     for key in inputs:
         inputs[key] = to_numpy(inputs[key])
-        print(f"{key=}, {inputs[key].shape=}")
 
     """
     key='ego_current_state', inputs[key].shape=(1, 10)
@@ -42,9 +41,14 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
 
     # ==== Ego ====
     ego_state = inputs["ego_current_state"][0]  # Use the first sample in the batch
-    print(f"{ego_state=}")
     ego_x, ego_y = ego_state[0], ego_state[1]
     ego_heading = np.arctan2(ego_state[3], ego_state[2])
+    ego_vel_x = ego_state[4]
+    ego_vel_y = ego_state[5]
+    ego_acc_x = ego_state[6]
+    ego_acc_y = ego_state[7]
+    ego_steering = ego_state[8]
+    ego_yaw_rate = ego_state[9]
 
     # Ego vehicle's length and width
     car_length = 4.5  # Assumed value for vehicle length
@@ -77,7 +81,6 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
         # Skip zero vectors (masked objects)
         if np.sum(np.abs(neighbor[:4])) < 1e-6:
             continue
-        print(f"Agent {i} {neighbor}")
 
         n_x, n_y = neighbor[0], neighbor[1]
         n_heading = np.arctan2(neighbor[3], neighbor[2])
@@ -163,10 +166,6 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
     lanes_speed_limit = inputs["lanes_speed_limit"][0]
     lanes_has_speed_limit = inputs["lanes_has_speed_limit"][0]
 
-    print(f"{lanes.shape=}")
-    print(f"{lanes_speed_limit.shape=}")
-    print(f"{lanes_has_speed_limit.shape=}")
-
     for i in range(lanes.shape[0]):
         for j in range(lanes.shape[1]):
             lane_point = lanes[i, j]
@@ -230,11 +229,93 @@ def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_p
         #     color=color,
         # )
 
+    # ==== Route ====
+    route_lanes = inputs["route_lanes"][0]  # Use the first sample in the batch
+    route_lanes_speed_limit = inputs["route_lanes_speed_limit"][0]
+    route_lanes_has_speed_limit = inputs["route_lanes_has_speed_limit"][0]
+
+    for i in range(route_lanes.shape[0]):
+        for j in range(route_lanes.shape[1]):
+            lane_point = route_lanes[i, j]
+            # Skip zero vectors (masked objects)
+            if np.sum(np.abs(lane_point[:4])) < 1e-6:
+                continue
+            traffic_light = lane_point[8:12]
+            color = None
+            if traffic_light[0] == 1:
+                color = "green"
+            elif traffic_light[1] == 1:
+                color = "yellow"
+            elif traffic_light[2] == 1:
+                color = "red"
+            elif traffic_light[3] == 1:
+                color = "gray"
+
+            # the lane boundaries
+            left_x = lane_point[0] + lane_point[4]
+            left_y = lane_point[1] + lane_point[5]
+
+            right_x = lane_point[0] + lane_point[6]
+            right_y = lane_point[1] + lane_point[7]
+
+            if j + 1 < route_lanes.shape[1]:
+                next_point = route_lanes[i, j + 1]
+                ax.plot(
+                    [lane_point[0], next_point[0]],
+                    [lane_point[1], next_point[1]],
+                    alpha=0.5,
+                    linewidth=2,
+                    color=color,
+                )
+                next_left_x = next_point[0] + next_point[4]
+                next_left_y = next_point[1] + next_point[5]
+                ax.plot(
+                    [left_x, next_left_x],
+                    [left_y, next_left_y],
+                    alpha=0.5,
+                    linewidth=2,
+                    color=color,
+                )
+
+                next_right_x = next_point[0] + next_point[6]
+                next_right_y = next_point[1] + next_point[7]
+                ax.plot(
+                    [right_x, next_right_x],
+                    [right_y, next_right_y],
+                    alpha=0.5,
+                    linewidth=2,
+                    color=color,
+                )
+        # print speed limit
+        # ax.text(
+        #     (left_x + next_left_x) / 2,
+        #     (left_y + next_left_y) / 2,
+        #     f"Limit({route_lanes_has_speed_limit[i][0]})={route_lanes_speed_limit[i][0]:.1f}",
+        #     fontsize=8,
+        #     color="black",
+        # )
+
     # プロットの装飾
     ax.set_xlabel("X [m]")
     ax.set_ylabel("Y [m]")
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.3)
+
+    # 自車両の速度・加速度・舵角などをテキストで表示
+    ax.text(
+        99,
+        99,
+        f"VelocityX: {ego_vel_x:.2f} m/s\n"
+        f"VelocityY: {ego_vel_y:.2f} m/s\n"
+        f"AccelerationX: {ego_acc_x:.2f} m/s²\n"
+        f"AccelerationY: {ego_acc_y:.2f} m/s²\n"
+        f"Steering: {ego_steering:.2f} rad\n"
+        f"Yaw Rate: {ego_yaw_rate:.2f} rad/s",
+        fontsize=8,
+        color="red",
+        ha="right",
+        va="top",
+    )
 
     # エゴ車両中心の表示範囲を設定
     view_range = 110
