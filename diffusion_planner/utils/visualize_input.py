@@ -6,12 +6,12 @@ from diffusion_planner.utils.normalizer import ObservationNormalizer
 from copy import deepcopy
 
 
-def visualize_inputs(inputs: dict, obs_noramlizer: ObservationNormalizer, save_path: Path):
+def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_path: Path):
     """
     draw the input data of the diffusion_planner model on the xy plane
     """
     inputs = deepcopy(inputs)
-    inputs = obs_noramlizer.inverse(inputs)
+    inputs = obs_normalizer.inverse(inputs)
 
     # Function to convert PyTorch tensors to NumPy arrays
     def to_numpy(tensor):
