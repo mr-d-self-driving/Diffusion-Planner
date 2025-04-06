@@ -11,7 +11,7 @@ from rclpy.qos import (
     QoSHistoryPolicy,
 )
 from nav_msgs.msg import Odometry
-from autoware_perception_msgs.msg import DetectedObjects
+from autoware_perception_msgs.msg import DetectedObjects, TrackedObjects
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import ColorRGBA
@@ -32,7 +32,7 @@ from builtin_interfaces.msg import Duration
 from scipy.spatial.transform import Rotation
 from mmengine import fileio
 import io
-from .utils import create_trajectory_marker
+from .utils import create_trajectory_marker, pose_to_mat4x4, rot3x3_to_heading_cos_sin
 
 
 class DiffusionPlannerNode(Node):
@@ -87,6 +87,12 @@ class DiffusionPlannerNode(Node):
             DetectedObjects,
             "/perception/object_recognition/detection/objects",
             self.cb_detected_objects,
+            10,
+        )
+        self.tracked_objects_sub = self.create_subscription(
+            TrackedObjects,
+            "/perception/object_recognition/tracking/objects",
+            self.cb_tracked_objects,
             10,
         )
 
@@ -148,9 +154,10 @@ class DiffusionPlannerNode(Node):
         self.map2bl_matrix_4x4 = None
         self.vector_map = None
         self.route = None
-        self.route_tensor = torch.zeros(
-            (1, 25, 20, 12), dtype=torch.float32, device="cuda"
-        )
+        dev = self.diffusion_planner.parameters().__next__().device
+        self.route_tensor = torch.zeros((1, 25, 20, 12), device=dev)
+        self.neighbor = torch.zeros((1, 32, 21, 11), device=dev)
+        self.tracked_objs = {}  # object_id -> index in self.neighbor
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
 
@@ -244,7 +251,7 @@ class DiffusionPlannerNode(Node):
 
         input_dict = {
             "ego_current_state": ego_current_state,
-            "neighbor_agents_past": torch.zeros((1, 32, 21, 11), device=dev),
+            "neighbor_agents_past": self.neighbor,
             "lanes": lanes_tensor,
             "lanes_speed_limit": torch.zeros((1, 70, 1), device=dev),
             "lanes_has_speed_limit": torch.zeros(
@@ -327,6 +334,79 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info(
             f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
         )
+
+    def cb_tracked_objects(self, msg):
+        dev = self.diffusion_planner.parameters().__next__().device
+        new_tracked_objs = {}
+        label_map = {
+            0: 0,  # unknown -> vehicle
+            1: 0,  # car -> vehicle
+            2: 0,  # truck -> vehicle
+            3: 0,  # bus -> vehicle
+            4: 0,  # trailer -> vehicle
+            5: 2,  # motorcycle -> bicycle
+            6: 2,  # bicycle -> bicycle
+            7: 1,  # pedestrian -> pedestrian
+        }
+        for i in range(len(msg.objects)):
+            obj = msg.objects[i]
+            object_id_bytes = bytes(obj.object_id.uuid)
+            classification = obj.classification
+            label_list = [i.label for i in classification]
+            probability_list = [i.probability for i in classification]
+            max_index = np.argmax(probability_list)
+            label = label_list[max_index]
+            label_in_model = label_map[label]
+            kinematics = obj.kinematics
+            pose_in_map_4x4 = pose_to_mat4x4(kinematics.pose_with_covariance.pose)
+            pose_in_bl_4x4 = self.map2bl_matrix_4x4 @ pose_in_map_4x4
+            cos, sin = rot3x3_to_heading_cos_sin(pose_in_bl_4x4[0:3, 0:3])
+            twist_in_map_4x4 = np.eye(4)
+            twist_in_map_4x4[0, 3] = kinematics.twist_with_covariance.twist.linear.x
+            twist_in_map_4x4[1, 3] = kinematics.twist_with_covariance.twist.linear.y
+            twist_in_map_4x4[2, 3] = kinematics.twist_with_covariance.twist.linear.z
+            twist_in_bl_4x4 = self.map2bl_matrix_4x4 @ twist_in_map_4x4
+            shape = obj.shape
+            if object_id_bytes in self.tracked_objs:
+                index = self.tracked_objs[object_id_bytes]
+                self.neighbor[0, index, 0:-1] = self.neighbor[0, index, 1:].clone()
+                self.neighbor[0, index, -1, 0] = pose_in_bl_4x4[0, 3]  # x
+                self.neighbor[0, index, -1, 1] = pose_in_bl_4x4[1, 3]  # y
+                self.neighbor[0, index, -1, 2] = cos  # heading cos
+                self.neighbor[0, index, -1, 3] = sin  # heading sin
+                self.neighbor[0, index, -1, 4] = twist_in_bl_4x4[0, 3]  # velocity x
+                self.neighbor[0, index, -1, 5] = twist_in_bl_4x4[1, 3]  # velocity y
+                self.neighbor[0, index, -1, 6] = shape.dimensions.x  # length
+                self.neighbor[0, index, -1, 7] = shape.dimensions.y  # width
+                self.neighbor[0, index, -1, 8] = label_in_model == 0  # vehicle
+                self.neighbor[0, index, -1, 9] = label_in_model == 1  # pedestrian
+                self.neighbor[0, index, -1, 10] = label_in_model == 2  # bicycle
+                new_tracked_objs[object_id_bytes] = index
+            else:
+                first_empty_index = -1
+                for j in range(32):
+                    if self.neighbor[0, j, 0, 0] == 0:
+                        first_empty_index = j
+                        break
+                if first_empty_index == -1:
+                    continue
+                self.neighbor[0, first_empty_index, 0, 0] = pose_in_bl_4x4[0, 3]  # x
+                self.neighbor[0, first_empty_index, 0, 1] = pose_in_bl_4x4[1, 3]  # y
+                self.neighbor[0, first_empty_index, 0, 2] = cos  # heading cos
+                self.neighbor[0, first_empty_index, 0, 3] = sin  # heading sin
+                self.neighbor[0, first_empty_index, 0, 4] = twist_in_bl_4x4[0, 3]
+                self.neighbor[0, first_empty_index, 0, 5] = twist_in_bl_4x4[1, 3]
+                self.neighbor[0, first_empty_index, 0, 6] = shape.dimensions.x
+                self.neighbor[0, first_empty_index, 0, 7] = shape.dimensions.y
+                self.neighbor[0, first_empty_index, 0, 8] = label_in_model == 0
+                self.neighbor[0, first_empty_index, 0, 9] = label_in_model == 1
+                self.neighbor[0, first_empty_index, 0, 10] = label_in_model == 2
+                new_tracked_objs[object_id_bytes] = first_empty_index
+
+        self.tracked_objs = new_tracked_objs
+        for i in range(32):
+            if i not in self.tracked_objs.values():
+                self.neighbor[0, i] = torch.zeros((21, 11), device=dev)
 
     def process_route(self, msg):
         self.route_tensor = torch.zeros(

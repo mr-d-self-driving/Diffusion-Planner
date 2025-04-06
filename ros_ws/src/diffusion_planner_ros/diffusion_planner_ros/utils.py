@@ -3,6 +3,42 @@ from std_msgs.msg import ColorRGBA
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import Point
 from scipy.spatial.transform import Rotation
+import numpy as np
+
+
+def pose_to_mat4x4(pose):
+    """
+    ROSのPoseを4x4の行列に変換
+    """
+    mat = np.array(
+        [
+            [1.0, 0.0, 0.0, pose.position.x],
+            [0.0, 1.0, 0.0, pose.position.y],
+            [0.0, 0.0, 1.0, pose.position.z],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+
+    q = [
+        pose.orientation.x,
+        pose.orientation.y,
+        pose.orientation.z,
+        pose.orientation.w,
+    ]
+    rot = Rotation.from_quat(q)
+    mat[:3, :3] = rot.as_matrix()
+    return mat
+
+
+def rot3x3_to_heading_cos_sin(rot3x3):
+    """
+    回転行列からヘディング角を計算
+    """
+    rot = Rotation.from_matrix(rot3x3)
+    heading = rot.as_euler("zyx")[0]  # ZYX順でヘディングを取得
+    cos_heading = np.cos(heading)
+    sin_heading = np.sin(heading)
+    return cos_heading, sin_heading
 
 
 def create_trajectory_marker(trajectory_msg):
