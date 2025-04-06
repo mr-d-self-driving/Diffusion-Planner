@@ -235,8 +235,6 @@ class DiffusionPlannerNode(Node):
         ego_twist_angular = np.array(
             [ego_twist_angular.x, ego_twist_angular.y, ego_twist_angular.z]
         )
-        ego_twist_linear = self.map2bl_matrix_4x4[0:3, 0:3] @ ego_twist_linear
-        ego_twist_angular = self.map2bl_matrix_4x4[0:3, 0:3] @ ego_twist_angular
         linear_vel_norm = np.linalg.norm(ego_twist_linear)
         if abs(linear_vel_norm) < 0.2:
             yaw_rate = 0.0  # if the car is almost stopped, the yaw rate is unreliable
