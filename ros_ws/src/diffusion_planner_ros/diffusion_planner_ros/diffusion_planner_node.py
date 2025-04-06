@@ -210,13 +210,7 @@ class DiffusionPlannerNode(Node):
         start = time.time()
         result_list = get_input_feature(
             self.static_map,
-            ego_x=self.latest_kinematic_state.pose.pose.position.x,
-            ego_y=self.latest_kinematic_state.pose.pose.position.y,
-            ego_z=self.latest_kinematic_state.pose.pose.position.z,
-            ego_qx=self.latest_kinematic_state.pose.pose.orientation.x,
-            ego_qy=self.latest_kinematic_state.pose.pose.orientation.y,
-            ego_qz=self.latest_kinematic_state.pose.pose.orientation.z,
-            ego_qw=self.latest_kinematic_state.pose.pose.orientation.w,
+            map2bl_mat4x4=self.map2bl_matrix_4x4,
             mask_range=100,
         )
         lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)

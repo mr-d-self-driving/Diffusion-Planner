@@ -536,30 +536,12 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
 
 def get_input_feature(
     map: AWMLStaticMap,
-    ego_x: float,
-    ego_y: float,
-    ego_z: float,
-    ego_qx: float,
-    ego_qy: float,
-    ego_qz: float,
-    ego_qw: float,
+    map2bl_mat4x4: NDArray,
     mask_range: float,
 ) -> list[np.ndarray]:
-    # 自車中心に座標変換するための行列を作成
-    rot = Rotation.from_quat([ego_qx, ego_qy, ego_qz, ego_qw])
-    translation = np.array([ego_x, ego_y, ego_z])
-    transform_matrix = rot.as_matrix()
-    transform_matrix_4x4 = np.eye(4)
-    transform_matrix_4x4[:3, :3] = transform_matrix
-    transform_matrix_4x4[:3, 3] = translation
-    inv_transform_matrix_4x4 = np.eye(4)
-    inv_transform_matrix_4x4[:3, :3] = transform_matrix.T
-    inv_transform_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
-
-    # Plot the map
     result = []
     for segment_id, segment in map.lane_segments.items():
-        curr_data = process_segment(segment, inv_transform_matrix_4x4, mask_range)
+        curr_data = process_segment(segment, map2bl_mat4x4, mask_range)
         if curr_data is None:
             continue
         result.append(curr_data)
