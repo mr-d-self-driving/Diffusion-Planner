@@ -15,7 +15,7 @@ from autoware_perception_msgs.msg import DetectedObjects, TrackedObjects
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import ColorRGBA
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, AccelWithCovarianceStamped
 from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     get_input_feature,
@@ -81,7 +81,15 @@ class DiffusionPlannerNode(Node):
             10,
         )
 
-        # sub(2) detected_objects
+        # sub(2) acceleration
+        self.acceleration_sub = self.create_subscription(
+            AccelWithCovarianceStamped,
+            "/localization/acceleration",
+            self.cb_acceleration,
+            10,
+        )
+
+        # sub(3) detected_objects, tracked_objects
         # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_perception_msgs/msg/DetectedObjects.msg
         self.detected_objects_sub = self.create_subscription(
             DetectedObjects,
@@ -96,7 +104,7 @@ class DiffusionPlannerNode(Node):
             10,
         )
 
-        # sub(3) route
+        # sub(4) route
         # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_planning_msgs/msg/LaneletRoute.msg
         transient_qos = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
@@ -150,6 +158,7 @@ class DiffusionPlannerNode(Node):
 
         # members
         self.latest_kinematic_state = None
+        self.latest_acceleration = None
         self.bl2map_matrix_4x4 = None
         self.map2bl_matrix_4x4 = None
         self.vector_map = None
@@ -181,6 +190,9 @@ class DiffusionPlannerNode(Node):
         self.map2bl_matrix_4x4 = np.eye(4)
         self.map2bl_matrix_4x4[:3, :3] = transform_matrix.T
         self.map2bl_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
+
+    def cb_acceleration(self, msg):
+        self.latest_acceleration = msg
 
     def cb_detected_objects(self, msg):
         if self.latest_kinematic_state is None:
@@ -244,8 +256,8 @@ class DiffusionPlannerNode(Node):
         ego_current_state[0, 3] = 0  # heading sin in base_link is always 0
         ego_current_state[0, 4] = ego_twist_linear[0]  # velocity x
         ego_current_state[0, 5] = ego_twist_linear[1]  # velocity y
-        ego_current_state[0, 6] = 0  # acceleration x (TODO)
-        ego_current_state[0, 7] = 0  # acceleration y (TODO)
+        ego_current_state[0, 6] = self.latest_acceleration.accel.accel.linear.x
+        ego_current_state[0, 7] = self.latest_acceleration.accel.accel.linear.y
         ego_current_state[0, 8] = steering_angle  # steering angle
         ego_current_state[0, 9] = yaw_rate  # yaw rate
 
