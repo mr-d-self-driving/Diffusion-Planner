@@ -494,22 +494,22 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
         return None
     else:
         # 点数が20になるように修正する
-        filtered_centerlines = resample_waypoints(centerlines, 20)
+        centerlines = resample_waypoints(centerlines, 20)
         left_boundaries = resample_waypoints(left_boundaries, 20)
         right_boundaries = resample_waypoints(right_boundaries, 20)
 
-    left_boundaries -= filtered_centerlines
-    right_boundaries -= filtered_centerlines
+    left_boundaries -= centerlines
+    right_boundaries -= centerlines
 
-    diff_centerlines = filtered_centerlines[1:] - filtered_centerlines[:-1]
+    diff_centerlines = centerlines[1:] - centerlines[:-1]
     diff_centerlines = np.insert(diff_centerlines, diff_centerlines.shape[0], 0, axis=0)
 
     traffic_light = [0, 0, 0, 1]  # (green, yellow, red, unknown)
-    traffic_light = np.tile(traffic_light, (filtered_centerlines.shape[0], 1))
+    traffic_light = np.tile(traffic_light, (centerlines.shape[0], 1))
 
     curr_data = np.concatenate(
         (
-            filtered_centerlines[:, 0:2],  # xyのみ
+            centerlines[:, 0:2],  # xyのみ
             diff_centerlines[:, 0:2],  # xyのみ
             left_boundaries[:, 0:2],  # xyのみ
             right_boundaries[:, 0:2],  # xyのみ
