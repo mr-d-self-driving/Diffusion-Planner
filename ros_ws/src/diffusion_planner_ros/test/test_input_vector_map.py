@@ -6,6 +6,8 @@ from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     get_input_feature,
 )
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation
+import numpy as np
 
 
 def parse_args():
@@ -34,7 +36,16 @@ if __name__ == "__main__":
     ego_qw = 0.9668934685700217
     RANGE = 100
 
-    result_list = get_input_feature(result, ego_x, ego_y, ego_z, ego_qx, ego_qy, ego_qz, ego_qw, RANGE)
+    map2bl_mat4x4 = np.eye(4)
+    map2bl_mat4x4[0, 3] = ego_x
+    map2bl_mat4x4[1, 3] = ego_y
+    map2bl_mat4x4[2, 3] = ego_z
+    map2bl_mat4x4[0:3, 0:3] = Rotation.from_quat(
+        [ego_qx, ego_qy, ego_qz, ego_qw]
+    ).as_matrix()
+    map2bl_mat4x4 = np.linalg.inv(map2bl_mat4x4)
+
+    result_list = get_input_feature(result, map2bl_mat4x4, RANGE)
     print(f"{len(result_list)=}")
 
     plt.figure(figsize=(10, 8))
