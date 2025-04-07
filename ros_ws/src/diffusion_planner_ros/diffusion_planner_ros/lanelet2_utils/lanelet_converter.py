@@ -464,11 +464,6 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
     centerlines = segment.polyline.waypoints
     left_boundaries = segment.left_boundaries[0].polyline.waypoints
     right_boundaries = segment.right_boundaries[0].polyline.waypoints
-    n = centerlines.shape[0]
-    if left_boundaries.shape[0] != n:
-        left_boundaries = resample_waypoints(left_boundaries, n)
-    if right_boundaries.shape[0] != n:
-        right_boundaries = resample_waypoints(right_boundaries, n)
 
     # 自車座標系に変換
     centerlines_4xN = np.vstack((centerlines.T, np.ones(centerlines.shape[0])))
@@ -492,23 +487,14 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
         & (centerlines[:, 1] > -mask_range)
         & (centerlines[:, 1] < mask_range)
     )
-    filtered_centerlines = centerlines[mask]
-    left_boundaries = left_boundaries[mask]
-    right_boundaries = right_boundaries[mask]
+    true_num = np.sum(mask)
 
-    # 点数が20になるように修正する
-    n = filtered_centerlines.shape[0]
-    if n == 0:
-        # print(f"{n=}")
-        # print(f"{centerlines.shape=}")
-        # print(f"{inv_transform_matrix_4x4=}")
+    if true_num == 0:
+        # この範囲に点がない場合は、何もせずに返す
         return None
-    elif n == 1:
-        filtered_centerlines = np.tile(filtered_centerlines, (20, 1))
-        left_boundaries = np.tile(left_boundaries, (20, 1))
-        right_boundaries = np.tile(right_boundaries, (20, 1))
     else:
-        filtered_centerlines = resample_waypoints(filtered_centerlines, 20)
+        # 点数が20になるように修正する
+        filtered_centerlines = resample_waypoints(centerlines, 20)
         left_boundaries = resample_waypoints(left_boundaries, 20)
         right_boundaries = resample_waypoints(right_boundaries, 20)
 
