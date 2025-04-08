@@ -4,7 +4,6 @@ import sys
 
 import numpy as np
 from scipy.interpolate import interp1d
-from scipy.spatial.transform import Rotation
 
 try:
     import lanelet2
@@ -355,7 +354,15 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
     lane_segments: dict[int, LaneSegment] = {}
     crosswalk_segments: dict[int, CrosswalkSegment] = {}
     taken_boundary_ids: list[int] = []
+    traffic_lights = []
+    for regulatory_element in lanelet_map.regulatoryElementLayer:
+        subtype = regulatory_element.attributes["subtype"]
+        if subtype == "traffic_light":
+            traffic_lights.append(regulatory_element)
     for lanelet in lanelet_map.laneletLayer:
+        if lanelet.trafficLights() is not None:
+            # TODO check traffic lights
+            pass
         lanelet_subtype = _get_lanelet_subtype(lanelet)
 
         # NOTE: skip walkway because it contains stop_line as boundary
