@@ -33,6 +33,14 @@ from scipy.spatial.transform import Rotation
 from mmengine import fileio
 import io
 from .utils import create_trajectory_marker, pose_to_mat4x4, rot3x3_to_heading_cos_sin
+from dataclasses import dataclass
+
+
+@dataclass
+class TrackingObject:
+    kinematics_list: list
+    shape_list: list
+    class_label: int
 
 
 class DiffusionPlannerNode(Node):
@@ -166,7 +174,7 @@ class DiffusionPlannerNode(Node):
         dev = self.diffusion_planner.parameters().__next__().device
         self.route_tensor = torch.zeros((1, 25, 20, 12), device=dev)
         self.neighbor = torch.zeros((1, 32, 21, 11), device=dev)
-        self.tracked_objs = {}  # object_id -> index in self.neighbor
+        self.tracked_objs = {}  # object_id -> TrackingObject
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
 
@@ -340,7 +348,6 @@ class DiffusionPlannerNode(Node):
         )
 
     def cb_tracked_objects(self, msg):
-        dev = self.diffusion_planner.parameters().__next__().device
         new_tracked_objs = {}
         label_map = {
             0: 0,  # unknown -> vehicle
@@ -362,55 +369,56 @@ class DiffusionPlannerNode(Node):
             label = label_list[max_index]
             label_in_model = label_map[label]
             kinematics = obj.kinematics
-            pose_in_map_4x4 = pose_to_mat4x4(kinematics.pose_with_covariance.pose)
-            pose_in_bl_4x4 = self.map2bl_matrix_4x4 @ pose_in_map_4x4
-            cos, sin = rot3x3_to_heading_cos_sin(pose_in_bl_4x4[0:3, 0:3])
-            twist_in_map_4x4 = np.eye(4)
-            twist_in_map_4x4[0, 3] = kinematics.twist_with_covariance.twist.linear.x
-            twist_in_map_4x4[1, 3] = kinematics.twist_with_covariance.twist.linear.y
-            twist_in_map_4x4[2, 3] = kinematics.twist_with_covariance.twist.linear.z
-            twist_in_bl_4x4 = self.map2bl_matrix_4x4 @ twist_in_map_4x4
             shape = obj.shape
             if object_id_bytes in self.tracked_objs:
-                index = self.tracked_objs[object_id_bytes]
-                self.neighbor[0, index, 0:-1] = self.neighbor[0, index, 1:].clone()
-                self.neighbor[0, index, -1, 0] = pose_in_bl_4x4[0, 3]  # x
-                self.neighbor[0, index, -1, 1] = pose_in_bl_4x4[1, 3]  # y
-                self.neighbor[0, index, -1, 2] = cos  # heading cos
-                self.neighbor[0, index, -1, 3] = sin  # heading sin
-                self.neighbor[0, index, -1, 4] = twist_in_bl_4x4[0, 3]  # velocity x
-                self.neighbor[0, index, -1, 5] = twist_in_bl_4x4[1, 3]  # velocity y
-                self.neighbor[0, index, -1, 6] = shape.dimensions.x  # length
-                self.neighbor[0, index, -1, 7] = shape.dimensions.y  # width
-                self.neighbor[0, index, -1, 8] = label_in_model == 0  # vehicle
-                self.neighbor[0, index, -1, 9] = label_in_model == 1  # pedestrian
-                self.neighbor[0, index, -1, 10] = label_in_model == 2  # bicycle
-                new_tracked_objs[object_id_bytes] = index
+                tracked_obj = self.tracked_objs[object_id_bytes]
+                assert tracked_obj.class_label == label_in_model, (
+                    f"Class label mismatch: {tracked_obj.class_label} != {label_in_model}"
+                )
+                tracked_obj.shape_list.append(shape)
+                tracked_obj.kinematics_list.append(kinematics)
+                new_tracked_objs[object_id_bytes] = tracked_obj
             else:
-                first_empty_index = -1
-                for j in range(32):
-                    if self.neighbor[0, j, 0, 0] == 0:
-                        first_empty_index = j
-                        break
-                if first_empty_index == -1:
-                    continue
-                self.neighbor[0, first_empty_index, 0, 0] = pose_in_bl_4x4[0, 3]  # x
-                self.neighbor[0, first_empty_index, 0, 1] = pose_in_bl_4x4[1, 3]  # y
-                self.neighbor[0, first_empty_index, 0, 2] = cos  # heading cos
-                self.neighbor[0, first_empty_index, 0, 3] = sin  # heading sin
-                self.neighbor[0, first_empty_index, 0, 4] = twist_in_bl_4x4[0, 3]
-                self.neighbor[0, first_empty_index, 0, 5] = twist_in_bl_4x4[1, 3]
-                self.neighbor[0, first_empty_index, 0, 6] = shape.dimensions.x
-                self.neighbor[0, first_empty_index, 0, 7] = shape.dimensions.y
-                self.neighbor[0, first_empty_index, 0, 8] = label_in_model == 0
-                self.neighbor[0, first_empty_index, 0, 9] = label_in_model == 1
-                self.neighbor[0, first_empty_index, 0, 10] = label_in_model == 2
-                new_tracked_objs[object_id_bytes] = first_empty_index
+                new_tracked_objs[object_id_bytes] = TrackingObject(
+                    kinematics_list=[kinematics],
+                    shape_list=[shape],
+                    class_label=label_in_model,
+                )
 
         self.tracked_objs = new_tracked_objs
-        for i in range(32):
-            if i not in self.tracked_objs.values():
-                self.neighbor[0, i] = torch.zeros((21, 11), device=dev)
+        self.get_logger().info(f"Tracked objects: {len(self.tracked_objs)}")
+
+        # convert to tensor
+        dev = self.diffusion_planner.parameters().__next__().device
+        self.neighbor = torch.zeros((1, 32, 21, 11), device=dev)
+        for i, (object_id_bytes, tracked_obj) in enumerate(self.tracked_objs.items()):
+            label_in_model = tracked_obj.class_label
+            for j in range(21):
+                if j < len(tracked_obj.kinematics_list):
+                    kinematics = tracked_obj.kinematics_list[j]
+                    shape = tracked_obj.shape_list[j]
+                else:
+                    kinematics = tracked_obj.kinematics_list[-1]
+                    shape = tracked_obj.shape_list[-1]
+                pose_in_map_4x4 = pose_to_mat4x4(kinematics.pose_with_covariance.pose)
+                pose_in_bl_4x4 = self.map2bl_matrix_4x4 @ pose_in_map_4x4
+                cos, sin = rot3x3_to_heading_cos_sin(pose_in_bl_4x4[0:3, 0:3])
+                twist_in_map_4x4 = np.eye(4)
+                twist_in_map_4x4[0, 3] = kinematics.twist_with_covariance.twist.linear.x
+                twist_in_map_4x4[1, 3] = kinematics.twist_with_covariance.twist.linear.y
+                twist_in_map_4x4[2, 3] = kinematics.twist_with_covariance.twist.linear.z
+                twist_in_bl_4x4 = self.map2bl_matrix_4x4 @ twist_in_map_4x4
+                self.neighbor[0, i, 20 - j, 0] = pose_in_bl_4x4[0, 3]  # x
+                self.neighbor[0, i, 20 - j, 1] = pose_in_bl_4x4[1, 3]  # y
+                self.neighbor[0, i, 20 - j, 2] = cos  # heading cos
+                self.neighbor[0, i, 20 - j, 3] = sin  # heading sin
+                self.neighbor[0, i, 20 - j, 4] = twist_in_bl_4x4[0, 3]  # velocity x
+                self.neighbor[0, i, 20 - j, 5] = twist_in_bl_4x4[1, 3]  # velocity y
+                self.neighbor[0, i, 20 - j, 6] = shape.dimensions.x  # length
+                self.neighbor[0, i, 20 - j, 7] = shape.dimensions.y  # width
+                self.neighbor[0, i, 20 - j, 8] = label_in_model == 0  # vehicle
+                self.neighbor[0, i, 20 - j, 9] = label_in_model == 1  # pedestrian
+                self.neighbor[0, i, 20 - j, 10] = label_in_model == 2  # bicycle
 
     def process_route(self, msg):
         self.route_tensor = torch.zeros(
