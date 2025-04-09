@@ -84,21 +84,17 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
 
         n_x, n_y = neighbor[0], neighbor[1]
         n_heading = np.arctan2(neighbor[3], neighbor[2])
+        vel_x, vely = neighbor[4], neighbor[5]
+        len_x, len_y = neighbor[6], neighbor[7]
 
         # Set color and shape dimensions based on the vehicle type
         vehicle_type = np.argmax(neighbor[8:11]) if neighbor.shape[0] > 8 else 0
         if vehicle_type == 0:  # Vehicle
             color = "blue"
-            shape_length = 4.0
-            shape_width = 1.8
         elif vehicle_type == 1:  # Pedestrian
             color = "green"
-            shape_length = 1.0
-            shape_width = 0.5
         else:  # Bicycle
             color = "purple"
-            shape_length = 1.8
-            shape_width = 0.5
 
         # Draw the past trajectory as a dashed line
         past_x = [neighbors[i, t, 0] for t in range(last_timestep + 1)]
@@ -106,16 +102,16 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
         ax.plot(past_x, past_y, color=color, alpha=0.9, linestyle="--")
 
         # Draw the current position as an arrow
-        dx = shape_length / 2 * np.cos(n_heading)
-        dy = shape_length / 2 * np.sin(n_heading)
+        dx = len_x / 2 * np.cos(n_heading)
+        dy = len_y / 2 * np.sin(n_heading)
         ax.arrow(
             n_x,
             n_y,
             dx,
             dy,
-            width=shape_width / 2,
-            head_width=shape_width,
-            head_length=shape_length / 3,
+            width=len_y / 2,
+            head_width=len_y,
+            head_length=len_x / 3,
             fc=color,
             ec=color,
             alpha=0.5,
@@ -128,6 +124,40 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
             color=color,
             ha="center",
             va="center",
+        )
+
+        # Draw bounding box
+        ax.add_line(
+            plt.Line2D(
+                [n_x - dx, n_x + dx],
+                [n_y - dy, n_y + dy],
+                color=color,
+                alpha=0.5,
+            )
+        )
+        ax.add_line(
+            plt.Line2D(
+                [n_x - dx, n_x + dx],
+                [n_y + dy, n_y - dy],
+                color=color,
+                alpha=0.5,
+            )
+        )
+        ax.add_line(
+            plt.Line2D(
+                [n_x - dx, n_x - dx],
+                [n_y - dy, n_y + dy],
+                color=color,
+                alpha=0.5,
+            )
+        )
+        ax.add_line(
+            plt.Line2D(
+                [n_x + dx, n_x + dx],
+                [n_y - dy, n_y + dy],
+                color=color,
+                alpha=0.5,
+            )
         )
 
     # ==== Static objects ====
