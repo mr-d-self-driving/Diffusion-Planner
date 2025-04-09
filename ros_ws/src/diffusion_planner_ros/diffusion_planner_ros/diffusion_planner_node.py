@@ -372,7 +372,7 @@ class DiffusionPlannerNode(Node):
             shape = obj.shape
             if object_id_bytes in self.tracked_objs:
                 tracked_obj = self.tracked_objs[object_id_bytes]
-                assert tracked_obj.class_label == label_in_model, (
+                self.get_logger().warn(
                     f"Class label mismatch: {tracked_obj.class_label} != {label_in_model}"
                 )
                 tracked_obj.shape_list.append(shape)
@@ -392,6 +392,8 @@ class DiffusionPlannerNode(Node):
         dev = self.diffusion_planner.parameters().__next__().device
         self.neighbor = torch.zeros((1, 32, 21, 11), device=dev)
         for i, (object_id_bytes, tracked_obj) in enumerate(self.tracked_objs.items()):
+            if i >= 32:
+                break
             label_in_model = tracked_obj.class_label
             for j in range(21):
                 if j < len(tracked_obj.kinematics_list):
@@ -425,7 +427,7 @@ class DiffusionPlannerNode(Node):
             (1, 25, 20, 12), dtype=torch.float32, device="cuda"
         )
 
-        for i in range(len(msg.segments)):
+        for i in range(min(len(msg.segments), 25)):
             ll2_id = msg.segments[i].preferred_primitive.id
             if ll2_id in self.static_map.lane_segments:
                 curr_result = process_segment(
@@ -474,7 +476,7 @@ class DiffusionPlannerNode(Node):
         centerline_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)
         centerline_marker.lifetime = Duration(sec=0, nanosec=int(1e8))
         centerline_marker.points = []
-        for j in range(len(msg.segments)):
+        for j in range(min(len(msg.segments), 25)):
             centerline_in_base_link = self.route_tensor[0, j, :, :2].cpu().numpy()
             centerline_in_base_link = np.concatenate(
                 [
