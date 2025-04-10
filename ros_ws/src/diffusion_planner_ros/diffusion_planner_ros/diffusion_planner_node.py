@@ -166,8 +166,6 @@ class DiffusionPlannerNode(Node):
         self.map2bl_matrix_4x4 = None
         self.vector_map = None
         self.route = None
-        dev = self.diffusion_planner.parameters().__next__().device
-        self.route_tensor = torch.zeros((1, 25, 20, 12), device=dev)
         self.tracked_objs = {}  # object_id -> TrackingObject
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
@@ -213,7 +211,9 @@ class DiffusionPlannerNode(Node):
         ).to(dev)
 
         start = time.time()
-        self.process_route(self.route)
+        route_tensor, route_lanes_speed_limit, route_lanes_has_speed_limit = (
+            self.process_route(self.route)
+        )
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"    route time: {elapsed_msec:.4f} msec")
@@ -251,9 +251,9 @@ class DiffusionPlannerNode(Node):
             "lanes": lanes_tensor,
             "lanes_speed_limit": lanes_speed_limit,
             "lanes_has_speed_limit": lanes_has_speed_limit,
-            "route_lanes": self.route_tensor,
-            "route_lanes_speed_limit": self.route_lanes_speed_limit,
-            "route_lanes_has_speed_limit": self.route_lanes_has_speed_limit,
+            "route_lanes": route_tensor,
+            "route_lanes_speed_limit": route_lanes_speed_limit,
+            "route_lanes_has_speed_limit": route_lanes_has_speed_limit,
             "static_objects": torch.zeros((1, 5, 10), device=dev),
         }
         input_dict = self.config_obj.observation_normalizer(input_dict)
@@ -322,13 +322,11 @@ class DiffusionPlannerNode(Node):
         )
 
     def process_route(self, msg):
-        self.route_tensor = torch.zeros(
-            (1, 25, 20, 12), dtype=torch.float32, device="cuda"
-        )
-        self.route_lanes_speed_limit = torch.zeros(
+        route_tensor = torch.zeros((1, 25, 20, 12), dtype=torch.float32, device="cuda")
+        route_lanes_speed_limit = torch.zeros(
             (1, 25, 1), dtype=torch.float32, device="cuda"
         )
-        self.route_lanes_has_speed_limit = torch.zeros(
+        route_lanes_has_speed_limit = torch.zeros(
             (1, 25, 1), dtype=torch.bool, device="cuda"
         )
 
@@ -345,10 +343,10 @@ class DiffusionPlannerNode(Node):
                 if curr_result is None:
                     continue
                 line_data, speed_limit = curr_result
-                self.route_tensor[0, i] = torch.from_numpy(line_data).cuda()
+                route_tensor[0, i] = torch.from_numpy(line_data).cuda()
                 assert speed_limit is not None
-                # self.route_lanes_speed_limit[0, i] = speed_limit
-                # self.route_lanes_has_speed_limit[0, i] = speed_limit is not None
+                # route_lanes_speed_limit[0, i] = speed_limit
+                # route_lanes_has_speed_limit[0, i] = speed_limit is not None
 
         marker_array = MarkerArray()
         centerline_marker = Marker()
@@ -364,7 +362,7 @@ class DiffusionPlannerNode(Node):
         centerline_marker.lifetime = Duration(sec=0, nanosec=int(1e8))
         centerline_marker.points = []
         for j in range(min(len(msg.segments), 25)):
-            centerline_in_base_link = self.route_tensor[0, j, :, :2].cpu().numpy()
+            centerline_in_base_link = route_tensor[0, j, :, :2].cpu().numpy()
             centerline_in_base_link = np.concatenate(
                 [
                     centerline_in_base_link,
@@ -386,6 +384,7 @@ class DiffusionPlannerNode(Node):
                 centerline_marker.points.append(p)
         marker_array.markers.append(centerline_marker)
         self.pub_route_marker.publish(marker_array)
+        return route_tensor, route_lanes_speed_limit, route_lanes_has_speed_limit
 
 
 def main(args=None):
