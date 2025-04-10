@@ -38,6 +38,7 @@ from .utils import (
     create_current_ego_state,
     tracking_one_step,
     convert_tracked_objects_to_tensor,
+    convert_prediction_to_tensor,
 )
 
 
@@ -263,49 +264,16 @@ class DiffusionPlannerNode(Node):
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"inference time: {elapsed_msec:.4f} msec")
-        pred = out["prediction"]
-        # print(f"{pred.shape=}")  # ([1, 11, 80, 4])
+
+        pred = out["prediction"]  # ([1, 11, T, 4])
         pred = pred[0, 0].detach().cpu().numpy().astype(np.float64)  # T, 4
         heading = np.arctan2(pred[:, 3], pred[:, 2])[..., None]
         pred = np.concatenate([pred[..., :2], heading], axis=-1)  # T, 3(x, y, heading)
-        # Convert to Trajectory message
-        trajectory_msg = Trajectory()
-        trajectory_msg.header.stamp = self.get_clock().now().to_msg()
-        trajectory_msg.header.frame_id = "map"
-        trajectory_msg.points = []
-        dt = 0.1
-        prev_x = prev_y = 0
-        for i in range(pred.shape[0]):
-            curr_x = pred[i, 0]
-            curr_y = pred[i, 1]
-            distance = np.sqrt((curr_x - prev_x) ** 2 + (curr_y - prev_y) ** 2)
-            curr_heading = pred[i, 2]
-            # self.get_logger().info(f"Predicted position: {curr_x}, {curr_y}, {curr_heading}")
-            # transform to map frame
-            vec3d = [curr_x, curr_y, 0.0]
-            vec3d = self.bl2map_matrix_4x4 @ np.array([*vec3d, 1.0])
-            rot = Rotation.from_euler("z", curr_heading, degrees=False).as_matrix()
-            rot = self.bl2map_matrix_4x4[0:3, 0:3] @ rot
-            quat = Rotation.from_matrix(rot).as_quat()
-            point = TrajectoryPoint()
-            total_seconds = float(i * dt)
-            secs = int(total_seconds)
-            nanosec = int((total_seconds - secs) * 1e9)
-            point.time_from_start = Duration()
-            point.time_from_start.sec = secs
-            point.time_from_start.nanosec = nanosec
-            point.pose.position.x = vec3d[0]
-            point.pose.position.y = vec3d[1]
-            point.pose.position.z = vec3d[2]
-            point.pose.orientation.x = quat[0]
-            point.pose.orientation.y = quat[1]
-            point.pose.orientation.z = quat[2]
-            point.pose.orientation.w = quat[3]
-            point.longitudinal_velocity_mps = distance / dt
-            trajectory_msg.points.append(point)
-            prev_x = curr_x
-            prev_y = curr_y
+
         # Publish the trajectory
+        trajectory_msg = convert_prediction_to_tensor(
+            pred, self.bl2map_matrix_4x4, self.get_clock().now().to_msg()
+        )
         self.pub_trajectory.publish(trajectory_msg)
 
         # Publish the trajectory marker

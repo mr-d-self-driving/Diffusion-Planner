@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation
 import numpy as np
 import torch
 from autoware_perception_msgs.msg import TrackedObjects
+from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 from dataclasses import dataclass
 
 
@@ -168,6 +169,55 @@ def tracking(tracked_list: list[TrackedObjects]):
         msg = tracked_list[i]
         updated_tracked_objs = tracking_one_step(msg, tracked_objs)
     return updated_tracked_objs
+
+
+def convert_prediction_to_tensor(
+    pred: torch.Tensor, bl2map_matrix_4x4: np.array, stamp
+) -> Trajectory:
+    # Convert to Trajectory message
+    trajectory_msg = Trajectory()
+    trajectory_msg.header.stamp = stamp
+    trajectory_msg.header.frame_id = "map"
+    trajectory_msg.points = []
+    dt = 0.1
+    prev_x = prev_y = 0
+    for i in range(pred.shape[0]):
+        point = TrajectoryPoint()
+
+        # position
+        curr_x = pred[i, 0]
+        curr_y = pred[i, 1]
+        distance = np.sqrt((curr_x - prev_x) ** 2 + (curr_y - prev_y) ** 2)
+        vec3d = [curr_x, curr_y, 0.0]
+        vec3d = bl2map_matrix_4x4 @ np.array([*vec3d, 1.0])
+        point.pose.position.x = vec3d[0]
+        point.pose.position.y = vec3d[1]
+        point.pose.position.z = vec3d[2]
+
+        # orientation
+        curr_heading = pred[i, 2]
+        rot = Rotation.from_euler("z", curr_heading, degrees=False).as_matrix()
+        rot = bl2map_matrix_4x4[0:3, 0:3] @ rot
+        quat = Rotation.from_matrix(rot).as_quat()
+        point.pose.orientation.x = quat[0]
+        point.pose.orientation.y = quat[1]
+        point.pose.orientation.z = quat[2]
+        point.pose.orientation.w = quat[3]
+
+        # time/velocity
+        seconds_float = float(i * dt)
+        seconds_int = int(seconds_float)
+        nanosec = int((seconds_float - seconds_int) * 1e9)
+        point.time_from_start = Duration()
+        point.time_from_start.sec = seconds_int
+        point.time_from_start.nanosec = nanosec
+        point.longitudinal_velocity_mps = distance / dt
+        trajectory_msg.points.append(point)
+
+        prev_x = curr_x
+        prev_y = curr_y
+
+    return trajectory_msg
 
 
 def create_trajectory_marker(trajectory_msg):
