@@ -271,18 +271,6 @@ def create_trajectory_marker(trajectory_msg):
     """
     marker_array = MarkerArray()
 
-    # トラジェクトリパスのマーカー
-    path_marker = Marker()
-    path_marker.header = trajectory_msg.header
-    path_marker.ns = "trajectory_path"
-    path_marker.id = 0
-    path_marker.type = Marker.LINE_STRIP
-    path_marker.action = Marker.ADD
-    path_marker.pose.orientation.w = 1.0
-    path_marker.scale.x = 0.2  # 線の太さ
-    path_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)  # 緑色
-    path_marker.lifetime = Duration(sec=0, nanosec=100000000)  # 0.1秒
-
     # ポイントのマーカー
     points_marker = Marker()
     points_marker.header = trajectory_msg.header
@@ -332,7 +320,6 @@ def create_trajectory_marker(trajectory_msg):
         p.x = point.pose.position.x
         p.y = point.pose.position.y
         p.z = point.pose.position.z
-        path_marker.points.append(p)
 
         # すべてのポイント
         points_marker.points.append(p)
@@ -366,7 +353,6 @@ def create_trajectory_marker(trajectory_msg):
             end_point.z = start_point.z + direction[2] * 1.0
             arrows_marker.points.append(end_point)
 
-    marker_array.markers.append(path_marker)
     marker_array.markers.append(points_marker)
     marker_array.markers.append(arrows_marker)
     marker_array.markers.append(time_markers)
