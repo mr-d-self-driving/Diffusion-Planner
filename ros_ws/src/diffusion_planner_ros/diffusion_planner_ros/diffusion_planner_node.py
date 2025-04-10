@@ -129,41 +129,32 @@ class DiffusionPlannerNode(Node):
         ##############
         # Publishers #
         ##############
+        pub_qos = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.VOLATILE,
+        )
         # pub(1)[main] trajectory
         self.pub_trajectory = self.create_publisher(
             Trajectory,
             "/planning/scenario_planning/lane_driving/trajectory",
             # "/diffusion_planner/trajectory",
-            QoSProfile(
-                history=QoSHistoryPolicy.KEEP_LAST,
-                depth=10,
-                reliability=QoSReliabilityPolicy.RELIABLE,
-                durability=QoSDurabilityPolicy.VOLATILE,
-            ),
+            pub_qos,
         )
 
         # pub(2)[debug] route_marker
         self.pub_route_marker = self.create_publisher(
             MarkerArray,
             "/diffusion_planner/debug/route_marker",
-            QoSProfile(
-                history=QoSHistoryPolicy.KEEP_LAST,
-                depth=10,
-                reliability=QoSReliabilityPolicy.RELIABLE,
-                durability=QoSDurabilityPolicy.VOLATILE,
-            ),
+            pub_qos,
         )
 
         # pub(3)[debug] trajectory_marker
         self.pub_trajectory_marker = self.create_publisher(
             MarkerArray,
             "/diffusion_planner/debug/trajectory_marker",
-            QoSProfile(
-                history=QoSHistoryPolicy.KEEP_LAST,
-                depth=10,
-                reliability=QoSReliabilityPolicy.RELIABLE,
-                durability=QoSDurabilityPolicy.VOLATILE,
-            ),
+            pub_qos,
         )
 
         #############
