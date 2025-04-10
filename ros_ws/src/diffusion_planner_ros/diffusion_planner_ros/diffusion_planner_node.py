@@ -253,8 +253,6 @@ class DiffusionPlannerNode(Node):
             "route_lanes_speed_limit": self.route_lanes_speed_limit,
             "route_lanes_has_speed_limit": self.route_lanes_has_speed_limit,
             "static_objects": torch.zeros((1, 5, 10), device=dev),
-            "sampled_trajectories": torch.zeros((1, 11, 81, 4), device=dev),
-            "diffusion_time": torch.zeros((1, 11, 81, 4), device=dev),
         }
         input_dict = self.config_obj.observation_normalizer(input_dict)
         # visualize_inputs(
