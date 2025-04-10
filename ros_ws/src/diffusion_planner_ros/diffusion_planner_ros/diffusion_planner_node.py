@@ -168,7 +168,6 @@ class DiffusionPlannerNode(Node):
         self.route = None
         dev = self.diffusion_planner.parameters().__next__().device
         self.route_tensor = torch.zeros((1, 25, 20, 12), device=dev)
-        self.neighbor = torch.zeros((1, 32, 21, 11), device=dev)
         self.tracked_objs = {}  # object_id -> TrackingObject
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
@@ -206,7 +205,7 @@ class DiffusionPlannerNode(Node):
         self.tracked_objs = tracking_one_step(msg, self.tracked_objs)
         self.get_logger().info(f"Tracked objects: {len(self.tracked_objs)}")
 
-        self.neighbor = convert_tracked_objects_to_tensor(
+        neighbor = convert_tracked_objects_to_tensor(
             self.tracked_objs,
             self.map2bl_matrix_4x4,
             max_num_objects=32,
@@ -248,7 +247,7 @@ class DiffusionPlannerNode(Node):
 
         input_dict = {
             "ego_current_state": ego_current_state,
-            "neighbor_agents_past": self.neighbor,
+            "neighbor_agents_past": neighbor,
             "lanes": lanes_tensor,
             "lanes_speed_limit": lanes_speed_limit,
             "lanes_has_speed_limit": lanes_has_speed_limit,
