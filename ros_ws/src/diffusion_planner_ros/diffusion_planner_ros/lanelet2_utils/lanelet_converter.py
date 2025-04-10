@@ -32,15 +32,13 @@ from shapely import LineString
 
 
 def _interpolate_points(line, num_point):
-    line = LineString(line)
-    new_line = np.concatenate(
-        [
-            line.interpolate(d).coords._coords
-            for d in np.linspace(0, line.length, num_point)
-        ]
-    )
-
-    return new_line
+    # line (n, 3)
+    n = line.shape[0]
+    if n == num_point:
+        return line
+    index = np.linspace(0, n - 1, num_point)
+    line = line[index.astype(int)]
+    return line
 
 
 # cspell: ignore MGRS
