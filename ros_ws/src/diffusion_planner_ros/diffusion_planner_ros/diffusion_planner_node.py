@@ -8,7 +8,7 @@ import time
 import numpy as np
 import rclpy
 import torch
-from autoware_perception_msgs.msg import TrackedObjects
+from autoware_perception_msgs.msg import TrackedObjects, TrafficLightGroupArray
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from mmengine import fileio
@@ -116,7 +116,15 @@ class DiffusionPlannerNode(Node):
             10,
         )
 
-        # sub(4) route
+        # sub(4) traffic_light
+        self.traffic_light_sub = self.create_subscription(
+            TrafficLightGroupArray,
+            "/perception/traffic_light_recognition/traffic_signals",
+            self.cb_traffic_light,
+            10,
+        )
+
+        # sub(5) route
         # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_planning_msgs/msg/LaneletRoute.msg
         transient_qos = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
@@ -174,6 +182,7 @@ class DiffusionPlannerNode(Node):
         #############
         self.kinematic_state_list = []
         self.acceleration_list = []
+        self.traffic_light_list = []
         self.route = None
         self.tracked_objs = {}  # object_id -> TrackingObject
 
@@ -185,6 +194,9 @@ class DiffusionPlannerNode(Node):
     def cb_acceleration(self, msg):
         self.acceleration_list.append(msg)
 
+    def cb_traffic_light(self, msg):
+        self.traffic_light_list.append(msg)
+
     def cb_route(self, msg):
         self.route = msg
 
@@ -193,9 +205,13 @@ class DiffusionPlannerNode(Node):
             return
         dev = self.diffusion_planner.parameters().__next__().device
         stamp = msg.header.stamp
+        # stamp = self.get_clock().now().to_msg()
 
         curr_kinematic_state = get_nearest_msg(self.kinematic_state_list, stamp)
         curr_acceleration = get_nearest_msg(self.acceleration_list, stamp)
+        curr_traffic_light = get_nearest_msg(self.traffic_light_list, stamp)
+
+        # self.get_logger().info(f"{curr_traffic_light=}")
 
         if curr_kinematic_state is None:
             self.get_logger().warn("No kinematic state message found")
