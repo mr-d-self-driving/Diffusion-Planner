@@ -202,6 +202,12 @@ class DiffusionPlannerNode(Node):
     def cb_acceleration(self, msg):
         self.latest_acceleration = msg
 
+    def cb_route(self, msg):
+        self.route = msg
+        self.get_logger().info(
+            f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
+        )
+
     def cb_tracked_objects(self, msg):
         if self.latest_kinematic_state is None:
             return
@@ -249,17 +255,44 @@ class DiffusionPlannerNode(Node):
             line_data, speed_limit = result
             lanes_tensor[0, i] = torch.from_numpy(line_data).cuda()
             assert speed_limit is not None
-            # lanes_speed_limit[0, i] = speed_limit
-            # lanes_has_speed_limit[0, i] = speed_limit is not None
+            lanes_speed_limit[0, i] = speed_limit
+            lanes_has_speed_limit[0, i] = speed_limit is not None
+            lanes_speed_limit[0, i] = torch.zeros_like(lanes_speed_limit[0, i])
+            lanes_has_speed_limit[0, i] = torch.zeros_like(lanes_has_speed_limit[0, i])
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Lane     : {elapsed_msec:.4f} msec")
 
         # Route
         start = time.time()
-        route_tensor, route_lanes_speed_limit, route_lanes_has_speed_limit = (
-            self.process_route(self.route)
+        route_tensor = torch.zeros((1, 25, 20, 12), dtype=torch.float32, device="cuda")
+        route_speed_limit = torch.zeros((1, 25, 1), dtype=torch.float32, device=dev)
+        route_has_speed_limit = torch.zeros((1, 25, 1), dtype=torch.bool, device=dev)
+        for i in range(min(len(self.route.segments), 25)):
+            ll2_id = self.route.segments[i].preferred_primitive.id
+            if ll2_id in self.static_map.lane_segments:
+                curr_result = process_segment(
+                    self.static_map.lane_segments[ll2_id],
+                    self.map2bl_matrix_4x4,
+                    self.latest_kinematic_state.pose.pose.position.x,
+                    self.latest_kinematic_state.pose.pose.position.y,
+                    mask_range=100,
+                )
+                if curr_result is None:
+                    continue
+                line_data, speed_limit = curr_result
+                route_tensor[0, i] = torch.from_numpy(line_data).cuda()
+                assert speed_limit is not None
+                route_speed_limit[0, i] = speed_limit
+                route_has_speed_limit[0, i] = speed_limit is not None
+                route_speed_limit[0, i] = torch.zeros_like(route_speed_limit[0, i])
+                route_has_speed_limit[0, i] = torch.zeros_like(
+                    route_has_speed_limit[0, i]
+                )
+        marker_array = create_route_marker(
+            route_tensor, self.bl2map_matrix_4x4, self.get_clock().now().to_msg()
         )
+        self.pub_route_marker.publish(marker_array)
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Route    : {elapsed_msec:.4f} msec")
@@ -272,8 +305,8 @@ class DiffusionPlannerNode(Node):
             "lanes_speed_limit": lanes_speed_limit,
             "lanes_has_speed_limit": lanes_has_speed_limit,
             "route_lanes": route_tensor,
-            "route_lanes_speed_limit": route_lanes_speed_limit,
-            "route_lanes_has_speed_limit": route_lanes_has_speed_limit,
+            "route_lanes_speed_limit": route_speed_limit,
+            "route_lanes_has_speed_limit": route_has_speed_limit,
             "static_objects": torch.zeros((1, 5, 10), device=dev),
         }
         input_dict = self.config_obj.observation_normalizer(input_dict)
@@ -301,45 +334,6 @@ class DiffusionPlannerNode(Node):
         # Publish the trajectory marker
         marker_array = create_trajectory_marker(trajectory_msg)
         self.pub_trajectory_marker.publish(marker_array)
-
-    def cb_route(self, msg):
-        self.route = msg
-        self.get_logger().info(
-            f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
-        )
-
-    def process_route(self, msg):
-        route_tensor = torch.zeros((1, 25, 20, 12), dtype=torch.float32, device="cuda")
-        route_lanes_speed_limit = torch.zeros(
-            (1, 25, 1), dtype=torch.float32, device="cuda"
-        )
-        route_lanes_has_speed_limit = torch.zeros(
-            (1, 25, 1), dtype=torch.bool, device="cuda"
-        )
-
-        for i in range(min(len(msg.segments), 25)):
-            ll2_id = msg.segments[i].preferred_primitive.id
-            if ll2_id in self.static_map.lane_segments:
-                curr_result = process_segment(
-                    self.static_map.lane_segments[ll2_id],
-                    self.map2bl_matrix_4x4,
-                    self.latest_kinematic_state.pose.pose.position.x,
-                    self.latest_kinematic_state.pose.pose.position.y,
-                    mask_range=100,
-                )
-                if curr_result is None:
-                    continue
-                line_data, speed_limit = curr_result
-                route_tensor[0, i] = torch.from_numpy(line_data).cuda()
-                assert speed_limit is not None
-                # route_lanes_speed_limit[0, i] = speed_limit
-                # route_lanes_has_speed_limit[0, i] = speed_limit is not None
-
-        marker_array = create_route_marker(
-            route_tensor, self.bl2map_matrix_4x4, self.get_clock().now().to_msg()
-        )
-        self.pub_route_marker.publish(marker_array)
-        return route_tensor, route_lanes_speed_limit, route_lanes_has_speed_limit
 
 
 def main(args=None):
