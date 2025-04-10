@@ -213,6 +213,7 @@ class DiffusionPlannerNode(Node):
         if self.route is None:
             return
         dev = self.diffusion_planner.parameters().__next__().device
+        stamp = msg.header.stamp
 
         # Ego
         start = time.time()
@@ -234,9 +235,7 @@ class DiffusionPlannerNode(Node):
             max_num_objects=32,
             max_timesteps=21,
         ).to(dev)
-        marker_array = create_neighbor_marker(
-            neighbor, self.get_clock().now().to_msg()
-        )
+        marker_array = create_neighbor_marker(neighbor, stamp)
         self.pub_neighbor_marker.publish(marker_array)
         end = time.time()
         elapsed_msec = (end - start) * 1000
@@ -292,9 +291,7 @@ class DiffusionPlannerNode(Node):
                 route_has_speed_limit[0, i] = torch.zeros_like(
                     route_has_speed_limit[0, i]
                 )
-        marker_array = create_route_marker(
-            route_tensor, self.get_clock().now().to_msg()
-        )
+        marker_array = create_route_marker(route_tensor, stamp)
         self.pub_route_marker.publish(marker_array)
         end = time.time()
         elapsed_msec = (end - start) * 1000
@@ -330,7 +327,7 @@ class DiffusionPlannerNode(Node):
 
         # Publish the trajectory
         trajectory_msg = convert_prediction_to_tensor(
-            pred, self.bl2map_matrix_4x4, self.get_clock().now().to_msg()
+            pred, self.bl2map_matrix_4x4, stamp
         )
         self.pub_trajectory.publish(trajectory_msg)
 
