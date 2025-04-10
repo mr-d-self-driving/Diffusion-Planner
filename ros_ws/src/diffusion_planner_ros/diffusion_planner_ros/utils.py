@@ -136,11 +136,11 @@ def convert_tracked_objects_to_tensor(
         label_in_model = tracked_obj.class_label
         for j in range(max_timesteps):
             if j < len(tracked_obj.kinematics_list):
-                kinematics = tracked_obj.kinematics_list[j]
-                shape = tracked_obj.shape_list[j]
+                kinematics = tracked_obj.kinematics_list[-(j + 1)]
+                shape = tracked_obj.shape_list[-(j + 1)]
             else:
-                kinematics = tracked_obj.kinematics_list[-1]
-                shape = tracked_obj.shape_list[-1]
+                kinematics = tracked_obj.kinematics_list[0]
+                shape = tracked_obj.shape_list[0]
             pose_in_map_4x4 = pose_to_mat4x4(kinematics.pose_with_covariance.pose)
             pose_in_bl_4x4 = map2bl_matrix_4x4 @ pose_in_map_4x4
             cos, sin = rot3x3_to_heading_cos_sin(pose_in_bl_4x4[0:3, 0:3])
