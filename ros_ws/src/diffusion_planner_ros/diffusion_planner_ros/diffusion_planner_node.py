@@ -225,8 +225,14 @@ class DiffusionPlannerNode(Node):
             mask_range=100,
         )
         lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
+        lanes_speed_limit = torch.zeros((1, 70, 1), dtype=torch.float32, device=dev)
+        lanes_has_speed_limit = torch.zeros((1, 70, 1), dtype=torch.bool, device=dev)
         for i, result in enumerate(result_list):
-            lanes_tensor[0, i] = torch.from_numpy(result[0]).cuda()
+            line_data, speed_limit = result
+            lanes_tensor[0, i] = torch.from_numpy(line_data).cuda()
+            assert speed_limit is not None
+            lanes_speed_limit[0, i] = speed_limit
+            lanes_has_speed_limit[0, i] = speed_limit is not None
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"get_input time: {elapsed_msec:.4f} msec")
@@ -241,10 +247,8 @@ class DiffusionPlannerNode(Node):
             "ego_current_state": ego_current_state,
             "neighbor_agents_past": self.neighbor,
             "lanes": lanes_tensor,
-            "lanes_speed_limit": torch.zeros((1, 70, 1), device=dev),
-            "lanes_has_speed_limit": torch.zeros(
-                (1, 70, 1), dtype=torch.bool, device=dev
-            ),
+            "lanes_speed_limit": lanes_speed_limit,
+            "lanes_has_speed_limit": lanes_has_speed_limit,
             "route_lanes": self.route_tensor,
             "route_lanes_speed_limit": torch.zeros((1, 25, 1), device=dev),
             "route_lanes_has_speed_limit": torch.zeros(
