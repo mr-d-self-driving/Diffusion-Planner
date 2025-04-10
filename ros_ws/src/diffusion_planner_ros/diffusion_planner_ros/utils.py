@@ -446,7 +446,7 @@ def create_neighbor_marker(neighbor_tensor: torch.Tensor, stamp) -> MarkerArray:
         cube_marker.color = colors[obj_type_idx]
 
         # マーカーの表示時間
-        cube_marker.lifetime = Duration(sec=0, nanosec=100000000)  # 0.1秒
+        cube_marker.lifetime = Duration(sec=0, nanosec=200000000)  # 0.1秒
 
         marker_array.markers.append(cube_marker)
 
@@ -476,7 +476,7 @@ def create_neighbor_marker(neighbor_tensor: torch.Tensor, stamp) -> MarkerArray:
         text_marker.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.9)
 
         # マーカーの表示時間
-        text_marker.lifetime = Duration(sec=0, nanosec=100000000)  # 0.1秒
+        text_marker.lifetime = Duration(sec=0, nanosec=200000000)  # 0.1秒
 
         marker_array.markers.append(text_marker)
 
@@ -513,7 +513,7 @@ def create_neighbor_marker(neighbor_tensor: torch.Tensor, stamp) -> MarkerArray:
             path_marker.color = ColorRGBA(r=0.7, g=0.7, b=0.7, a=0.5)
 
             # マーカーの表示時間
-            path_marker.lifetime = Duration(sec=0, nanosec=100000000)  # 0.1秒
+            path_marker.lifetime = Duration(sec=0, nanosec=200000000)  # 0.1秒
 
             marker_array.markers.append(path_marker)
 
