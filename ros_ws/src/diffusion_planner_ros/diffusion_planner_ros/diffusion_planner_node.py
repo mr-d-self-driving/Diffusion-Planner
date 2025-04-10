@@ -208,24 +208,32 @@ class DiffusionPlannerNode(Node):
         if self.route is None:
             return
         dev = self.diffusion_planner.parameters().__next__().device
-        self.tracked_objs = tracking_one_step(msg, self.tracked_objs)
-        self.get_logger().info(f"Tracked objects: {len(self.tracked_objs)}")
 
+        # Ego
+        start = time.time()
+        ego_current_state = create_current_ego_state(
+            self.latest_kinematic_state,
+            self.latest_acceleration,
+            self.wheel_base,
+        ).to(dev)
+        end = time.time()
+        elapsed_msec = (end - start) * 1000
+        self.get_logger().info(f"Time Ego      : {elapsed_msec:.4f} msec")
+
+        # Neighbors
+        start = time.time()
+        self.tracked_objs = tracking_one_step(msg, self.tracked_objs)
         neighbor = convert_tracked_objects_to_tensor(
             self.tracked_objs,
             self.map2bl_matrix_4x4,
             max_num_objects=32,
             max_timesteps=21,
         ).to(dev)
-
-        start = time.time()
-        route_tensor, route_lanes_speed_limit, route_lanes_has_speed_limit = (
-            self.process_route(self.route)
-        )
         end = time.time()
         elapsed_msec = (end - start) * 1000
-        self.get_logger().info(f"    route time: {elapsed_msec:.4f} msec")
+        self.get_logger().info(f"Time Neighbor : {elapsed_msec:.4f} msec")
 
+        # Lane
         start = time.time()
         result_list = get_input_feature(
             self.static_map,
@@ -245,14 +253,18 @@ class DiffusionPlannerNode(Node):
             # lanes_has_speed_limit[0, i] = speed_limit is not None
         end = time.time()
         elapsed_msec = (end - start) * 1000
-        self.get_logger().info(f"get_input time: {elapsed_msec:.4f} msec")
+        self.get_logger().info(f"Time Lane     : {elapsed_msec:.4f} msec")
 
-        ego_current_state = create_current_ego_state(
-            self.latest_kinematic_state,
-            self.latest_acceleration,
-            self.wheel_base,
-        ).to(dev)
+        # Route
+        start = time.time()
+        route_tensor, route_lanes_speed_limit, route_lanes_has_speed_limit = (
+            self.process_route(self.route)
+        )
+        end = time.time()
+        elapsed_msec = (end - start) * 1000
+        self.get_logger().info(f"Time Route    : {elapsed_msec:.4f} msec")
 
+        # Inference
         input_dict = {
             "ego_current_state": ego_current_state,
             "neighbor_agents_past": neighbor,
@@ -273,7 +285,7 @@ class DiffusionPlannerNode(Node):
             out = self.diffusion_planner(input_dict)[1]
         end = time.time()
         elapsed_msec = (end - start) * 1000
-        self.get_logger().info(f"inference time: {elapsed_msec:.4f} msec")
+        self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
 
         pred = out["prediction"]  # ([1, 11, T, 4])
         pred = pred[0, 0].detach().cpu().numpy().astype(np.float64)  # T, 4
