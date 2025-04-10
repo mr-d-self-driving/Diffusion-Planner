@@ -423,10 +423,22 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
     )
 
 
-def process_segment(segment, inv_transform_matrix_4x4, mask_range):
+def process_segment(segment, inv_transform_matrix_4x4, center_x, center_y, mask_range):
     centerlines = segment.polyline.waypoints
     left_boundaries = segment.left_boundaries[0].polyline.waypoints
     right_boundaries = segment.right_boundaries[0].polyline.waypoints
+
+    # x, yがegoからmask_range内のものだけを抽出
+    mask = (
+        (centerlines[:, 0] > center_x - mask_range)
+        & (centerlines[:, 0] < center_x + mask_range)
+        & (centerlines[:, 1] > center_y - mask_range)
+        & (centerlines[:, 1] < center_y + mask_range)
+    )
+    true_num = np.sum(mask)
+    if true_num == 0:
+        # この範囲に点がない場合は、何もせずに返す
+        return None
 
     # 自車座標系に変換
     centerlines_4xN = np.vstack((centerlines.T, np.ones(centerlines.shape[0])))
@@ -443,23 +455,10 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
     right_boundaries_ego = inv_transform_matrix_4x4 @ right_boundaries_4xN
     right_boundaries = right_boundaries_ego[:3, :].T
 
-    # x, yがegoからmask_range内のものだけを抽出
-    mask = (
-        (centerlines[:, 0] > -mask_range)
-        & (centerlines[:, 0] < mask_range)
-        & (centerlines[:, 1] > -mask_range)
-        & (centerlines[:, 1] < mask_range)
-    )
-    true_num = np.sum(mask)
-
-    if true_num == 0:
-        # この範囲に点がない場合は、何もせずに返す
-        return None
-    else:
-        # 点数が20になるように修正する
-        centerlines = _interpolate_points(centerlines, 20)
-        left_boundaries = _interpolate_points(left_boundaries, 20)
-        right_boundaries = _interpolate_points(right_boundaries, 20)
+    # 点数が20になるように修正する
+    centerlines = _interpolate_points(centerlines, 20)
+    left_boundaries = _interpolate_points(left_boundaries, 20)
+    right_boundaries = _interpolate_points(right_boundaries, 20)
 
     left_boundaries -= centerlines
     right_boundaries -= centerlines
@@ -486,11 +485,15 @@ def process_segment(segment, inv_transform_matrix_4x4, mask_range):
 def get_input_feature(
     map: AWMLStaticMap,
     map2bl_mat4x4: NDArray,
+    center_x: float,
+    center_y: float,
     mask_range: float,
 ) -> list[np.ndarray]:
     result = []
     for segment_id, segment in map.lane_segments.items():
-        curr_data = process_segment(segment, map2bl_mat4x4, mask_range)
+        curr_data = process_segment(
+            segment, map2bl_mat4x4, center_x, center_y, mask_range
+        )
         if curr_data is None:
             continue
         result.append(curr_data)

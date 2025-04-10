@@ -218,6 +218,8 @@ class DiffusionPlannerNode(Node):
         result_list = get_input_feature(
             self.static_map,
             map2bl_mat4x4=self.map2bl_matrix_4x4,
+            center_x=self.latest_kinematic_state.pose.pose.position.x,
+            center_y=self.latest_kinematic_state.pose.pose.position.y,
             mask_range=100,
         )
         lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
@@ -342,6 +344,8 @@ class DiffusionPlannerNode(Node):
                 curr_result = process_segment(
                     self.static_map.lane_segments[ll2_id],
                     self.map2bl_matrix_4x4,
+                    self.latest_kinematic_state.pose.pose.position.x,
+                    self.latest_kinematic_state.pose.pose.position.y,
                     mask_range=100,
                 )
                 if curr_result is None:
