@@ -32,8 +32,9 @@ from scipy.spatial.transform import Rotation
 from mmengine import fileio
 import io
 from .utils import (
-    create_trajectory_marker,
+    create_neighbor_marker,
     create_route_marker,
+    create_trajectory_marker,
     create_current_ego_state,
     tracking_one_step,
     convert_tracked_objects_to_tensor,
@@ -143,14 +144,21 @@ class DiffusionPlannerNode(Node):
             pub_qos,
         )
 
-        # pub(2)[debug] route_marker
+        # pub(2)[debug] neighbor_marker
+        self.pub_neighbor_marker = self.create_publisher(
+            MarkerArray,
+            "/diffusion_planner/debug/neighbor_marker",
+            pub_qos,
+        )
+
+        # pub(3)[debug] route_marker
         self.pub_route_marker = self.create_publisher(
             MarkerArray,
             "/diffusion_planner/debug/route_marker",
             pub_qos,
         )
 
-        # pub(3)[debug] trajectory_marker
+        # pub(4)[debug] trajectory_marker
         self.pub_trajectory_marker = self.create_publisher(
             MarkerArray,
             "/diffusion_planner/debug/trajectory_marker",
@@ -226,6 +234,10 @@ class DiffusionPlannerNode(Node):
             max_num_objects=32,
             max_timesteps=21,
         ).to(dev)
+        marker_array = create_neighbor_marker(
+            neighbor, self.get_clock().now().to_msg()
+        )
+        self.pub_neighbor_marker.publish(marker_array)
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Neighbor : {elapsed_msec:.4f} msec")

@@ -367,3 +367,152 @@ def create_route_marker(route_tensor: torch.Tensor, stamp) -> MarkerArray:
             centerline_marker.points.append(p)
     marker_array.markers.append(centerline_marker)
     return marker_array
+
+def create_neighbor_marker(neighbor_tensor: torch.Tensor, stamp) -> MarkerArray:
+    """
+    近隣物体（車両、歩行者、自転車）を表示するためのマーカー配列を作成します
+
+    Args:
+        neighbor_tensor: 近隣物体のテンソル (1, 32, 21, 11)
+                        最後の次元は [x, y, cos, sin, vx, vy, length, width, vehicle, pedestrian, bicycle]
+        stamp: タイムスタンプ
+
+    Returns:
+        MarkerArray: 近隣物体を表示するマーカー配列
+    """
+    marker_array = MarkerArray()
+
+    # neighbor_tensorから必要なデータを抽出 (最新のフレーム)
+    neighbor_data = neighbor_tensor[0, :, -1, :]  # (32, 11)
+
+    # マーカーIDカウンター
+    marker_id = 0
+
+    # 各物体ごとにマーカーを作成
+    for i in range(neighbor_data.shape[0]):
+        # オブジェクトが有効かどうか確認（座標が0でない場合）
+        if torch.sum(torch.abs(neighbor_data[i, :2])) < 1e-6:
+            continue
+
+        # 物体の位置と向き
+        x, y = neighbor_data[i, 0].item(), neighbor_data[i, 1].item()
+        cos_h, sin_h = neighbor_data[i, 2].item(), neighbor_data[i, 3].item()
+        heading = np.arctan2(sin_h, cos_h)
+
+        # 物体の寸法
+        length = neighbor_data[i, 6].item()
+        width = neighbor_data[i, 7].item()
+
+        # 物体の種類判定
+        obj_type_idx = torch.argmax(neighbor_data[i, 8:11]).item()
+
+        # 種類に応じた色の設定
+        colors = [
+            ColorRGBA(r=0.0, g=0.0, b=1.0, a=0.7),  # 車両 - 青
+            ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.7),  # 歩行者 - 緑
+            ColorRGBA(r=1.0, g=0.0, b=1.0, a=0.7),  # 自転車 - マゼンタ
+        ]
+
+        # 物体の長方形マーカー
+        cube_marker = Marker()
+        cube_marker.header.stamp = stamp
+        cube_marker.header.frame_id = "base_link"
+        cube_marker.ns = "neighbor_objects"
+        cube_marker.id = marker_id
+        marker_id += 1
+        cube_marker.type = Marker.CUBE
+        cube_marker.action = Marker.ADD
+
+        # マーカーの位置
+        cube_marker.pose.position.x = x
+        cube_marker.pose.position.y = y
+        cube_marker.pose.position.z = 0.5  # 地上から少し上に配置
+
+        # マーカーの向き
+        q = Rotation.from_euler("z", heading).as_quat()
+        cube_marker.pose.orientation.x = q[0]
+        cube_marker.pose.orientation.y = q[1]
+        cube_marker.pose.orientation.z = q[2]
+        cube_marker.pose.orientation.w = q[3]
+
+        # マーカーのサイズ
+        cube_marker.scale.x = length
+        cube_marker.scale.y = width
+        cube_marker.scale.z = 1.5  # 高さ
+
+        # マーカーの色
+        cube_marker.color = colors[obj_type_idx]
+
+        # マーカーの表示時間
+        cube_marker.lifetime = Duration(sec=0, nanosec=100000000)  # 0.1秒
+
+        marker_array.markers.append(cube_marker)
+
+        # 物体のID/種類ラベル
+        text_marker = Marker()
+        text_marker.header.stamp = stamp
+        text_marker.header.frame_id = "base_link"
+        text_marker.ns = "neighbor_labels"
+        text_marker.id = marker_id
+        marker_id += 1
+        text_marker.type = Marker.TEXT_VIEW_FACING
+        text_marker.action = Marker.ADD
+
+        # ラベルの位置（物体の上）
+        text_marker.pose.position.x = x
+        text_marker.pose.position.y = y
+        text_marker.pose.position.z = 2.0
+
+        # 物体の種類
+        obj_types = ["Vehicle", "Pedestrian", "Bicycle"]
+        text_marker.text = f"{obj_types[obj_type_idx]} #{i}"
+
+        # テキストのスケール
+        text_marker.scale.z = 0.8  # テキストの高さ
+
+        # テキストの色（白）
+        text_marker.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.9)
+
+        # マーカーの表示時間
+        text_marker.lifetime = Duration(sec=0, nanosec=100000000)  # 0.1秒
+
+        marker_array.markers.append(text_marker)
+
+        # 過去の軌跡を表示（10フレーム分）
+        path_marker = Marker()
+        path_marker.header.stamp = stamp
+        path_marker.header.frame_id = "base_link"
+        path_marker.ns = "neighbor_paths"
+        path_marker.id = marker_id
+        marker_id += 1
+        path_marker.type = Marker.LINE_STRIP
+        path_marker.action = Marker.ADD
+
+        # 過去の10フレーム分の軌跡を取得
+        history_length = min(10, neighbor_tensor.shape[2] - 1)
+        for j in range(history_length):
+            frame_idx = -j - 1
+            past_data = neighbor_tensor[0, i, frame_idx, :]
+
+            # 座標が有効な場合のみ追加
+            if torch.sum(torch.abs(past_data[:2])) > 1e-6:
+                p = Point()
+                p.x = past_data[0].item()
+                p.y = past_data[1].item()
+                p.z = 0.1
+                path_marker.points.append(p)
+
+        # 軌跡が存在する場合のみマーカーを追加
+        if len(path_marker.points) > 1:
+            # 軌跡のサイズ
+            path_marker.scale.x = 0.1  # 線の太さ
+
+            # 軌跡の色（薄いグレー）
+            path_marker.color = ColorRGBA(r=0.7, g=0.7, b=0.7, a=0.5)
+
+            # マーカーの表示時間
+            path_marker.lifetime = Duration(sec=0, nanosec=100000000)  # 0.1秒
+
+            marker_array.markers.append(path_marker)
+
+    return marker_array
