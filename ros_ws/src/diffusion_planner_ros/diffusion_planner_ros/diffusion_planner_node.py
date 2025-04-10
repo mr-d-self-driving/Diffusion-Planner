@@ -226,7 +226,7 @@ class DiffusionPlannerNode(Node):
         )
         lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
         for i, result in enumerate(result_list):
-            lanes_tensor[0, i] = torch.from_numpy(result).cuda()
+            lanes_tensor[0, i] = torch.from_numpy(result[0]).cuda()
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"get_input time: {elapsed_msec:.4f} msec")
@@ -352,7 +352,7 @@ class DiffusionPlannerNode(Node):
                 )
                 if curr_result is None:
                     continue
-                self.route_tensor[0, i] = torch.from_numpy(curr_result).cuda()
+                self.route_tensor[0, i] = torch.from_numpy(curr_result[0]).cuda()
             assert ll2_id not in self.static_map.crosswalk_segments
             assert ll2_id not in self.static_map.boundary_segments
 

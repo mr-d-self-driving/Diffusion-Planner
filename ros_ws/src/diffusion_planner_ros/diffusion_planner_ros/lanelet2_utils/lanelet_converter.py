@@ -479,7 +479,7 @@ def process_segment(segment, inv_transform_matrix_4x4, center_x, center_y, mask_
     traffic_light = [0, 0, 0, 1]  # (green, yellow, red, unknown)
     traffic_light = np.tile(traffic_light, (centerlines.shape[0], 1))
 
-    curr_data = np.concatenate(
+    line_data = np.concatenate(
         (
             centerlines[:, 0:2],  # xyのみ
             diff_centerlines[:, 0:2],  # xyのみ
@@ -489,7 +489,8 @@ def process_segment(segment, inv_transform_matrix_4x4, center_x, center_y, mask_
         ),
         axis=1,
     )
-    return curr_data
+
+    return line_data, segment.speed_limit_mph
 
 
 def get_input_feature(
@@ -509,7 +510,7 @@ def get_input_feature(
         result.append(curr_data)
 
     # 先頭の距離でソート
-    result = sorted(result, key=lambda x: np.linalg.norm(x[0, :2]))
+    result = sorted(result, key=lambda tup: np.linalg.norm(tup[0][0, :2]))
     result = result[0:70]
 
     return result
