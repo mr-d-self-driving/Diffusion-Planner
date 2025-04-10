@@ -15,9 +15,12 @@ except ImportError as e:
     print(e)  # noqa: T201
     sys.exit(1)
 
-from .polylines_base import BoundaryType
 from numpy.typing import NDArray
-from .uuid import uuid
+from shapely import LineString
+
+from .constant import MAP_TYPE_MAPPING, T4_LANE, T4_ROADEDGE, T4_ROADLINE
+from .map import MapType
+from .polylines_base import BoundaryType
 from .static_map import (
     AWMLStaticMap,
     BoundarySegment,
@@ -25,20 +28,18 @@ from .static_map import (
     LaneSegment,
     Polyline,
 )
-from .map import MapType
-from .constant import MAP_TYPE_MAPPING, T4_LANE, T4_ROADEDGE, T4_ROADLINE
-
-from shapely import LineString
+from .uuid import uuid
 
 
 def _interpolate_points(line, num_point):
-    # line (n, 3)
-    n = line.shape[0]
-    if n == num_point:
-        return line
-    index = np.linspace(0, n - 1, num_point)
-    line = line[index.astype(int)]
-    return line
+    line = LineString(line)
+    new_line = np.concatenate(
+        [
+            line.interpolate(d).coords._coords
+            for d in np.linspace(0, line.length, num_point)
+        ]
+    )
+    return new_line
 
 
 # cspell: ignore MGRS
