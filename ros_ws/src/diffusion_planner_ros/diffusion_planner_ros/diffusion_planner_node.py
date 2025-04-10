@@ -290,7 +290,7 @@ class DiffusionPlannerNode(Node):
                     route_has_speed_limit[0, i]
                 )
         marker_array = create_route_marker(
-            route_tensor, self.bl2map_matrix_4x4, self.get_clock().now().to_msg()
+            route_tensor, self.get_clock().now().to_msg()
         )
         self.pub_route_marker.publish(marker_array)
         end = time.time()

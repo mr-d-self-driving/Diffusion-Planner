@@ -329,11 +329,11 @@ def create_trajectory_marker(trajectory_msg):
     return marker_array
 
 
-def create_route_marker(route_tensor: torch.Tensor, bl2map_matrix_4x4: np.array, stamp) -> MarkerArray:
+def create_route_marker(route_tensor: torch.Tensor, stamp) -> MarkerArray:
     marker_array = MarkerArray()
     centerline_marker = Marker()
     centerline_marker.header.stamp = stamp
-    centerline_marker.header.frame_id = "map"
+    centerline_marker.header.frame_id = "base_link"
     centerline_marker.ns = "route"
     centerline_marker.id = 0
     centerline_marker.type = Marker.LINE_STRIP
@@ -355,11 +355,10 @@ def create_route_marker(route_tensor: torch.Tensor, bl2map_matrix_4x4: np.array,
             ],
             axis=1,
         )
-        centerline_in_map = (bl2map_matrix_4x4 @ centerline_in_base_link.T).T
         # Create a marker for the centerline
-        for i, point in enumerate(centerline_in_map):
+        for i, point in enumerate(centerline_in_base_link):
             p = Point()
-            norm = np.linalg.norm(centerline_in_base_link[i])
+            norm = np.linalg.norm(point)
             if norm < 2:
                 continue
             p.x = point[0]
