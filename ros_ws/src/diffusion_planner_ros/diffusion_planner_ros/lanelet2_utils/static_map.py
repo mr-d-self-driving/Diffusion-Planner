@@ -205,6 +205,7 @@ class LaneSegment:
     left_neighbor_ids: list[int] = field(factory=list)
     right_neighbor_ids: list[int] = field(factory=list)
     speed_limit_mph: float | None = field(default=None)
+    center: NDArrayF32 = field(init=False)
 
     @property
     def lane_type(self) -> MapType:

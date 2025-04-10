@@ -423,21 +423,35 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
     )
 
 
+def fix_point_num(map: AWMLStaticMap):
+    for segment_id, segment in map.lane_segments.items():
+        centerlines = segment.polyline.waypoints
+        left_boundaries = segment.left_boundaries[0].polyline.waypoints
+        right_boundaries = segment.right_boundaries[0].polyline.waypoints
+        # 点数が20になるように修正する
+        segment.polyline.waypoints = _interpolate_points(centerlines, 20)
+        segment.left_boundaries[0].polyline.waypoints = _interpolate_points(
+            left_boundaries, 20
+        )
+        segment.right_boundaries[0].polyline.waypoints = _interpolate_points(
+            right_boundaries, 20
+        )
+        segment.center = np.mean(centerlines[:, 0:2], axis=0)
+    return map
+
+
 def process_segment(segment, inv_transform_matrix_4x4, center_x, center_y, mask_range):
     centerlines = segment.polyline.waypoints
     left_boundaries = segment.left_boundaries[0].polyline.waypoints
     right_boundaries = segment.right_boundaries[0].polyline.waypoints
 
-    # x, yがegoからmask_range内のものだけを抽出
-    mask = (
-        (centerlines[:, 0] > center_x - mask_range)
-        & (centerlines[:, 0] < center_x + mask_range)
-        & (centerlines[:, 1] > center_y - mask_range)
-        & (centerlines[:, 1] < center_y + mask_range)
+    inside = (
+        (segment.center[0] > center_x - mask_range * 1.1)
+        & (segment.center[0] < center_x + mask_range * 1.1)
+        & (segment.center[1] > center_y - mask_range * 1.1)
+        & (segment.center[1] < center_y + mask_range * 1.1)
     )
-    true_num = np.sum(mask)
-    if true_num == 0:
-        # この範囲に点がない場合は、何もせずに返す
+    if not inside:
         return None
 
     # 自車座標系に変換
@@ -454,11 +468,6 @@ def process_segment(segment, inv_transform_matrix_4x4, center_x, center_y, mask_
     )
     right_boundaries_ego = inv_transform_matrix_4x4 @ right_boundaries_4xN
     right_boundaries = right_boundaries_ego[:3, :].T
-
-    # 点数が20になるように修正する
-    centerlines = _interpolate_points(centerlines, 20)
-    left_boundaries = _interpolate_points(left_boundaries, 20)
-    right_boundaries = _interpolate_points(right_boundaries, 20)
 
     left_boundaries -= centerlines
     right_boundaries -= centerlines

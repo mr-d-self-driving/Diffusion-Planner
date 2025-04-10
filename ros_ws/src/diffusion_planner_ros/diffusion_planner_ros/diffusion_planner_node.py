@@ -20,6 +20,7 @@ from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     get_input_feature,
     process_segment,
+    fix_point_num,
 )
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.visualize_input import visualize_inputs
@@ -50,6 +51,7 @@ class DiffusionPlannerNode(Node):
         vector_map_path = self.declare_parameter("vector_map_path", value="None").value
         self.get_logger().info(f"Vector map path: {vector_map_path}")
         self.static_map = convert_lanelet(vector_map_path)
+        self.static_map = fix_point_num(self.static_map)
 
         # get config
         config_json_path = self.declare_parameter(
