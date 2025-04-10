@@ -11,11 +11,10 @@ from rclpy.qos import (
     QoSHistoryPolicy,
 )
 from nav_msgs.msg import Odometry
+from visualization_msgs.msg import MarkerArray
 from autoware_perception_msgs.msg import TrackedObjects
-from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
-from visualization_msgs.msg import MarkerArray, Marker
-from std_msgs.msg import ColorRGBA
-from geometry_msgs.msg import Point, AccelWithCovarianceStamped
+from autoware_planning_msgs.msg import LaneletRoute, Trajectory
+from geometry_msgs.msg import AccelWithCovarianceStamped
 from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     get_input_feature,
@@ -29,12 +28,12 @@ import torch
 from diffusion_planner.utils.config import Config
 import time
 import numpy as np
-from builtin_interfaces.msg import Duration
 from scipy.spatial.transform import Rotation
 from mmengine import fileio
 import io
 from .utils import (
     create_trajectory_marker,
+    create_route_marker,
     create_current_ego_state,
     tracking_one_step,
     convert_tracked_objects_to_tensor,
@@ -313,41 +312,9 @@ class DiffusionPlannerNode(Node):
                 # route_lanes_speed_limit[0, i] = speed_limit
                 # route_lanes_has_speed_limit[0, i] = speed_limit is not None
 
-        marker_array = MarkerArray()
-        centerline_marker = Marker()
-        centerline_marker.header.stamp = self.get_clock().now().to_msg()
-        centerline_marker.header.frame_id = "map"
-        centerline_marker.ns = "route"
-        centerline_marker.id = 0
-        centerline_marker.type = Marker.LINE_STRIP
-        centerline_marker.action = Marker.ADD
-        centerline_marker.pose.orientation.w = 1.0
-        centerline_marker.scale.x = 0.6
-        centerline_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)
-        centerline_marker.lifetime = Duration(sec=1, nanosec=0)
-        centerline_marker.points = []
-        for j in range(min(len(msg.segments), 25)):
-            centerline_in_base_link = route_tensor[0, j, :, :2].cpu().numpy()
-            centerline_in_base_link = np.concatenate(
-                [
-                    centerline_in_base_link,
-                    np.zeros((centerline_in_base_link.shape[0], 1)),
-                    np.ones((centerline_in_base_link.shape[0], 1)),
-                ],
-                axis=1,
-            )
-            centerline_in_map = (self.bl2map_matrix_4x4 @ centerline_in_base_link.T).T
-            # Create a marker for the centerline
-            for i, point in enumerate(centerline_in_map):
-                p = Point()
-                norm = np.linalg.norm(centerline_in_base_link[i])
-                if norm < 2:
-                    continue
-                p.x = point[0]
-                p.y = point[1]
-                p.z = point[2]
-                centerline_marker.points.append(p)
-        marker_array.markers.append(centerline_marker)
+        marker_array = create_route_marker(
+            route_tensor, self.bl2map_matrix_4x4, self.get_clock().now().to_msg()
+        )
         self.pub_route_marker.publish(marker_array)
         return route_tensor, route_lanes_speed_limit, route_lanes_has_speed_limit
 
