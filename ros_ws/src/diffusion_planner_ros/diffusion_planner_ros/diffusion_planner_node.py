@@ -45,13 +45,16 @@ class DiffusionPlannerNode(Node):
     def __init__(self):
         super().__init__("diffusion_planner_node")
 
-        # get vector_map
+        ##############
+        # Parameters #
+        ##############
+        # param(1) vector_map
         vector_map_path = self.declare_parameter("vector_map_path", value="None").value
         self.get_logger().info(f"Vector map path: {vector_map_path}")
         self.static_map = convert_lanelet(vector_map_path)
         self.static_map = fix_point_num(self.static_map)
 
-        # get config
+        # param(2) config
         config_json_path = self.declare_parameter(
             "config_json_path", value="None"
         ).value
@@ -66,7 +69,7 @@ class DiffusionPlannerNode(Node):
         self.diffusion_planner.decoder.decoder.training = False
         print(f"{self.config_obj.state_normalizer=}")
 
-        # Load the model checkpoint
+        # param(3) checkpoint
         ckpt_path = self.declare_parameter("ckpt_path", value="None").value
         self.get_logger().info(f"Checkpoint path: {ckpt_path}")
         ckpt = fileio.get(ckpt_path)
@@ -76,10 +79,13 @@ class DiffusionPlannerNode(Node):
         new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         self.diffusion_planner.load_state_dict(new_state_dict)
 
-        # get wheel_base
+        # param(4) wheel_base
         self.wheel_base = self.declare_parameter("wheel_base", value=5.0).value
         self.get_logger().info(f"Wheel base: {self.wheel_base}")
 
+        ###############
+        # Subscribers #
+        ###############
         # sub(1) kinematic_state
         self.kinematic_state_sub = self.create_subscription(
             Odometry,
@@ -120,6 +126,9 @@ class DiffusionPlannerNode(Node):
             transient_qos,
         )
 
+        ##############
+        # Publishers #
+        ##############
         # pub(1)[main] trajectory
         self.pub_trajectory = self.create_publisher(
             Trajectory,
@@ -157,7 +166,9 @@ class DiffusionPlannerNode(Node):
             ),
         )
 
-        # members
+        #############
+        # Variables #
+        #############
         self.latest_kinematic_state = None
         self.latest_acceleration = None
         self.bl2map_matrix_4x4 = None
