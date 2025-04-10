@@ -356,7 +356,7 @@ class DiffusionPlannerNode(Node):
         centerline_marker.pose.orientation.w = 1.0
         centerline_marker.scale.x = 0.6
         centerline_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)
-        centerline_marker.lifetime = Duration(sec=0, nanosec=int(1e8))
+        centerline_marker.lifetime = Duration(sec=1, nanosec=0)
         centerline_marker.points = []
         for j in range(min(len(msg.segments), 25)):
             centerline_in_base_link = route_tensor[0, j, :, :2].cpu().numpy()
