@@ -5,6 +5,15 @@ from geometry_msgs.msg import Point
 from scipy.spatial.transform import Rotation
 import numpy as np
 import torch
+from autoware_perception_msgs.msg import TrackedObjects
+from dataclasses import dataclass
+
+
+@dataclass
+class TrackingObject:
+    kinematics_list: list
+    shape_list: list
+    class_label: int
 
 
 def pose_to_mat4x4(pose):
@@ -73,6 +82,92 @@ def create_current_ego_state(kinematic_state_msg, acceleration_msg, wheel_base):
     ego_current_state[0, 8] = steering_angle  # steering angle
     ego_current_state[0, 9] = yaw_rate  # yaw rate
     return ego_current_state
+
+
+def tracking_one_step(msg: TrackedObjects, tracked_objs: dict) -> dict:
+    updated_tracked_objs = {}
+    label_map = {
+        0: 0,  # unknown -> vehicle
+        1: 0,  # car -> vehicle
+        2: 0,  # truck -> vehicle
+        3: 0,  # bus -> vehicle
+        4: 0,  # trailer -> vehicle
+        5: 2,  # motorcycle -> bicycle
+        6: 2,  # bicycle -> bicycle
+        7: 1,  # pedestrian -> pedestrian
+    }
+    for i in range(len(msg.objects)):
+        obj = msg.objects[i]
+        object_id_bytes = bytes(obj.object_id.uuid)
+        classification = obj.classification
+        label_list = [i.label for i in classification]
+        probability_list = [i.probability for i in classification]
+        max_index = np.argmax(probability_list)
+        label = label_list[max_index]
+        label_in_model = label_map[label]
+        kinematics = obj.kinematics
+        shape = obj.shape
+        if object_id_bytes in tracked_objs:
+            tracked_obj = tracked_objs[object_id_bytes]
+            tracked_obj.shape_list.append(shape)
+            tracked_obj.kinematics_list.append(kinematics)
+            updated_tracked_objs[object_id_bytes] = tracked_obj
+        else:
+            updated_tracked_objs[object_id_bytes] = TrackingObject(
+                kinematics_list=[kinematics],
+                shape_list=[shape],
+                class_label=label_in_model,
+            )
+
+    return updated_tracked_objs
+
+
+def convert_tracked_objects_to_tensor(
+    tracked_objs: dict,
+    map2bl_matrix_4x4: np.ndarray,
+    max_num_objects: int,
+    max_timesteps: int,
+) -> torch.Tensor:
+    neighbor = torch.zeros((1, max_num_objects, max_timesteps, 11))
+    for i, (object_id_bytes, tracked_obj) in enumerate(tracked_objs.items()):
+        if i >= max_num_objects:
+            break
+        label_in_model = tracked_obj.class_label
+        for j in range(max_timesteps):
+            if j < len(tracked_obj.kinematics_list):
+                kinematics = tracked_obj.kinematics_list[j]
+                shape = tracked_obj.shape_list[j]
+            else:
+                kinematics = tracked_obj.kinematics_list[-1]
+                shape = tracked_obj.shape_list[-1]
+            pose_in_map_4x4 = pose_to_mat4x4(kinematics.pose_with_covariance.pose)
+            pose_in_bl_4x4 = map2bl_matrix_4x4 @ pose_in_map_4x4
+            cos, sin = rot3x3_to_heading_cos_sin(pose_in_bl_4x4[0:3, 0:3])
+            twist_in_map_4x4 = np.eye(4)
+            twist_in_map_4x4[0, 3] = kinematics.twist_with_covariance.twist.linear.x
+            twist_in_map_4x4[1, 3] = kinematics.twist_with_covariance.twist.linear.y
+            twist_in_map_4x4[2, 3] = kinematics.twist_with_covariance.twist.linear.z
+            twist_in_bl_4x4 = map2bl_matrix_4x4 @ twist_in_map_4x4
+            neighbor[0, i, 20 - j, 0] = pose_in_bl_4x4[0, 3]  # x
+            neighbor[0, i, 20 - j, 1] = pose_in_bl_4x4[1, 3]  # y
+            neighbor[0, i, 20 - j, 2] = cos  # heading cos
+            neighbor[0, i, 20 - j, 3] = sin  # heading sin
+            neighbor[0, i, 20 - j, 4] = twist_in_bl_4x4[0, 3]  # velocity x
+            neighbor[0, i, 20 - j, 5] = twist_in_bl_4x4[1, 3]  # velocity y
+            neighbor[0, i, 20 - j, 6] = shape.dimensions.x  # length
+            neighbor[0, i, 20 - j, 7] = shape.dimensions.y  # width
+            neighbor[0, i, 20 - j, 8] = label_in_model == 0  # vehicle
+            neighbor[0, i, 20 - j, 9] = label_in_model == 1  # pedestrian
+            neighbor[0, i, 20 - j, 10] = label_in_model == 2  # bicycle
+    return neighbor
+
+
+def tracking(tracked_list: list[TrackedObjects]):
+    tracked_objs = {}
+    for i in range(len(tracked_list)):
+        msg = tracked_list[i]
+        updated_tracked_objs = tracking_one_step(msg, tracked_objs)
+    return updated_tracked_objs
 
 
 def create_trajectory_marker(trajectory_msg):
