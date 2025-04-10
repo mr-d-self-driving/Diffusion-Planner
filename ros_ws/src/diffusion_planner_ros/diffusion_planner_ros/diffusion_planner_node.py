@@ -231,8 +231,8 @@ class DiffusionPlannerNode(Node):
             line_data, speed_limit = result
             lanes_tensor[0, i] = torch.from_numpy(line_data).cuda()
             assert speed_limit is not None
-            lanes_speed_limit[0, i] = speed_limit
-            lanes_has_speed_limit[0, i] = speed_limit is not None
+            # lanes_speed_limit[0, i] = speed_limit
+            # lanes_has_speed_limit[0, i] = speed_limit is not None
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"get_input time: {elapsed_msec:.4f} msec")
@@ -250,10 +250,8 @@ class DiffusionPlannerNode(Node):
             "lanes_speed_limit": lanes_speed_limit,
             "lanes_has_speed_limit": lanes_has_speed_limit,
             "route_lanes": self.route_tensor,
-            "route_lanes_speed_limit": torch.zeros((1, 25, 1), device=dev),
-            "route_lanes_has_speed_limit": torch.zeros(
-                (1, 25, 1), dtype=torch.bool, device=dev
-            ),
+            "route_lanes_speed_limit": self.route_lanes_speed_limit,
+            "route_lanes_has_speed_limit": self.route_lanes_has_speed_limit,
             "static_objects": torch.zeros((1, 5, 10), device=dev),
             "sampled_trajectories": torch.zeros((1, 11, 81, 4), device=dev),
             "diffusion_time": torch.zeros((1, 11, 81, 4), device=dev),
@@ -343,6 +341,12 @@ class DiffusionPlannerNode(Node):
         self.route_tensor = torch.zeros(
             (1, 25, 20, 12), dtype=torch.float32, device="cuda"
         )
+        self.route_lanes_speed_limit = torch.zeros(
+            (1, 25, 1), dtype=torch.float32, device="cuda"
+        )
+        self.route_lanes_has_speed_limit = torch.zeros(
+            (1, 25, 1), dtype=torch.bool, device="cuda"
+        )
 
         for i in range(min(len(msg.segments), 25)):
             ll2_id = msg.segments[i].preferred_primitive.id
@@ -356,31 +360,11 @@ class DiffusionPlannerNode(Node):
                 )
                 if curr_result is None:
                     continue
-                self.route_tensor[0, i] = torch.from_numpy(curr_result[0]).cuda()
-            assert ll2_id not in self.static_map.crosswalk_segments
-            assert ll2_id not in self.static_map.boundary_segments
-
-        # すでに通過した部分は除外する
-        # 除外は要らないらしいのでコメントアウト
-        # self.route_tensor = self.route_tensor[:, : len(msg.segments), :, :]
-        # self.route_tensor = self.route_tensor.view(1, -1, 12)
-        # # 一番現在位置に近いindexを取得
-        # diff_x = self.route_tensor[:, :, 0]
-        # diff_y = self.route_tensor[:, :, 1]
-        # dist = torch.sqrt(diff_x**2 + diff_y**2)
-        # min_index = torch.argmin(dist, dim=1)
-        # # min_index以降を0番目に持ってきて、末尾以降は0で埋める
-        # rem = 25 - len(msg.segments)
-        # self.route_tensor = torch.cat(
-        #     [
-        #         self.route_tensor[:, min_index:, :],
-        #         torch.zeros_like(self.route_tensor[:, -1, :]).repeat(
-        #             1, min_index + rem * 20, 1
-        #         ),
-        #     ],
-        #     dim=1,
-        # )
-        # self.route_tensor = self.route_tensor.view(1, 25, 20, 12)
+                line_data, speed_limit = curr_result
+                self.route_tensor[0, i] = torch.from_numpy(line_data).cuda()
+                assert speed_limit is not None
+                # self.route_lanes_speed_limit[0, i] = speed_limit
+                # self.route_lanes_has_speed_limit[0, i] = speed_limit is not None
 
         marker_array = MarkerArray()
         centerline_marker = Marker()
@@ -416,7 +400,6 @@ class DiffusionPlannerNode(Node):
                 p.y = point[1]
                 p.z = point[2]
                 centerline_marker.points.append(p)
-        self.get_logger().info("Publishing route markers")
         marker_array.markers.append(centerline_marker)
         self.pub_route_marker.publish(marker_array)
 
