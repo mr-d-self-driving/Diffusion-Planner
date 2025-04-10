@@ -40,6 +40,7 @@ from .utils import (
     create_neighbor_marker,
     create_route_marker,
     create_trajectory_marker,
+    get_transform_matrix,
     tracking_one_step,
 )
 
@@ -172,8 +173,6 @@ class DiffusionPlannerNode(Node):
         #############
         self.latest_kinematic_state = None
         self.latest_acceleration = None
-        self.bl2map_matrix_4x4 = None
-        self.map2bl_matrix_4x4 = None
         self.route = None
         self.tracked_objs = {}  # object_id -> TrackingObject
 
@@ -181,33 +180,12 @@ class DiffusionPlannerNode(Node):
 
     def cb_kinematic_state(self, msg):
         self.latest_kinematic_state = msg
-        ego_x = msg.pose.pose.position.x
-        ego_y = msg.pose.pose.position.y
-        ego_z = msg.pose.pose.position.z
-        ego_qx = msg.pose.pose.orientation.x
-        ego_qy = msg.pose.pose.orientation.y
-        ego_qz = msg.pose.pose.orientation.z
-        ego_qw = msg.pose.pose.orientation.w
-        rot = Rotation.from_quat([ego_qx, ego_qy, ego_qz, ego_qw])
-        translation = np.array([ego_x, ego_y, ego_z])
-        transform_matrix = rot.as_matrix()
-
-        self.bl2map_matrix_4x4 = np.eye(4)
-        self.bl2map_matrix_4x4[:3, :3] = transform_matrix
-        self.bl2map_matrix_4x4[:3, 3] = translation
-
-        self.map2bl_matrix_4x4 = np.eye(4)
-        self.map2bl_matrix_4x4[:3, :3] = transform_matrix.T
-        self.map2bl_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
 
     def cb_acceleration(self, msg):
         self.latest_acceleration = msg
 
     def cb_route(self, msg):
         self.route = msg
-        self.get_logger().info(
-            f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
-        )
 
     def cb_tracked_objects(self, msg):
         if self.latest_kinematic_state is None:
@@ -216,6 +194,10 @@ class DiffusionPlannerNode(Node):
             return
         dev = self.diffusion_planner.parameters().__next__().device
         stamp = msg.header.stamp
+
+        bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
+            self.latest_kinematic_state
+        )
 
         # Ego
         start = time.time()
@@ -233,7 +215,7 @@ class DiffusionPlannerNode(Node):
         self.tracked_objs = tracking_one_step(msg, self.tracked_objs)
         neighbor = convert_tracked_objects_to_tensor(
             self.tracked_objs,
-            self.map2bl_matrix_4x4,
+            map2bl_matrix_4x4,
             max_num_objects=32,
             max_timesteps=21,
         ).to(dev)
@@ -247,7 +229,7 @@ class DiffusionPlannerNode(Node):
         start = time.time()
         result_list = get_input_feature(
             self.static_map,
-            map2bl_mat4x4=self.map2bl_matrix_4x4,
+            map2bl_mat4x4=map2bl_matrix_4x4,
             center_x=self.latest_kinematic_state.pose.pose.position.x,
             center_y=self.latest_kinematic_state.pose.pose.position.y,
             mask_range=100,
@@ -277,7 +259,7 @@ class DiffusionPlannerNode(Node):
             if ll2_id in self.static_map.lane_segments:
                 curr_result = process_segment(
                     self.static_map.lane_segments[ll2_id],
-                    self.map2bl_matrix_4x4,
+                    map2bl_matrix_4x4,
                     self.latest_kinematic_state.pose.pose.position.x,
                     self.latest_kinematic_state.pose.pose.position.y,
                     mask_range=100,
@@ -328,7 +310,7 @@ class DiffusionPlannerNode(Node):
         pred = np.concatenate([pred[..., :2], heading], axis=-1)  # T, 3(x, y, heading)
 
         # Publish the trajectory
-        trajectory_msg = convert_prediction_to_msg(pred, self.bl2map_matrix_4x4, stamp)
+        trajectory_msg = convert_prediction_to_msg(pred, bl2map_matrix_4x4, stamp)
         self.pub_trajectory.publish(trajectory_msg)
 
         # Publish the trajectory marker

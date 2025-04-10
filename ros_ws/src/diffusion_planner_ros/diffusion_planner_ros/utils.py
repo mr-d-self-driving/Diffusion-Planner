@@ -6,6 +6,7 @@ from autoware_perception_msgs.msg import TrackedObjects
 from autoware_planning_msgs.msg import Trajectory, TrajectoryPoint
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import Point
+from nav_msgs.msg import Odometry
 from scipy.spatial.transform import Rotation
 from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
@@ -16,6 +17,28 @@ class TrackingObject:
     kinematics_list: list
     shape_list: list
     class_label: int
+
+
+def get_transform_matrix(msg: Odometry):
+    ego_x = msg.pose.pose.position.x
+    ego_y = msg.pose.pose.position.y
+    ego_z = msg.pose.pose.position.z
+    ego_qx = msg.pose.pose.orientation.x
+    ego_qy = msg.pose.pose.orientation.y
+    ego_qz = msg.pose.pose.orientation.z
+    ego_qw = msg.pose.pose.orientation.w
+    rot = Rotation.from_quat([ego_qx, ego_qy, ego_qz, ego_qw])
+    translation = np.array([ego_x, ego_y, ego_z])
+    transform_matrix = rot.as_matrix()
+
+    bl2map_matrix_4x4 = np.eye(4)
+    bl2map_matrix_4x4[:3, :3] = transform_matrix
+    bl2map_matrix_4x4[:3, 3] = translation
+
+    map2bl_matrix_4x4 = np.eye(4)
+    map2bl_matrix_4x4[:3, :3] = transform_matrix.T
+    map2bl_matrix_4x4[:3, 3] = -transform_matrix.T @ translation
+    return bl2map_matrix_4x4, map2bl_matrix_4x4
 
 
 def pose_to_mat4x4(pose):
