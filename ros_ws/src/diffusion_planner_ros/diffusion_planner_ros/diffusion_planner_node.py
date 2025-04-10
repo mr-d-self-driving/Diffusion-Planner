@@ -35,8 +35,6 @@ from mmengine import fileio
 import io
 from .utils import (
     create_trajectory_marker,
-    pose_to_mat4x4,
-    rot3x3_to_heading_cos_sin,
     create_current_ego_state,
     tracking_one_step,
     convert_tracked_objects_to_tensor,
@@ -164,7 +162,6 @@ class DiffusionPlannerNode(Node):
         self.latest_acceleration = None
         self.bl2map_matrix_4x4 = None
         self.map2bl_matrix_4x4 = None
-        self.vector_map = None
         self.route = None
         self.tracked_objs = {}  # object_id -> TrackingObject
 
