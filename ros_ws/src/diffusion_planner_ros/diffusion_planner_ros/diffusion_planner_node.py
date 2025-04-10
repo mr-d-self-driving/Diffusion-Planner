@@ -1,44 +1,46 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import io
+import json
+import time
+
+import numpy as np
 import rclpy
-from rclpy.node import Node
-from rclpy.executors import SingleThreadedExecutor
-from rclpy.qos import (
-    QoSProfile,
-    QoSDurabilityPolicy,
-    QoSReliabilityPolicy,
-    QoSHistoryPolicy,
-)
-from nav_msgs.msg import Odometry
-from visualization_msgs.msg import MarkerArray
+import torch
 from autoware_perception_msgs.msg import TrackedObjects
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory
 from geometry_msgs.msg import AccelWithCovarianceStamped
+from mmengine import fileio
+from nav_msgs.msg import Odometry
+from rclpy.executors import SingleThreadedExecutor
+from rclpy.node import Node
+from rclpy.qos import (
+    QoSDurabilityPolicy,
+    QoSHistoryPolicy,
+    QoSProfile,
+    QoSReliabilityPolicy,
+)
+from scipy.spatial.transform import Rotation
+from visualization_msgs.msg import MarkerArray
+
+from diffusion_planner.model.diffusion_planner import Diffusion_Planner
+from diffusion_planner.utils.config import Config
+
 from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
+    fix_point_num,
     get_input_feature,
     process_segment,
-    fix_point_num,
 )
-from diffusion_planner.model.diffusion_planner import Diffusion_Planner
-from diffusion_planner.utils.visualize_input import visualize_inputs
-import json
-import torch
-from diffusion_planner.utils.config import Config
-import time
-import numpy as np
-from scipy.spatial.transform import Rotation
-from mmengine import fileio
-import io
 from .utils import (
+    convert_prediction_to_msg,
+    convert_tracked_objects_to_tensor,
+    create_current_ego_state,
     create_neighbor_marker,
     create_route_marker,
     create_trajectory_marker,
-    create_current_ego_state,
     tracking_one_step,
-    convert_tracked_objects_to_tensor,
-    convert_prediction_to_tensor,
 )
 
 
@@ -326,9 +328,7 @@ class DiffusionPlannerNode(Node):
         pred = np.concatenate([pred[..., :2], heading], axis=-1)  # T, 3(x, y, heading)
 
         # Publish the trajectory
-        trajectory_msg = convert_prediction_to_tensor(
-            pred, self.bl2map_matrix_4x4, stamp
-        )
+        trajectory_msg = convert_prediction_to_msg(pred, self.bl2map_matrix_4x4, stamp)
         self.pub_trajectory.publish(trajectory_msg)
 
         # Publish the trajectory marker

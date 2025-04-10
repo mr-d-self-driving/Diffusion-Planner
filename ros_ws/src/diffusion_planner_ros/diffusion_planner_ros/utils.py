@@ -1,13 +1,14 @@
-from visualization_msgs.msg import MarkerArray, Marker
-from std_msgs.msg import ColorRGBA
-from builtin_interfaces.msg import Duration
-from geometry_msgs.msg import Point
-from scipy.spatial.transform import Rotation
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 from autoware_perception_msgs.msg import TrackedObjects
-from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
-from dataclasses import dataclass
+from autoware_planning_msgs.msg import Trajectory, TrajectoryPoint
+from builtin_interfaces.msg import Duration
+from geometry_msgs.msg import Point
+from scipy.spatial.transform import Rotation
+from std_msgs.msg import ColorRGBA
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 @dataclass
@@ -171,7 +172,7 @@ def tracking(tracked_list: list[TrackedObjects]):
     return updated_tracked_objs
 
 
-def convert_prediction_to_tensor(
+def convert_prediction_to_msg(
     pred: torch.Tensor, bl2map_matrix_4x4: np.array, stamp
 ) -> Trajectory:
     # Convert to Trajectory message
@@ -367,6 +368,7 @@ def create_route_marker(route_tensor: torch.Tensor, stamp) -> MarkerArray:
             centerline_marker.points.append(p)
     marker_array.markers.append(centerline_marker)
     return marker_array
+
 
 def create_neighbor_marker(neighbor_tensor: torch.Tensor, stamp) -> MarkerArray:
     """
