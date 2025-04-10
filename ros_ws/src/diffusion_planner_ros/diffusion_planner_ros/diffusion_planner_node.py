@@ -207,9 +207,12 @@ class DiffusionPlannerNode(Node):
         stamp = msg.header.stamp
         # stamp = self.get_clock().now().to_msg()
 
-        curr_kinematic_state = get_nearest_msg(self.kinematic_state_list, stamp)
-        curr_acceleration = get_nearest_msg(self.acceleration_list, stamp)
-        curr_traffic_light = get_nearest_msg(self.traffic_light_list, stamp)
+        curr_kinematic_state, idx = get_nearest_msg(self.kinematic_state_list, stamp)
+        self.kinematic_state_list = self.kinematic_state_list[idx:]
+        curr_acceleration, idx = get_nearest_msg(self.acceleration_list, stamp)
+        self.acceleration_list = self.acceleration_list[idx:]
+        curr_traffic_light, idx = get_nearest_msg(self.traffic_light_list, stamp)
+        self.traffic_light_list = self.traffic_light_list[idx:]
 
         # self.get_logger().info(f"{curr_traffic_light=}")
 

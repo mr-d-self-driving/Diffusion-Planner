@@ -29,15 +29,17 @@ def get_nearest_msg(msg_list: list, stamp):
     """
     stamp_int = parse_timestamp(stamp)
     nearest_msg = None
+    nearest_index = -1
     nearest_time_diff = float("inf")
-    for msg in msg_list:
+    for i, msg in enumerate(msg_list):
         msg_stamp = msg.header.stamp if hasattr(msg, "header") else msg.stamp
         msg_stamp_int = parse_timestamp(msg_stamp)
         time_diff = abs(msg_stamp_int - stamp_int)
         if time_diff < nearest_time_diff:
             nearest_time_diff = time_diff
             nearest_msg = msg
-    return nearest_msg
+            nearest_index = i
+    return nearest_msg, nearest_index
 
 
 def get_transform_matrix(msg: Odometry):
