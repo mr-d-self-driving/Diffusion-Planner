@@ -11,7 +11,7 @@ from rclpy.qos import (
     QoSHistoryPolicy,
 )
 from nav_msgs.msg import Odometry
-from autoware_perception_msgs.msg import DetectedObjects, TrackedObjects
+from autoware_perception_msgs.msg import TrackedObjects
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory, TrajectoryPoint
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import ColorRGBA
@@ -98,14 +98,8 @@ class DiffusionPlannerNode(Node):
             10,
         )
 
-        # sub(3) detected_objects, tracked_objects
+        # sub(3) tracked_objects
         # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_perception_msgs/msg/DetectedObjects.msg
-        self.detected_objects_sub = self.create_subscription(
-            DetectedObjects,
-            "/perception/object_recognition/detection/objects",
-            self.cb_detected_objects,
-            10,
-        )
         self.tracked_objects_sub = self.create_subscription(
             TrackedObjects,
             "/perception/object_recognition/tracking/objects",
@@ -203,12 +197,21 @@ class DiffusionPlannerNode(Node):
     def cb_acceleration(self, msg):
         self.latest_acceleration = msg
 
-    def cb_detected_objects(self, msg):
+    def cb_tracked_objects(self, msg):
         if self.latest_kinematic_state is None:
             return
         if self.route is None:
             return
         dev = self.diffusion_planner.parameters().__next__().device
+        self.tracked_objs = tracking_one_step(msg, self.tracked_objs)
+        self.get_logger().info(f"Tracked objects: {len(self.tracked_objs)}")
+
+        self.neighbor = convert_tracked_objects_to_tensor(
+            self.tracked_objs,
+            self.map2bl_matrix_4x4,
+            max_num_objects=32,
+            max_timesteps=21,
+        ).to(dev)
 
         start = time.time()
         self.process_route(self.route)
@@ -313,27 +316,11 @@ class DiffusionPlannerNode(Node):
         marker_array = create_trajectory_marker(trajectory_msg)
         self.pub_trajectory_marker.publish(marker_array)
 
-    def cb_vector_map(self, msg):
-        self.vector_map = msg
-        self.get_logger().info("Received vector map")
-
     def cb_route(self, msg):
         self.route = msg
         self.get_logger().info(
             f"Received lanelet route. Number of lanelets: {len(msg.segments)}"
         )
-
-    def cb_tracked_objects(self, msg):
-        self.tracked_objs = tracking_one_step(msg, self.tracked_objs)
-        self.get_logger().info(f"Tracked objects: {len(self.tracked_objs)}")
-
-        dev = self.diffusion_planner.parameters().__next__().device
-        self.neighbor = convert_tracked_objects_to_tensor(
-            self.tracked_objs,
-            self.map2bl_matrix_4x4,
-            max_num_objects=32,
-            max_timesteps=21,
-        ).to(dev)
 
     def process_route(self, msg):
         self.route_tensor = torch.zeros(
