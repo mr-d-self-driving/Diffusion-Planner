@@ -19,6 +19,27 @@ class TrackingObject:
     class_label: int
 
 
+def parse_timestamp(stamp) -> int:
+    return stamp.sec * int(1e9) + stamp.nanosec
+
+
+def get_nearest_msg(msg_list: list, stamp):
+    """
+    msg_listの中から、最も近いタイムスタンプを持つメッセージを返す
+    """
+    stamp_int = parse_timestamp(stamp)
+    nearest_msg = None
+    nearest_time_diff = float("inf")
+    for msg in msg_list:
+        msg_stamp = msg.header.stamp if hasattr(msg, "header") else msg.stamp
+        msg_stamp_int = parse_timestamp(msg_stamp)
+        time_diff = abs(msg_stamp_int - stamp_int)
+        if time_diff < nearest_time_diff:
+            nearest_time_diff = time_diff
+            nearest_msg = msg
+    return nearest_msg
+
+
 def get_transform_matrix(msg: Odometry):
     ego_x = msg.pose.pose.position.x
     ego_y = msg.pose.pose.position.y

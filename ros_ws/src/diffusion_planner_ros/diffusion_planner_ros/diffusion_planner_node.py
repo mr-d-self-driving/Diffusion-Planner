@@ -40,6 +40,7 @@ from .utils import (
     create_neighbor_marker,
     create_route_marker,
     create_trajectory_marker,
+    get_nearest_msg,
     get_transform_matrix,
     tracking_one_step,
 )
@@ -171,39 +172,47 @@ class DiffusionPlannerNode(Node):
         #############
         # Variables #
         #############
-        self.latest_kinematic_state = None
-        self.latest_acceleration = None
+        self.kinematic_state_list = []
+        self.acceleration_list = []
         self.route = None
         self.tracked_objs = {}  # object_id -> TrackingObject
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
 
     def cb_kinematic_state(self, msg):
-        self.latest_kinematic_state = msg
+        self.kinematic_state_list.append(msg)
 
     def cb_acceleration(self, msg):
-        self.latest_acceleration = msg
+        self.acceleration_list.append(msg)
 
     def cb_route(self, msg):
         self.route = msg
 
     def cb_tracked_objects(self, msg):
-        if self.latest_kinematic_state is None:
-            return
         if self.route is None:
             return
         dev = self.diffusion_planner.parameters().__next__().device
         stamp = msg.header.stamp
 
+        curr_kinematic_state = get_nearest_msg(self.kinematic_state_list, stamp)
+        curr_acceleration = get_nearest_msg(self.acceleration_list, stamp)
+
+        if curr_kinematic_state is None:
+            self.get_logger().warn("No kinematic state message found")
+            return
+        if curr_acceleration is None:
+            self.get_logger().warn("No acceleration message found")
+            return
+
         bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
-            self.latest_kinematic_state
+            curr_kinematic_state
         )
 
         # Ego
         start = time.time()
         ego_current_state = create_current_ego_state(
-            self.latest_kinematic_state,
-            self.latest_acceleration,
+            curr_kinematic_state,
+            curr_acceleration,
             self.wheel_base,
         ).to(dev)
         end = time.time()
@@ -230,8 +239,8 @@ class DiffusionPlannerNode(Node):
         result_list = get_input_feature(
             self.static_map,
             map2bl_mat4x4=map2bl_matrix_4x4,
-            center_x=self.latest_kinematic_state.pose.pose.position.x,
-            center_y=self.latest_kinematic_state.pose.pose.position.y,
+            center_x=curr_kinematic_state.pose.pose.position.x,
+            center_y=curr_kinematic_state.pose.pose.position.y,
             mask_range=100,
         )
         lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
@@ -260,8 +269,8 @@ class DiffusionPlannerNode(Node):
                 curr_result = process_segment(
                     self.static_map.lane_segments[ll2_id],
                     map2bl_matrix_4x4,
-                    self.latest_kinematic_state.pose.pose.position.x,
-                    self.latest_kinematic_state.pose.pose.position.y,
+                    curr_kinematic_state.pose.pose.position.x,
+                    curr_kinematic_state.pose.pose.position.y,
                     mask_range=100,
                 )
                 if curr_result is None:
