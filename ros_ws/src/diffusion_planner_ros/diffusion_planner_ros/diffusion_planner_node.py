@@ -283,7 +283,7 @@ class DiffusionPlannerNode(Node):
 
         # Route
         start = time.time()
-        route_tensor = torch.zeros((1, 25, 20, 12), dtype=torch.float32, device="cuda")
+        route_tensor = torch.zeros((1, 25, 20, 12), dtype=torch.float32, device=dev)
         route_speed_limit = torch.zeros((1, 25, 1), dtype=torch.float32, device=dev)
         route_has_speed_limit = torch.zeros((1, 25, 1), dtype=torch.bool, device=dev)
         for i in range(min(len(self.route.segments), 25)):
