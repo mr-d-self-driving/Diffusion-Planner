@@ -176,16 +176,16 @@ def convert_tracked_objects_to_tensor(
     neighbor = torch.zeros((1, max_num_objects, max_timesteps, 11))
 
     # Sort tracked objects by distance from ego
-    #   I think that it is needed because the neighbors are sorted by distance from ego in the original code
-    #   https://github.com/SakodaShintaro/Diffusion-Planner/blob/6c8954e6424107dc1355ce7ba1d7aec10e6c8a1a/diffusion_planner/data_process/agent_process.py#L279-L280
-    #   but it didn't work well in my case, so I commented it out
-    # def sort_key(item):
-    #     _, tracked_obj = item
-    #     last_kinematics = tracked_obj.kinematics_list[-1]
-    #     pose_in_map = pose_to_mat4x4(last_kinematics.pose_with_covariance.pose)
-    #     pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
-    #     return np.linalg.norm(pose_in_bl[0:2, 3])
-    # tracked_objs = dict(sorted(tracked_objs.items(), key=sort_key))
+    # It is needed because the neighbors are sorted by distance from ego in the original code
+    # https://github.com/SakodaShintaro/Diffusion-Planner/blob/6c8954e6424107dc1355ce7ba1d7aec10e6c8a1a/diffusion_planner/data_process/agent_process.py#L279-L280
+    def sort_key(item):
+        _, tracked_obj = item
+        last_kinematics = tracked_obj.kinematics_list[-1]
+        pose_in_map = pose_to_mat4x4(last_kinematics.pose_with_covariance.pose)
+        pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
+        return np.linalg.norm(pose_in_bl[0:2, 3])
+
+    tracked_objs = dict(sorted(tracked_objs.items(), key=sort_key))
 
     for i, (object_id_bytes, tracked_obj) in enumerate(tracked_objs.items()):
         if i >= max_num_objects:
@@ -212,8 +212,9 @@ def convert_tracked_objects_to_tensor(
             neighbor[0, i, 20 - j, 3] = sin  # heading sin
             neighbor[0, i, 20 - j, 4] = twist_in_bl_4x4[0, 3]  # velocity x
             neighbor[0, i, 20 - j, 5] = twist_in_bl_4x4[1, 3]  # velocity y
-            neighbor[0, i, 20 - j, 6] = shape.dimensions.x  # length
-            neighbor[0, i, 20 - j, 7] = shape.dimensions.y  # width
+            # I don't know why but sometimes the length and width from autoware are 0
+            neighbor[0, i, 20 - j, 6] = max(shape.dimensions.x, 1.0)  # length
+            neighbor[0, i, 20 - j, 7] = max(shape.dimensions.y, 1.0)  # width
             neighbor[0, i, 20 - j, 8] = label_in_model == 0  # vehicle
             neighbor[0, i, 20 - j, 9] = label_in_model == 1  # pedestrian
             neighbor[0, i, 20 - j, 10] = label_in_model == 2  # bicycle
