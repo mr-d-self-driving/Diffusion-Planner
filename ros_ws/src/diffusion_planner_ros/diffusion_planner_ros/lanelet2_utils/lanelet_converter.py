@@ -513,7 +513,10 @@ def process_segment(
         axis=1,
     )
 
-    return line_data, segment.speed_limit_mph
+    # convert from miles per hour to meters per second
+    speed_limit_mps = segment.speed_limit_mph * 0.44704
+
+    return line_data, speed_limit_mps
 
 
 def get_input_feature(

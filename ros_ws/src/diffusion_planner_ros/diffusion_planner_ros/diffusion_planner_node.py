@@ -220,19 +220,17 @@ class DiffusionPlannerNode(Node):
         if curr_acceleration is None:
             self.get_logger().warn("No acceleration message found")
             return
-        if curr_traffic_light is None:
-            self.get_logger().warn("No traffic light message found")
-            return
 
         bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
             curr_kinematic_state
         )
         traffic_light_recognition = {}
-        for traffic_light_group in curr_traffic_light.traffic_light_groups:
-            traffic_light_group_id = traffic_light_group.traffic_light_group_id
-            elements = traffic_light_group.elements
-            assert len(elements) == 1, elements
-            traffic_light_recognition[traffic_light_group_id] = elements[0].color
+        if curr_traffic_light is not None:
+            for traffic_light_group in curr_traffic_light.traffic_light_groups:
+                traffic_light_group_id = traffic_light_group.traffic_light_group_id
+                elements = traffic_light_group.elements
+                assert len(elements) == 1, elements
+                traffic_light_recognition[traffic_light_group_id] = elements[0].color
 
         # Ego
         start = time.time()
@@ -279,8 +277,6 @@ class DiffusionPlannerNode(Node):
             assert speed_limit is not None
             lanes_speed_limit[0, i] = speed_limit
             lanes_has_speed_limit[0, i] = speed_limit is not None
-            lanes_speed_limit[0, i] = torch.zeros_like(lanes_speed_limit[0, i])
-            lanes_has_speed_limit[0, i] = torch.zeros_like(lanes_has_speed_limit[0, i])
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Lane     : {elapsed_msec:.4f} msec")
@@ -308,10 +304,6 @@ class DiffusionPlannerNode(Node):
                 assert speed_limit is not None
                 route_speed_limit[0, i] = speed_limit
                 route_has_speed_limit[0, i] = speed_limit is not None
-                route_speed_limit[0, i] = torch.zeros_like(route_speed_limit[0, i])
-                route_has_speed_limit[0, i] = torch.zeros_like(
-                    route_has_speed_limit[0, i]
-                )
         marker_array = create_route_marker(route_tensor, stamp)
         self.pub_route_marker.publish(marker_array)
         end = time.time()
