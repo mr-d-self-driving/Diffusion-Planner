@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     convert_lanelet,
-    get_input_feature,
+    create_lane_tensor,
     fix_point_num,
 )
 import matplotlib.pyplot as plt
@@ -47,12 +47,14 @@ if __name__ == "__main__":
     ).as_matrix()
     map2bl_mat4x4 = np.linalg.inv(map2bl_mat4x4)
 
-    result_list = get_input_feature(result, map2bl_mat4x4, ego_x, ego_y, RANGE, {})
-    print(f"{len(result_list)=}")
+    lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
+        result, map2bl_mat4x4, ego_x, ego_y, RANGE, {}, 70, "cpu"
+    )
+    print(f"{lanes_tensor.shape=}")
 
     plt.figure(figsize=(10, 8))
-    for i in range(len(result_list)):
-        result, _ = result_list[i]
+    for i in range(lanes_tensor.shape[1]):
+        result = lanes_tensor[0, i]
         plt.plot(result[:, 0], result[:, 1], "r-")
         plt.plot(result[:, 4] + result[:, 0], result[:, 5] + result[:, 1], "g-")
         plt.plot(result[:, 6] + result[:, 0], result[:, 7] + result[:, 1], "b-")

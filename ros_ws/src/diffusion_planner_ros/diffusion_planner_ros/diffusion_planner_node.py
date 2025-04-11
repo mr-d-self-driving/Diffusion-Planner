@@ -29,8 +29,8 @@ from diffusion_planner.utils.visualize_input import visualize_inputs
 
 from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
+    create_lane_tensor,
     fix_point_num,
-    get_input_feature,
     process_segment,
 )
 from .utils import (
@@ -262,23 +262,16 @@ class DiffusionPlannerNode(Node):
 
         # Lane
         start = time.time()
-        result_list = get_input_feature(
+        lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
             self.static_map,
             map2bl_mat4x4=map2bl_matrix_4x4,
             center_x=curr_kinematic_state.pose.pose.position.x,
             center_y=curr_kinematic_state.pose.pose.position.y,
             mask_range=100,
             traffic_light_recognition=traffic_light_recognition,
+            num_segments=70,
+            dev=dev,
         )
-        lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
-        lanes_speed_limit = torch.zeros((1, 70, 1), dtype=torch.float32, device=dev)
-        lanes_has_speed_limit = torch.zeros((1, 70, 1), dtype=torch.bool, device=dev)
-        for i, result in enumerate(result_list):
-            line_data, speed_limit = result
-            lanes_tensor[0, i] = torch.from_numpy(line_data).cuda()
-            assert speed_limit is not None
-            lanes_speed_limit[0, i] = speed_limit
-            lanes_has_speed_limit[0, i] = speed_limit is not None
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Lane     : {elapsed_msec:.4f} msec")

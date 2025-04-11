@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import torch
 import sys
 
 import numpy as np
@@ -522,25 +523,43 @@ def process_segment(
     return line_data, speed_limit_mps
 
 
-def get_input_feature(
+def create_lane_tensor(
     map: AWMLStaticMap,
     map2bl_mat4x4: NDArray,
     center_x: float,
     center_y: float,
     mask_range: float,
     traffic_light_recognition: dict,
+    num_segments: int,
+    dev: torch.device,
 ) -> list[np.ndarray]:
-    result = []
+    result_list = []
     for segment_id, segment in map.lane_segments.items():
         curr_data = process_segment(
-            segment, map2bl_mat4x4, center_x, center_y, mask_range, traffic_light_recognition
+            segment,
+            map2bl_mat4x4,
+            center_x,
+            center_y,
+            mask_range,
+            traffic_light_recognition,
         )
         if curr_data is None:
             continue
-        result.append(curr_data)
+        result_list.append(curr_data)
 
     # sort by distance from the first point
-    result = sorted(result, key=lambda tup: np.linalg.norm(tup[0][0, :2]))
-    result = result[0:70]
+    result_list = sorted(result_list, key=lambda tup: np.linalg.norm(tup[0][0, :2]))
+    result_list = result_list[0:num_segments]
 
-    return result
+    lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
+    lanes_speed_limit = torch.zeros((1, 70, 1), dtype=torch.float32, device=dev)
+    lanes_has_speed_limit = torch.zeros((1, 70, 1), dtype=torch.bool, device=dev)
+
+    for i, result_list in enumerate(result_list):
+        line_data, speed_limit = result_list
+        lanes_tensor[0, i] = torch.from_numpy(line_data).cuda()
+        assert speed_limit is not None
+        lanes_speed_limit[0, i] = speed_limit
+        lanes_has_speed_limit[0, i] = speed_limit is not None
+
+    return lanes_tensor, lanes_speed_limit, lanes_has_speed_limit
