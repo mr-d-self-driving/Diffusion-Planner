@@ -21,11 +21,11 @@ from rclpy.qos import (
     QoSProfile,
     QoSReliabilityPolicy,
 )
-from scipy.spatial.transform import Rotation
 from visualization_msgs.msg import MarkerArray
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.config import Config
+from diffusion_planner.utils.visualize_input import visualize_inputs
 
 from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
@@ -233,6 +233,7 @@ class DiffusionPlannerNode(Node):
             elements = traffic_light_group.elements
             assert len(elements) == 1, elements
             traffic_light_recognition[traffic_light_group_id] = elements[0].color
+
         # Ego
         start = time.time()
         ego_current_state = create_current_ego_state(
