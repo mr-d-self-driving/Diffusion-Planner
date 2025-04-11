@@ -22,7 +22,7 @@ def parse_timestamp(stamp) -> int:
 
 def get_nearest_msg(msg_list: list, stamp):
     """
-    msg_listの中から、最も近いタイムスタンプを持つメッセージとそのindexを返す
+    Get the nearest message and its index from a list of messages
     """
     stamp_int = parse_timestamp(stamp)
     nearest_msg = None
@@ -63,7 +63,7 @@ def get_transform_matrix(msg: Odometry):
 
 def pose_to_mat4x4(pose):
     """
-    ROSのPoseを4x4の行列に変換
+    Convert ROS Pose to 4x4 matrix
     """
     mat = np.array(
         [
@@ -87,10 +87,10 @@ def pose_to_mat4x4(pose):
 
 def rot3x3_to_heading_cos_sin(rot3x3):
     """
-    回転行列からヘディング角を計算
+    Convert 3x3 rotation matrix to heading cos and sin
     """
     rot = Rotation.from_matrix(rot3x3)
-    heading = rot.as_euler("zyx")[0]  # ZYX順でヘディングを取得
+    heading = rot.as_euler("zyx")[0]
     cos_heading = np.cos(heading)
     sin_heading = np.sin(heading)
     return cos_heading, sin_heading
