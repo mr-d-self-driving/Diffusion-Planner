@@ -11,6 +11,8 @@ from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
 )
 from diffusion_planner_ros.utils import (
     create_current_ego_state,
+    get_nearest_msg,
+    parse_timestamp,
 )
 import secrets
 from dataclasses import dataclass
@@ -40,21 +42,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("vector_map_path", type=Path)
     parser.add_argument("--limit", type=int, default=1000)
     return parser.parse_args()
-
-
-def parse_timestamp(stamp) -> int:
-    return stamp.sec * int(1e9) + stamp.nanosec
-
-
-def get_latest_index(list_of_msg, index, target_timestamp):
-    """listのうちindexの位置から線形探索をしてtarget_timestampを超えないような最新のメッセージを取得する"""
-    for i in range(index, len(list_of_msg)):
-        msg = list_of_msg[i]
-        stamp = msg.header.stamp if hasattr(msg, "header") else msg.stamp
-        timestamp = parse_timestamp(stamp)
-        if timestamp > target_timestamp:
-            return i - 1
-    return len(list_of_msg) - 1
 
 
 if __name__ == "__main__":
@@ -112,12 +99,6 @@ if __name__ == "__main__":
     # 最初にmsgsの10Hzでの整形(tracked_objects基準)を行う
     n = len(topic_name_to_data["/perception/object_recognition/tracking/objects"])
     data_list = []
-    indices = {
-        "/localization/kinematic_state": 0,
-        "/localization/acceleration": 0,
-        "/perception/traffic_light_recognition/traffic_signals": 0,
-        "/sensing/camera/camera0/image_rect_color/compressed": 0,
-    }
     for i in range(n):
         tracking = topic_name_to_data[
             "/perception/object_recognition/tracking/objects"
@@ -131,12 +112,11 @@ if __name__ == "__main__":
         }
 
         for key in latest_msgs.keys():
-            curr_index = get_latest_index(
-                topic_name_to_data[key], indices[key], timestamp
+            curr_msg, curr_index = get_nearest_msg(
+                topic_name_to_data[key], tracking.header.stamp
             )
-            curr_msg = topic_name_to_data[key][curr_index]
+            topic_name_to_data[key] = topic_name_to_data[key][curr_index:]
             latest_msgs[key] = curr_msg
-            indices[key] = curr_index
 
         data_list.append(
             FrameData(
