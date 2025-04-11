@@ -47,7 +47,7 @@ if __name__ == "__main__":
     ).as_matrix()
     map2bl_mat4x4 = np.linalg.inv(map2bl_mat4x4)
 
-    result_list = get_input_feature(result, map2bl_mat4x4, ego_x, ego_y, RANGE)
+    result_list = get_input_feature(result, map2bl_mat4x4, ego_x, ego_y, RANGE, {})
     print(f"{len(result_list)=}")
 
     plt.figure(figsize=(10, 8))

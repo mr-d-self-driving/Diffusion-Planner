@@ -359,9 +359,6 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
         if subtype == "traffic_light":
             traffic_lights.append(regulatory_element)
     for lanelet in lanelet_map.laneletLayer:
-        if lanelet.trafficLights() is not None:
-            # TODO check traffic lights
-            pass
         lanelet_subtype = _get_lanelet_subtype(lanelet)
 
         # NOTE: skip walkway because it contains stop_line as boundary
@@ -394,6 +391,7 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
                 right_neighbor_ids=right_neighbor_ids,
                 speed_limit_mph=speed_limit_mph,
             )
+            lane_segments[lanelet.id].traffic_lights = lanelet.trafficLights()
         elif lanelet_subtype == "crosswalk":
             waypoints = _interpolate_lane(
                 np.array([(poly.x, poly.y, poly.z) for poly in lanelet.polygon3d()])
@@ -441,7 +439,14 @@ def fix_point_num(map: AWMLStaticMap):
     return map
 
 
-def process_segment(segment, inv_transform_matrix_4x4, center_x, center_y, mask_range):
+def process_segment(
+    segment,
+    inv_transform_matrix_4x4,
+    center_x,
+    center_y,
+    mask_range,
+    traffic_light_recognition,
+):
     centerlines = segment.polyline.waypoints
     left_boundaries = segment.left_boundaries[0].polyline.waypoints
     right_boundaries = segment.right_boundaries[0].polyline.waypoints
@@ -476,7 +481,25 @@ def process_segment(segment, inv_transform_matrix_4x4, center_x, center_y, mask_
     diff_centerlines = centerlines[1:] - centerlines[:-1]
     diff_centerlines = np.insert(diff_centerlines, diff_centerlines.shape[0], 0, axis=0)
 
-    traffic_light = [0, 0, 0, 1]  # (green, yellow, red, unknown)
+    traffic_light = [0, 0, 0, 0]  # (green, yellow, red, unknown)
+    assert len(segment.traffic_lights) <= 1
+    if len(segment.traffic_lights) == 0:
+        traffic_light = [0, 0, 0, 1]  # unknown
+    else:
+        traffic_light_id = segment.traffic_lights[0].id
+        if traffic_light_id in traffic_light_recognition:
+            traffic_light_color = traffic_light_recognition[traffic_light_id]
+            # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_perception_msgs/msg/TrafficLightElement.msg
+            if traffic_light_color == 1:  # RED
+                traffic_light[2] = 1
+            elif traffic_light_color == 2:  # AMBER
+                traffic_light[1] = 1
+            elif traffic_light_color == 3:  # GREEN
+                traffic_light[0] = 1
+            elif traffic_light_color == 4:  # WHITE
+                traffic_light[3] = 1
+        else:
+            traffic_light[3] = 1
     traffic_light = np.tile(traffic_light, (centerlines.shape[0], 1))
 
     line_data = np.concatenate(
@@ -499,11 +522,12 @@ def get_input_feature(
     center_x: float,
     center_y: float,
     mask_range: float,
+    traffic_light_recognition: dict,
 ) -> list[np.ndarray]:
     result = []
     for segment_id, segment in map.lane_segments.items():
         curr_data = process_segment(
-            segment, map2bl_mat4x4, center_x, center_y, mask_range
+            segment, map2bl_mat4x4, center_x, center_y, mask_range, traffic_light_recognition
         )
         if curr_data is None:
             continue

@@ -214,19 +214,25 @@ class DiffusionPlannerNode(Node):
         curr_traffic_light, idx = get_nearest_msg(self.traffic_light_list, stamp)
         self.traffic_light_list = self.traffic_light_list[idx:]
 
-        # self.get_logger().info(f"{curr_traffic_light=}")
-
         if curr_kinematic_state is None:
             self.get_logger().warn("No kinematic state message found")
             return
         if curr_acceleration is None:
             self.get_logger().warn("No acceleration message found")
             return
+        if curr_traffic_light is None:
+            self.get_logger().warn("No traffic light message found")
+            return
 
         bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
             curr_kinematic_state
         )
-
+        traffic_light_recognition = {}
+        for traffic_light_group in curr_traffic_light.traffic_light_groups:
+            traffic_light_group_id = traffic_light_group.traffic_light_group_id
+            elements = traffic_light_group.elements
+            assert len(elements) == 1, elements
+            traffic_light_recognition[traffic_light_group_id] = elements[0].color
         # Ego
         start = time.time()
         ego_current_state = create_current_ego_state(
@@ -261,6 +267,7 @@ class DiffusionPlannerNode(Node):
             center_x=curr_kinematic_state.pose.pose.position.x,
             center_y=curr_kinematic_state.pose.pose.position.y,
             mask_range=100,
+            traffic_light_recognition=traffic_light_recognition,
         )
         lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
         lanes_speed_limit = torch.zeros((1, 70, 1), dtype=torch.float32, device=dev)
@@ -291,6 +298,7 @@ class DiffusionPlannerNode(Node):
                     curr_kinematic_state.pose.pose.position.x,
                     curr_kinematic_state.pose.pose.position.y,
                     mask_range=100,
+                    traffic_light_recognition=traffic_light_recognition,
                 )
                 if curr_result is None:
                     continue
