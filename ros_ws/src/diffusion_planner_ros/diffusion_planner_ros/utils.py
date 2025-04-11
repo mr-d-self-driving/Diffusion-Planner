@@ -174,6 +174,19 @@ def convert_tracked_objects_to_tensor(
     max_timesteps: int,
 ) -> torch.Tensor:
     neighbor = torch.zeros((1, max_num_objects, max_timesteps, 11))
+
+    # Sort tracked objects by distance from ego
+    #   I think that it is needed because the neighbors are sorted by distance from ego in the original code
+    #   https://github.com/SakodaShintaro/Diffusion-Planner/blob/6c8954e6424107dc1355ce7ba1d7aec10e6c8a1a/diffusion_planner/data_process/agent_process.py#L279-L280
+    #   but it didn't work well in my case, so I commented it out
+    # def sort_key(item):
+    #     _, tracked_obj = item
+    #     last_kinematics = tracked_obj.kinematics_list[-1]
+    #     pose_in_map = pose_to_mat4x4(last_kinematics.pose_with_covariance.pose)
+    #     pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
+    #     return np.linalg.norm(pose_in_bl[0:2, 3])
+    # tracked_objs = dict(sorted(tracked_objs.items(), key=sort_key))
+
     for i, (object_id_bytes, tracked_obj) in enumerate(tracked_objs.items()):
         if i >= max_num_objects:
             break
