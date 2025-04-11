@@ -188,5 +188,5 @@ if __name__ == "__main__":
         # 2秒前から8秒後までのトラッキング（GT用）
 
         ego_state = create_current_ego_state(
-            data_list[i].kinematic_state, data_list[i].acceleration
+            data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
         )
