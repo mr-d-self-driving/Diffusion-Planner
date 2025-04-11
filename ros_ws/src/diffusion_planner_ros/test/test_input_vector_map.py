@@ -25,9 +25,9 @@ if __name__ == "__main__":
     args = parse_args()
     map_path = args.map_path
 
-    result = convert_lanelet(map_path)
-    result = fix_point_num(result)
-    print(f"{type(result)=}")
+    vector_map = convert_lanelet(map_path)
+    vector_map = fix_point_num(vector_map)
+    print(f"{type(vector_map)=}")
 
     ego_x = 3734.4
     ego_y = 73680.015625
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     map2bl_mat4x4 = np.linalg.inv(map2bl_mat4x4)
 
     lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
-        result, map2bl_mat4x4, ego_x, ego_y, RANGE, {}, 70, "cpu"
+        vector_map.lane_segments.values(), map2bl_mat4x4, ego_x, ego_y, RANGE, {}, 70, "cpu"
     )
     print(f"{lanes_tensor.shape=}")
 

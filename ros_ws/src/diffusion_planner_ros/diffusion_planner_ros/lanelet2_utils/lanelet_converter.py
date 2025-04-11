@@ -524,7 +524,7 @@ def process_segment(
 
 
 def create_lane_tensor(
-    map: AWMLStaticMap,
+    lane_segments: list,
     map2bl_mat4x4: NDArray,
     center_x: float,
     center_y: float,
@@ -534,7 +534,7 @@ def create_lane_tensor(
     dev: torch.device,
 ) -> list[np.ndarray]:
     result_list = []
-    for segment_id, segment in map.lane_segments.items():
+    for segment in lane_segments:
         curr_data = process_segment(
             segment,
             map2bl_mat4x4,
@@ -551,9 +551,15 @@ def create_lane_tensor(
     result_list = sorted(result_list, key=lambda tup: np.linalg.norm(tup[0][0, :2]))
     result_list = result_list[0:num_segments]
 
-    lanes_tensor = torch.zeros((1, 70, 20, 12), dtype=torch.float32, device=dev)
-    lanes_speed_limit = torch.zeros((1, 70, 1), dtype=torch.float32, device=dev)
-    lanes_has_speed_limit = torch.zeros((1, 70, 1), dtype=torch.bool, device=dev)
+    lanes_tensor = torch.zeros(
+        (1, num_segments, 20, 12), dtype=torch.float32, device=dev
+    )
+    lanes_speed_limit = torch.zeros(
+        (1, num_segments, 1), dtype=torch.float32, device=dev
+    )
+    lanes_has_speed_limit = torch.zeros(
+        (1, num_segments, 1), dtype=torch.bool, device=dev
+    )
 
     for i, result_list in enumerate(result_list):
         line_data, speed_limit = result_list

@@ -263,7 +263,7 @@ class DiffusionPlannerNode(Node):
         # Lane
         start = time.time()
         lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
-            self.static_map,
+            self.static_map.lane_segments.values(),
             map2bl_mat4x4=map2bl_matrix_4x4,
             center_x=curr_kinematic_state.pose.pose.position.x,
             center_y=curr_kinematic_state.pose.pose.position.y,
@@ -278,27 +278,20 @@ class DiffusionPlannerNode(Node):
 
         # Route
         start = time.time()
-        route_tensor = torch.zeros((1, 25, 20, 12), dtype=torch.float32, device=dev)
-        route_speed_limit = torch.zeros((1, 25, 1), dtype=torch.float32, device=dev)
-        route_has_speed_limit = torch.zeros((1, 25, 1), dtype=torch.bool, device=dev)
-        for i in range(min(len(self.route.segments), 25)):
-            ll2_id = self.route.segments[i].preferred_primitive.id
-            if ll2_id in self.static_map.lane_segments:
-                curr_result = process_segment(
-                    self.static_map.lane_segments[ll2_id],
-                    map2bl_matrix_4x4,
-                    curr_kinematic_state.pose.pose.position.x,
-                    curr_kinematic_state.pose.pose.position.y,
-                    mask_range=100,
-                    traffic_light_recognition=traffic_light_recognition,
-                )
-                if curr_result is None:
-                    continue
-                line_data, speed_limit = curr_result
-                route_tensor[0, i] = torch.from_numpy(line_data).cuda()
-                assert speed_limit is not None
-                route_speed_limit[0, i] = speed_limit
-                route_has_speed_limit[0, i] = speed_limit is not None
+        target_segments = [
+            self.static_map.lane_segments[segment.preferred_primitive.id]
+            for segment in self.route.segments
+        ]
+        route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
+            target_segments,
+            map2bl_mat4x4=map2bl_matrix_4x4,
+            center_x=curr_kinematic_state.pose.pose.position.x,
+            center_y=curr_kinematic_state.pose.pose.position.y,
+            mask_range=100,
+            traffic_light_recognition=traffic_light_recognition,
+            num_segments=25,
+            dev=dev,
+        )
         marker_array = create_route_marker(route_tensor, stamp)
         self.pub_route_marker.publish(marker_array)
         end = time.time()
