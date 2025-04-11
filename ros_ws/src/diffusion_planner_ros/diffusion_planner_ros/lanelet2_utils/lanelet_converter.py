@@ -427,7 +427,8 @@ def fix_point_num(map: AWMLStaticMap):
         centerlines = segment.polyline.waypoints
         left_boundaries = segment.left_boundaries[0].polyline.waypoints
         right_boundaries = segment.right_boundaries[0].polyline.waypoints
-        # 点数が20になるように修正する
+
+        # Fix the number of points to 20
         segment.polyline.waypoints = _interpolate_points(centerlines, 20)
         segment.left_boundaries[0].polyline.waypoints = _interpolate_points(
             left_boundaries, 20
@@ -435,6 +436,8 @@ def fix_point_num(map: AWMLStaticMap):
         segment.right_boundaries[0].polyline.waypoints = _interpolate_points(
             right_boundaries, 20
         )
+
+        # To crop the map faster, we need to set the center of the segment
         segment.center = np.mean(centerlines[:, 0:2], axis=0)
     return map
 
@@ -460,7 +463,7 @@ def process_segment(
     if not inside:
         return None
 
-    # 自車座標系に変換
+    # Convert to base_link
     centerlines_4xN = np.vstack((centerlines.T, np.ones(centerlines.shape[0])))
     centerlines_ego = inv_transform_matrix_4x4 @ centerlines_4xN
     centerlines = centerlines_ego[:3, :].T
@@ -504,10 +507,10 @@ def process_segment(
 
     line_data = np.concatenate(
         (
-            centerlines[:, 0:2],  # xyのみ
-            diff_centerlines[:, 0:2],  # xyのみ
-            left_boundaries[:, 0:2],  # xyのみ
-            right_boundaries[:, 0:2],  # xyのみ
+            centerlines[:, 0:2],  # xy
+            diff_centerlines[:, 0:2],  # xy
+            left_boundaries[:, 0:2],  # xy
+            right_boundaries[:, 0:2],  # xy
             traffic_light,
         ),
         axis=1,
@@ -536,7 +539,7 @@ def get_input_feature(
             continue
         result.append(curr_data)
 
-    # 先頭の距離でソート
+    # sort by distance from the first point
     result = sorted(result, key=lambda tup: np.linalg.norm(tup[0][0, :2]))
     result = result[0:70]
 
