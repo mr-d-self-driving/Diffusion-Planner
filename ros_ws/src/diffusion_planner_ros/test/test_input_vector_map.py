@@ -4,6 +4,7 @@ import argparse
 from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     get_input_feature,
+    fix_point_num,
 )
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation
@@ -25,6 +26,7 @@ if __name__ == "__main__":
     map_path = args.map_path
 
     result = convert_lanelet(map_path)
+    result = fix_point_num(result)
     print(f"{type(result)=}")
 
     ego_x = 3734.4
@@ -50,7 +52,7 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(10, 8))
     for i in range(len(result_list)):
-        result = result_list[i]
+        result, _ = result_list[i]
         plt.plot(result[:, 0], result[:, 1], "r-")
         plt.plot(result[:, 4] + result[:, 0], result[:, 5] + result[:, 1], "g-")
         plt.plot(result[:, 6] + result[:, 0], result[:, 7] + result[:, 1], "b-")
