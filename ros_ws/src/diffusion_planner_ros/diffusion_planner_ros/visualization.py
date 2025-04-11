@@ -97,19 +97,19 @@ def create_trajectory_marker(trajectory_msg):
 
 def create_route_marker(route_tensor: torch.Tensor, stamp) -> MarkerArray:
     marker_array = MarkerArray()
-    centerline_marker = Marker()
-    centerline_marker.header.stamp = stamp
-    centerline_marker.header.frame_id = "base_link"
-    centerline_marker.ns = "route"
-    centerline_marker.id = 0
-    centerline_marker.type = Marker.LINE_STRIP
-    centerline_marker.action = Marker.ADD
-    centerline_marker.pose.orientation.w = 1.0
-    centerline_marker.scale.x = 0.6
-    centerline_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)
-    centerline_marker.lifetime = Duration(sec=1, nanosec=0)
-    centerline_marker.points = []
     for j in range(route_tensor.shape[1]):
+        centerline_marker = Marker()
+        centerline_marker.header.stamp = stamp
+        centerline_marker.header.frame_id = "base_link"
+        centerline_marker.ns = "route"
+        centerline_marker.id = j
+        centerline_marker.type = Marker.LINE_STRIP
+        centerline_marker.action = Marker.ADD
+        centerline_marker.pose.orientation.w = 1.0
+        centerline_marker.scale.x = 0.6
+        centerline_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)
+        centerline_marker.lifetime = Duration(sec=1, nanosec=0)
+        centerline_marker.points = []
         centerline_in_base_link = route_tensor[0, j, :, :2].cpu().numpy()
         if np.sum(centerline_in_base_link) == 0:
             continue
@@ -131,7 +131,7 @@ def create_route_marker(route_tensor: torch.Tensor, stamp) -> MarkerArray:
             p.y = point[1]
             p.z = point[2]
             centerline_marker.points.append(p)
-    marker_array.markers.append(centerline_marker)
+        marker_array.markers.append(centerline_marker)
     return marker_array
 
 
