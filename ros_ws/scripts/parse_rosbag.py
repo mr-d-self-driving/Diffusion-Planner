@@ -13,11 +13,13 @@ from diffusion_planner_ros.utils import (
     create_current_ego_state,
     get_nearest_msg,
     parse_timestamp,
+    tracking_one_step,
+    convert_tracked_objects_to_tensor,
+    get_transform_matrix,
 )
 import secrets
 from dataclasses import dataclass
 from autoware_perception_msgs.msg import (
-    DetectedObjects,
     TrackedObjects,
     TrafficLightGroupArray,
 )
@@ -42,6 +44,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("vector_map_path", type=Path)
     parser.add_argument("--limit", type=int, default=1000)
     return parser.parse_args()
+
+
+def tracking_list(tracking_object_msg_list: list):
+    tracking_obj = {}
+    for tracking_object_msg in tracking_object_msg_list:
+        tracking_obj = tracking_one_step(tracking_object_msg, tracking_obj)
+    return tracking_obj
 
 
 if __name__ == "__main__":
@@ -164,9 +173,48 @@ if __name__ == "__main__":
     # 時刻の基準とするデータは "/perception/object_recognition/tracking/objects" (10Hz)
     # 重複が出ないように8秒ごとに作る
     for i in range(PAST_TIME_STEPS, n, FUTURE_TIME_STEPS):
+        print(f"{i=}")
         # 2秒前からここまでのトラッキング（入力用）
+        tracking_past = tracking_list(
+            topic_name_to_data["/perception/object_recognition/tracking/objects"][
+                i - PAST_TIME_STEPS : i
+            ]
+        )
         # 2秒前から8秒後までのトラッキング（GT用）
+        tracking_future = tracking_list(
+            topic_name_to_data["/perception/object_recognition/tracking/objects"][
+                i - PAST_TIME_STEPS : i + FUTURE_TIME_STEPS
+            ]
+        )
 
-        ego_state = create_current_ego_state(
+        # filter tracking_future by indices in tracking_past
+        tracking_past_keys = set(tracking_past.keys())
+        filtered_tracking_future = {}
+        for key in tracking_future.keys():
+            if key in tracking_past_keys:
+                filtered_tracking_future[key] = tracking_future[key]
+
+        print(tracking_past.keys())
+        print(filtered_tracking_future.keys())
+
+        bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
+            data_list[i].kinematic_state
+        )
+
+        ego_tensor = create_current_ego_state(
             data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
+        )
+
+        neighbor_past_tensor = convert_tracked_objects_to_tensor(
+            tracked_objs=tracking_past,
+            map2bl_matrix_4x4=map2bl_matrix_4x4,
+            max_num_objects=NEIGHBOR_NUM,
+            max_timesteps=PAST_TIME_STEPS,
+        )
+
+        neighbor_future_tensor = convert_tracked_objects_to_tensor(
+            tracked_objs=filtered_tracking_future,
+            map2bl_matrix_4x4=map2bl_matrix_4x4,
+            max_num_objects=NEIGHBOR_NUM,
+            max_timesteps=FUTURE_TIME_STEPS,
         )
