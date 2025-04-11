@@ -37,12 +37,14 @@ from .utils import (
     convert_prediction_to_msg,
     convert_tracked_objects_to_tensor,
     create_current_ego_state,
-    create_neighbor_marker,
-    create_route_marker,
-    create_trajectory_marker,
     get_nearest_msg,
     get_transform_matrix,
     tracking_one_step,
+)
+from .visualization import (
+    create_neighbor_marker,
+    create_route_marker,
+    create_trajectory_marker,
 )
 
 
