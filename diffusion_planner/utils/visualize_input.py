@@ -212,7 +212,6 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
 
             # Skip zero vectors (masked objects)
             if np.sum(np.abs(lane_point[:4])) < 1e-6:
-                print(f"Skip lane {i} {j}")
                 continue
 
             # the lane boundaries
@@ -265,11 +264,14 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
     route_lanes_has_speed_limit = inputs["route_lanes_has_speed_limit"][0]
 
     for i in range(route_lanes.shape[0]):
+        skipped = []
         for j in range(route_lanes.shape[1]):
             lane_point = route_lanes[i, j]
             # Skip zero vectors (masked objects)
             if np.sum(np.abs(lane_point[:4])) < 1e-6:
+                skipped.append(True)
                 continue
+            skipped.append(False)
             traffic_light = lane_point[8:12]
             color = None
             if traffic_light[0] == 1:
@@ -324,6 +326,11 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
         #     fontsize=8,
         #     color="black",
         # )
+
+        num_skipped = sum(skipped)
+        if num_skipped != 0 and num_skipped != 20:
+            print(f"{num_skipped}")
+            exit(0)
 
     # プロットの装飾
     ax.set_xlabel("X [m]")
