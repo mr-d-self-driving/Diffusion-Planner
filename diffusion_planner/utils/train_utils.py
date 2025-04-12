@@ -6,17 +6,12 @@ import os
 import json
 
 def openjson(path):
-       with open(path, 'r', encoding="utf-8") as f:
-              dict = json.load(f)
-       return dict
+    with open(path, 'r', encoding="utf-8") as f:
+        dict = json.load(f)
+    return dict
 
 def opendata(path):
-    
-    with open(path, 'rb') as f:
-        npz_bytes = np.load(f)
-    buff = io.BytesIO(npz_bytes)
-    npz_data = np.load(buff)
-
+    npz_data = np.load(path)
     return npz_data
 
 def set_seed(CUR_SEED):
