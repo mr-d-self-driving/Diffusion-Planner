@@ -30,7 +30,8 @@ from diffusion_planner.utils.tb_log import TensorBoardLogger as Logger
 def validate_model(model, val_loader, args, device):
     """検証データセットでモデルを評価し、損失を計算する"""
     model.eval()
-    total_loss = 0.0
+    total_loss_ego = 0.0
+    total_loss_neighbor = 0.0
     total_samples = 0
 
     with torch.no_grad():
@@ -116,13 +117,13 @@ def validate_model(model, val_loader, args, device):
             loss_nei = loss_tensor[:, 1:, :]
             loss_nei[:, :, :, 0:2] /= 20 ** 2
             loss_nei = loss_nei[neighbors_future_valid]
-            loss = loss_ego.mean() + loss_nei.mean()
-            total_loss += loss.item() * B
+            total_loss_ego += loss_ego.mean().item() * B
+            total_loss_neighbor += loss_nei.mean().item() * B
             total_samples += B
 
-    print(f"{total_loss=}, {total_samples=}")
-    avg_loss = total_loss / total_samples
-    return avg_loss
+    avg_loss_ego = total_loss_ego / total_samples
+    avg_loss_neighbor = total_loss_neighbor / total_samples
+    return avg_loss_ego, avg_loss_neighbor
 
 
 def boolean(v):
@@ -219,7 +220,7 @@ def get_args():
         "--train_epochs", type=int, help="epochs of training", default=500
     )
     parser.add_argument(
-        "--batch_size", type=int, help="batch size (default: 2048)", default=2048
+        "--batch_size", type=int, help="batch size (default: 2048)", default=1024
     )
     parser.add_argument(
         "--learning_rate",
@@ -413,5 +414,5 @@ if __name__ == "__main__":
     if args.ddp:
         torch.distributed.barrier()
 
-    avg_loss = validate_model(diffusion_planner, train_loader, args, args.device)
-    print(f"{avg_loss}")
+    avg_loss_ego, ave_loss_neighbor = validate_model(diffusion_planner, train_loader, args, args.device)
+    print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
