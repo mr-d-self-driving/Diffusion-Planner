@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("rosbag_path", type=Path)
     parser.add_argument("vector_map_path", type=Path)
     parser.add_argument("save_dir", type=Path)
-    parser.add_argument("--limit", type=int, default=1000)
+    parser.add_argument("--limit", type=int, default=-1)
     return parser.parse_args()
 
 
@@ -151,6 +151,7 @@ if __name__ == "__main__":
 
     # 最初にmsgsの10Hzでの整形(tracked_objects基準)を行う
     n = len(topic_name_to_data["/perception/object_recognition/tracking/objects"])
+    print(f"{n=}")
     data_list = []
     for i in range(n):
         tracking = topic_name_to_data[
