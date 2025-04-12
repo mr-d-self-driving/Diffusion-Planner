@@ -1,19 +1,19 @@
 import torch
 import random
 import numpy as np
-from mmengine import fileio
 import io
 import os
 import json
 
 def openjson(path):
-       value  = fileio.get_text(path)
-       dict = json.loads(value)
+       with open(path, 'r', encoding="utf-8") as f:
+              dict = json.load(f)
        return dict
 
 def opendata(path):
     
-    npz_bytes = fileio.get(path)
+    with open(path, 'rb') as f:
+        npz_bytes = np.load(f)
     buff = io.BytesIO(npz_bytes)
     npz_data = np.load(buff)
 
@@ -53,18 +53,14 @@ def save_model(model, optimizer, scheduler, save_path, epoch, train_loss, wandb_
                   'loss': train_loss,
                   'wandb_id': wandb_id}
 
-    with io.BytesIO() as f:
-        torch.save(save_model, f)
-        fileio.put(f.getvalue(), f'{save_path}/model_epoch_{epoch+1:06d}_trainloss_{train_loss:.4f}.pth')
-        fileio.put(f.getvalue(), f"{save_path}/latest.pth")
+    torch.save(save_model, f'{save_path}/model_epoch_{epoch+1:06d}_trainloss_{train_loss:.4f}.pth')
+    torch.save(save_model, f"{save_path}/latest.pth")
 
 def resume_model(path: str, model, optimizer, scheduler, ema, device):
     """
     load ckpt from path
     """
-    ckpt = fileio.get(path)
-    with io.BytesIO(ckpt) as f:
-        ckpt = torch.load(f)
+    ckpt = torch.load(path, map_location=device)
 
     # load model
     try:

@@ -11,7 +11,6 @@ import torch
 from autoware_perception_msgs.msg import TrackedObjects, TrafficLightGroupArray
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory
 from geometry_msgs.msg import AccelWithCovarianceStamped
-from mmengine import fileio
 from nav_msgs.msg import Odometry
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
@@ -79,9 +78,7 @@ class DiffusionPlannerNode(Node):
         # param(3) checkpoint
         ckpt_path = self.declare_parameter("ckpt_path", value="None").value
         self.get_logger().info(f"Checkpoint path: {ckpt_path}")
-        ckpt = fileio.get(ckpt_path)
-        with io.BytesIO(ckpt) as f:
-            ckpt = torch.load(f)
+        ckpt = torch.load(ckpt_path)
         state_dict = ckpt["model"]
         new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         self.diffusion_planner.load_state_dict(new_state_dict)

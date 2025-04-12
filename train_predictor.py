@@ -6,6 +6,7 @@ from timm.utils import ModelEma
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 import wandb
+import json
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 
@@ -132,8 +133,9 @@ def model_training(args):
         args_dict = vars(args)
         args_dict = {k: v if not isinstance(v, (StateNormalizer, ObservationNormalizer)) else v.to_dict() for k, v in args_dict.items() }
 
-        from mmengine.fileio import dump
-        dump(args_dict, os.path.join(save_path, 'args.json'), file_format='json', indent=4)
+        with open(os.path.join(save_path, 'args.json'), 'w', encoding='utf-8') as f:
+            json.dump(args_dict, f, indent=4)
+
     else:
         save_path = None
 
