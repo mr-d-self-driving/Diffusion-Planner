@@ -8,6 +8,8 @@ from collections import defaultdict
 import numpy as np
 from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     convert_lanelet,
+    create_lane_tensor,
+    fix_point_num,
 )
 from diffusion_planner_ros.utils import (
     create_current_ego_state,
@@ -26,6 +28,7 @@ from autoware_perception_msgs.msg import (
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from sensor_msgs.msg import CompressedImage
+from scipy.spatial.transform import Rotation
 
 
 @dataclass
@@ -53,6 +56,42 @@ def tracking_list(tracking_object_msg_list: list):
     return tracking_obj
 
 
+def create_ego_future(data_list, i, future_time_steps, map2bl_matrix_4x4):
+    ego_future_x = []
+    ego_future_y = []
+    ego_future_yaw = []
+    for j in range(future_time_steps):
+        x = data_list[i + j + 1].kinematic_state.pose.pose.position.x
+        y = data_list[i + j + 1].kinematic_state.pose.pose.position.y
+        z = data_list[i + j + 1].kinematic_state.pose.pose.position.z
+        qx = data_list[i + j + 1].kinematic_state.pose.pose.orientation.x
+        qy = data_list[i + j + 1].kinematic_state.pose.pose.orientation.y
+        qz = data_list[i + j + 1].kinematic_state.pose.pose.orientation.z
+        qw = data_list[i + j + 1].kinematic_state.pose.pose.orientation.w
+        rot = Rotation.from_quat([qx, qy, qz, qw])
+        pose_in_map = np.eye(4)
+        pose_in_map[:3, :3] = rot.as_matrix()
+        pose_in_map[0, 3] = x
+        pose_in_map[1, 3] = y
+        pose_in_map[2, 3] = z
+        pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
+        ego_future_x.append(pose_in_bl[0, 3])
+        ego_future_y.append(pose_in_bl[1, 3])
+        rot = Rotation.from_matrix(pose_in_bl[:3, :3])
+        yaw = rot.as_euler("xyz")[2]
+        ego_future_yaw.append(yaw)
+
+    ego_future_np = np.concatenate(
+        [
+            np.array(ego_future_x).reshape(-1, 1),
+            np.array(ego_future_y).reshape(-1, 1),
+            np.array(ego_future_yaw).reshape(-1, 1),
+        ],
+        axis=1,
+    )
+    return ego_future_np
+
+
 if __name__ == "__main__":
     args = parse_args()
     rosbag_path = args.rosbag_path
@@ -60,6 +99,7 @@ if __name__ == "__main__":
     limit = args.limit
 
     vector_map = convert_lanelet(str(vector_map_path))
+    vector_map = fix_point_num(vector_map)
 
     serialization_format = "cdr"
     storage_options = rosbag2_py.StorageOptions(
@@ -172,7 +212,7 @@ if __name__ == "__main__":
     # これをrosbagのデータから作る
     # 時刻の基準とするデータは "/perception/object_recognition/tracking/objects" (10Hz)
     # 重複が出ないように8秒ごとに作る
-    for i in range(PAST_TIME_STEPS, n, FUTURE_TIME_STEPS):
+    for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, FUTURE_TIME_STEPS):
         print(f"{i=}")
         # 2秒前からここまでのトラッキング（入力用）
         tracking_past = tracking_list(
@@ -201,8 +241,20 @@ if __name__ == "__main__":
             data_list[i].kinematic_state
         )
 
+        traffic_light_recognition = {}
+        if data_list[i].traffic_signals is not None:
+            for traffic_light_group in data_list[i].traffic_signals.traffic_light_groups:
+                traffic_light_group_id = traffic_light_group.traffic_light_group_id
+                elements = traffic_light_group.elements
+                assert len(elements) == 1, elements
+                traffic_light_recognition[traffic_light_group_id] = elements[0].color
+
         ego_tensor = create_current_ego_state(
             data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
+        )
+
+        ego_future_np = create_ego_future(
+            data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4
         )
 
         neighbor_past_tensor = convert_tracked_objects_to_tensor(
@@ -217,4 +269,17 @@ if __name__ == "__main__":
             map2bl_matrix_4x4=map2bl_matrix_4x4,
             max_num_objects=NEIGHBOR_NUM,
             max_timesteps=FUTURE_TIME_STEPS,
+        )
+
+        static_objects = np.zeros((STATIC_NUM, 10), dtype=np.float32)
+
+        lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
+            vector_map.lane_segments.values(),
+            map2bl_mat4x4=map2bl_matrix_4x4,
+            center_x=data_list[i].kinematic_state.pose.pose.position.x,
+            center_y=data_list[i].kinematic_state.pose.pose.position.y,
+            mask_range=100,
+            traffic_light_recognition=traffic_light_recognition,
+            num_segments=70,
+            dev="cpu",
         )
