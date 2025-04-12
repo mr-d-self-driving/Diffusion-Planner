@@ -203,8 +203,7 @@ def model_training(args):
             name=args.name, 
             notes=args.notes,
             resume="allow",
-            id = wandb_id,
-            sync_tensorboard=True,
+            id=wandb_id,
             dir=f'{save_path}')
         wandb.config.update(args)
 
