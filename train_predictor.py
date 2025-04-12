@@ -17,6 +17,7 @@ from diffusion_planner.utils.dataset import DiffusionPlannerData
 from diffusion_planner.utils import ddp
 
 from diffusion_planner.train_epoch import train_epoch
+from valid_predictor import validate_model
 
 def boolean(v):
     if isinstance(v, bool):
@@ -146,10 +147,19 @@ def model_training(args):
     
     # set up data loaders
     aug = StatePerturbation(augment_prob=args.augment_prob, device=args.device) if args.use_data_augment else None
-    train_set = DiffusionPlannerData(args.train_set, args.train_set_list, args.agent_num, args.predicted_neighbor_num, args.future_len)
+    data_set = DiffusionPlannerData(args.train_set, args.train_set_list, args.agent_num, args.predicted_neighbor_num, args.future_len)
+
+    # split valid dataset (10%)
+    total_size = len(data_set)
+    valid_size = int(total_size * 0.1)
+    train_size = total_size - valid_size
+    train_set, valid_set = torch.utils.data.random_split(data_set, [train_size, valid_size])
+
     train_sampler = DistributedSampler(train_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=True)
     train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=batch_size//ddp.get_world_size(), num_workers=args.num_workers, pin_memory=args.pin_mem, drop_last=True)
-   
+    valid_sampler = DistributedSampler(valid_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=False)
+    valid_loader = DataLoader(valid_set, sampler=valid_sampler, batch_size=batch_size//ddp.get_world_size(), num_workers=args.num_workers, pin_memory=args.pin_mem, drop_last=False)
+
     if global_rank == 0:
         print("Dataset Prepared: {} train data\n".format(len(train_set)))
 
@@ -198,12 +208,13 @@ def model_training(args):
             print(f"Epoch {epoch+1}/{train_epochs}")
         train_loss, train_total_loss = train_epoch(train_loader, diffusion_planner, optimizer, args, model_ema, aug)
         
-
+        valid_loss_ego, valid_loss_neighbor = validate_model(diffusion_planner, valid_loader, args, args.device)
 
         if global_rank == 0:
             lr_dict = {'lr': optimizer.param_groups[0]['lr']}
             wandb_logger.log_metrics({f"train_loss/{k}": v for k, v in train_loss.items()}, step=epoch+1)
             wandb_logger.log_metrics({f"lr/{k}": v for k, v in lr_dict.items()}, step=epoch+1)
+            wandb_logger.log_metrics({"valid_loss/ego": valid_loss_ego, "valid_loss/neighbors": valid_loss_neighbor}, step=epoch+1)
 
             if (epoch + 1) % save_utd == 0:
                 # save model at the end of epoch
