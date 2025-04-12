@@ -5,13 +5,13 @@ from torch import optim
 from timm.utils import ModelEma
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
+import wandb
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 
 from diffusion_planner.utils.train_utils import set_seed, save_model, resume_model
 from diffusion_planner.utils.normalizer import ObservationNormalizer, StateNormalizer
 from diffusion_planner.utils.lr_schedule import CosineAnnealingWarmUpRestarts
-from diffusion_planner.utils.tb_log import TensorBoardLogger as Logger
 from diffusion_planner.utils.data_augmentation import StatePerturbation
 from diffusion_planner.utils.dataset import DiffusionPlannerData
 from diffusion_planner.utils import ddp
@@ -197,7 +197,16 @@ def model_training(args):
         wandb_id = None
 
     # logger
-    wandb_logger = Logger(args.name, args.notes, args, wandb_resume_id=wandb_id, save_path=save_path, rank=global_rank) 
+    if global_rank == 0:
+        os.environ["WANDB_MODE"] = "online" if args.use_wandb else "offline"
+        wandb.init(project='Diffusion-Planner', 
+            name=args.name, 
+            notes=args.notes,
+            resume="allow",
+            id = wandb_id,
+            sync_tensorboard=True,
+            dir=f'{save_path}')
+        wandb.config.update(args)
 
     if args.ddp:
         torch.distributed.barrier()
@@ -212,13 +221,16 @@ def model_training(args):
 
         if global_rank == 0:
             lr_dict = {'lr': optimizer.param_groups[0]['lr']}
-            wandb_logger.log_metrics({f"train_loss/{k}": v for k, v in train_loss.items()}, step=epoch+1)
-            wandb_logger.log_metrics({f"lr/{k}": v for k, v in lr_dict.items()}, step=epoch+1)
-            wandb_logger.log_metrics({"valid_loss/ego": valid_loss_ego, "valid_loss/neighbors": valid_loss_neighbor}, step=epoch+1)
+            wandb.log({
+                **{f"train_loss/{k}": v for k, v in train_loss.items()},
+                **{f"lr/{k}": v for k, v in lr_dict.items()},
+                "valid_loss/ego": valid_loss_ego,
+                "valid_loss/neighbors": valid_loss_neighbor
+            }, step=epoch+1)
 
             if (epoch + 1) % save_utd == 0:
                 # save model at the end of epoch
-                save_model(diffusion_planner, optimizer, scheduler, save_path, epoch, train_total_loss, wandb_logger.id, model_ema.ema)
+                save_model(diffusion_planner, optimizer, scheduler, save_path, epoch, train_total_loss, wandb_id, model_ema.ema)
                 print(f"Model saved in {save_path}\n")
 
         scheduler.step()
