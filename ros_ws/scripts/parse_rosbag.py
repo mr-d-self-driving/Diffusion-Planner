@@ -145,6 +145,8 @@ if __name__ == "__main__":
     for key, value in topic_name_to_data.items():
         print(f"{key}: {len(value)} msgs")
 
+    route_msg = topic_name_to_data["/planning/mission_planning/route"][0]
+
     # 最初にmsgsの10Hzでの整形(tracked_objects基準)を行う
     n = len(topic_name_to_data["/perception/object_recognition/tracking/objects"])
     data_list = []
@@ -214,6 +216,8 @@ if __name__ == "__main__":
     # 重複が出ないように8秒ごとに作る
     for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, FUTURE_TIME_STEPS):
         print(f"{i=}")
+        token = secrets.token_hex(8)
+
         # 2秒前からここまでのトラッキング（入力用）
         tracking_past = tracking_list(
             topic_name_to_data["/perception/object_recognition/tracking/objects"][
@@ -243,7 +247,9 @@ if __name__ == "__main__":
 
         traffic_light_recognition = {}
         if data_list[i].traffic_signals is not None:
-            for traffic_light_group in data_list[i].traffic_signals.traffic_light_groups:
+            for traffic_light_group in data_list[
+                i
+            ].traffic_signals.traffic_light_groups:
                 traffic_light_group_id = traffic_light_group.traffic_light_group_id
                 elements = traffic_light_group.elements
                 assert len(elements) == 1, elements
@@ -283,3 +289,40 @@ if __name__ == "__main__":
             num_segments=70,
             dev="cpu",
         )
+
+        target_segments = [
+            vector_map.lane_segments[segment.preferred_primitive.id]
+            for segment in route_msg.segments
+        ]
+        route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
+            target_segments,
+            map2bl_mat4x4=map2bl_matrix_4x4,
+            center_x=data_list[i].kinematic_state.pose.pose.position.x,
+            center_y=data_list[i].kinematic_state.pose.pose.position.y,
+            mask_range=100,
+            traffic_light_recognition=traffic_light_recognition,
+            num_segments=25,
+            dev="cpu",
+        )
+
+        curr_data = {
+            "map_name": map_name,
+            "token": token,
+            "ego_current_state": ego_tensor.numpy(),
+            "ego_agent_future": ego_future_np,
+            "neighbor_agents_past": neighbor_past_tensor.numpy(),
+            "neighbor_agents_future": neighbor_future_tensor.numpy(),
+            "static_objects": static_objects,
+            "lanes": lanes_tensor.numpy(),
+            "lanes_speed_limit": lanes_speed_limit.numpy(),
+            "lanes_has_speed_limit": lanes_has_speed_limit.numpy(),
+            "route_lanes": route_tensor.numpy(),
+            "route_lanes_speed_limit": route_speed_limit.numpy(),
+            "route_lanes_has_speed_limit": route_has_speed_limit.numpy(),
+        }
+        # save the data
+        output_path = Path("output")
+        output_path.mkdir(parents=True, exist_ok=True)
+        output_file = f"{output_path}/{map_name}_{token}.npz"
+        np.savez(output_file, **curr_data)
+        print(f"Saved {output_file}")
