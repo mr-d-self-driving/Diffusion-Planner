@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("rosbag_path", type=Path)
     parser.add_argument("vector_map_path", type=Path)
+    parser.add_argument("save_dir", type=Path)
     parser.add_argument("--limit", type=int, default=1000)
     return parser.parse_args()
 
@@ -96,6 +97,7 @@ if __name__ == "__main__":
     args = parse_args()
     rosbag_path = args.rosbag_path
     vector_map_path = args.vector_map_path
+    save_dir = args.save_dir
     limit = args.limit
 
     vector_map = convert_lanelet(str(vector_map_path))
@@ -321,8 +323,7 @@ if __name__ == "__main__":
             "route_lanes_has_speed_limit": route_has_speed_limit.numpy(),
         }
         # save the data
-        output_path = Path("output")
-        output_path.mkdir(parents=True, exist_ok=True)
-        output_file = f"{output_path}/{map_name}_{token}.npz"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        output_file = f"{save_dir}/{map_name}_{token}.npz"
         np.savez(output_file, **curr_data)
         print(f"Saved {output_file}")
