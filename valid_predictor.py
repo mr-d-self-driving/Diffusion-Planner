@@ -1,34 +1,23 @@
-import os
 import argparse
-import random
-import numpy as np
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from timm.utils import ModelEma
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.dataset import DiffusionPlannerData
 from diffusion_planner.utils.normalizer import StateNormalizer, ObservationNormalizer
-from diffusion_planner.utils.train_utils import set_seed, save_model, resume_model
+from diffusion_planner.utils.train_utils import set_seed, resume_model
 from diffusion_planner.utils.lr_schedule import CosineAnnealingWarmUpRestarts
-from diffusion_planner.utils.tb_log import TensorBoardLogger
 from diffusion_planner.utils.data_augmentation import StatePerturbation
 from diffusion_planner.utils import ddp
-from diffusion_planner.train_epoch import train_epoch
-from diffusion_planner.utils.config import Config
-from diffusion_planner.model.diffusion_utils.sampling import dpm_sampler
 
 from torch import optim
 from torch.utils.data import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 
-from diffusion_planner.utils.tb_log import TensorBoardLogger as Logger
-
-
-def validate_model(model, val_loader, args, device):
-    """検証データセットでモデルを評価し、損失を計算する"""
+def validate_model(model, val_loader, args, device) -> tuple[float, float]:
+    """return: ave_loss_ego, ave_loss_neighbor"""
     model.eval()
     total_loss_ego = 0.0
     total_loss_neighbor = 0.0
@@ -140,15 +129,6 @@ def boolean(v):
 def get_args():
     # Arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--name",
-        type=str,
-        help='log name (default: "diffusion-planner-training")',
-        default="diffusion-planner-training",
-    )
-    parser.add_argument(
-        "--save_dir", type=str, help="save dir for model ckpt", default="."
-    )
 
     # Data
     parser.add_argument(
