@@ -19,7 +19,6 @@ from diffusion_planner_ros.utils import (
     get_transform_matrix,
     parse_traffic_light_recognition,
 )
-import secrets
 from dataclasses import dataclass
 from autoware_perception_msgs.msg import (
     TrackedObjects,
@@ -215,14 +214,14 @@ if __name__ == "__main__":
     ROUTE_NUM = 25
     ROUTE_LEN = 20
 
-    map_name = "autoware_map"
+    map_name = rosbag_path.stem
 
     # これをrosbagのデータから作る
     # 時刻の基準とするデータは "/perception/object_recognition/tracking/objects" (10Hz)
     # 重複が出ないように8秒ごとに作る
     for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, FUTURE_TIME_STEPS):
         print(f"{i=}")
-        token = secrets.token_hex(8)
+        token = f"{i:016d}"
 
         # 2秒前からここまでのトラッキング（入力用）
         tracking_past = tracking_list(
@@ -256,7 +255,7 @@ if __name__ == "__main__":
 
         ego_tensor = create_current_ego_state(
             data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
-        )
+        ).squeeze(0)
 
         ego_future_np = create_ego_future(
             data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4
@@ -267,14 +266,16 @@ if __name__ == "__main__":
             map2bl_matrix_4x4=map2bl_matrix_4x4,
             max_num_objects=NEIGHBOR_NUM,
             max_timesteps=PAST_TIME_STEPS,
-        )
+        ).squeeze(0)
 
         neighbor_future_tensor = convert_tracked_objects_to_tensor(
             tracked_objs=filtered_tracking_future,
             map2bl_matrix_4x4=map2bl_matrix_4x4,
             max_num_objects=NEIGHBOR_NUM,
             max_timesteps=FUTURE_TIME_STEPS,
-        )
+        ).squeeze(0)
+        # (32, 80, 11) -> (32, 80, 3)
+        # TODO
 
         static_objects = np.zeros((STATIC_NUM, 10), dtype=np.float32)
 
@@ -312,12 +313,12 @@ if __name__ == "__main__":
             "neighbor_agents_past": neighbor_past_tensor.numpy(),
             "neighbor_agents_future": neighbor_future_tensor.numpy(),
             "static_objects": static_objects,
-            "lanes": lanes_tensor.numpy(),
-            "lanes_speed_limit": lanes_speed_limit.numpy(),
-            "lanes_has_speed_limit": lanes_has_speed_limit.numpy(),
-            "route_lanes": route_tensor.numpy(),
-            "route_lanes_speed_limit": route_speed_limit.numpy(),
-            "route_lanes_has_speed_limit": route_has_speed_limit.numpy(),
+            "lanes": lanes_tensor.squeeze(0).numpy(),
+            "lanes_speed_limit": lanes_speed_limit.squeeze(0).numpy(),
+            "lanes_has_speed_limit": lanes_has_speed_limit.squeeze(0).numpy(),
+            "route_lanes": route_tensor.squeeze(0).numpy(),
+            "route_lanes_speed_limit": route_speed_limit.squeeze(0).numpy(),
+            "route_lanes_has_speed_limit": route_has_speed_limit.squeeze(0).numpy(),
         }
         # save the data
         save_dir.mkdir(parents=True, exist_ok=True)
