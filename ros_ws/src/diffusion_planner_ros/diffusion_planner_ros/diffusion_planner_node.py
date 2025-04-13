@@ -39,6 +39,7 @@ from .utils import (
     get_nearest_msg,
     get_transform_matrix,
     tracking_one_step,
+    parse_traffic_light_recognition,
 )
 from .visualization import (
     create_neighbor_marker,
@@ -225,11 +226,9 @@ class DiffusionPlannerNode(Node):
         )
         traffic_light_recognition = {}
         if curr_traffic_light is not None:
-            for traffic_light_group in curr_traffic_light.traffic_light_groups:
-                traffic_light_group_id = traffic_light_group.traffic_light_group_id
-                elements = traffic_light_group.elements
-                assert len(elements) == 1, elements
-                traffic_light_recognition[traffic_light_group_id] = elements[0].color
+            traffic_light_recognition = parse_traffic_light_recognition(
+                curr_traffic_light
+            )
 
         # Ego
         start = time.time()

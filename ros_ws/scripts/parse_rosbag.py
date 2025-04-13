@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path
 import rosbag2_py
-from cv_bridge import CvBridge
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from collections import defaultdict
@@ -18,6 +17,7 @@ from diffusion_planner_ros.utils import (
     tracking_one_step,
     convert_tracked_objects_to_tensor,
     get_transform_matrix,
+    parse_traffic_light_recognition,
 )
 import secrets
 from dataclasses import dataclass
@@ -29,6 +29,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from sensor_msgs.msg import CompressedImage
 from scipy.spatial.transform import Rotation
+from tqdm import tqdm
 
 
 @dataclass
@@ -152,6 +153,7 @@ if __name__ == "__main__":
     # 最初にmsgsの10Hzでの整形(tracked_objects基準)を行う
     n = len(topic_name_to_data["/perception/object_recognition/tracking/objects"])
     print(f"{n=}")
+    progress_bar = tqdm(total=n)
     data_list = []
     for i in range(n):
         tracking = topic_name_to_data[
@@ -186,6 +188,7 @@ if __name__ == "__main__":
                 ],
             )
         )
+        progress_bar.update(1)
 
     """
     作りたいnpz
@@ -223,14 +226,16 @@ if __name__ == "__main__":
 
         # 2秒前からここまでのトラッキング（入力用）
         tracking_past = tracking_list(
-            topic_name_to_data["/perception/object_recognition/tracking/objects"][
-                i - PAST_TIME_STEPS : i
+            [
+                frame_data.tracked_objects
+                for frame_data in data_list[i - PAST_TIME_STEPS : i]
             ]
         )
-        # 2秒前から8秒後までのトラッキング（GT用）
+        # ここから8秒後までのトラッキング（GT用）
         tracking_future = tracking_list(
-            topic_name_to_data["/perception/object_recognition/tracking/objects"][
-                i - PAST_TIME_STEPS : i + FUTURE_TIME_STEPS
+            [
+                frame_data.tracked_objects
+                for frame_data in data_list[i : i + FUTURE_TIME_STEPS]
             ]
         )
 
@@ -241,22 +246,13 @@ if __name__ == "__main__":
             if key in tracking_past_keys:
                 filtered_tracking_future[key] = tracking_future[key]
 
-        print(tracking_past.keys())
-        print(filtered_tracking_future.keys())
-
         bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
             data_list[i].kinematic_state
         )
 
-        traffic_light_recognition = {}
-        if data_list[i].traffic_signals is not None:
-            for traffic_light_group in data_list[
-                i
-            ].traffic_signals.traffic_light_groups:
-                traffic_light_group_id = traffic_light_group.traffic_light_group_id
-                elements = traffic_light_group.elements
-                assert len(elements) == 1, elements
-                traffic_light_recognition[traffic_light_group_id] = elements[0].color
+        traffic_light_recognition = parse_traffic_light_recognition(
+            data_list[i].traffic_signals
+        )
 
         ego_tensor = create_current_ego_state(
             data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
