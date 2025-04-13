@@ -48,11 +48,12 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
                     ego_future[..., 2:3].sin(),
                 ],
                 dim=-1,
-            )
+            )  # (B, T, 4)
+            print(f"{ego_future.shape=}")
             neighbors_future = batch[3].to(args.device)
             neighbor_future_mask = (
                 torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
-            )
+            )  # (B, Pn, T)
             neighbors_future = torch.cat(
                 [
                     neighbors_future[..., :2],
@@ -60,7 +61,7 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
                     neighbors_future[..., 2:3].sin(),
                 ],
                 dim=-1,
-            )
+            )  # (B, Pn, T, 4)
             neighbors_future[neighbor_future_mask] = 0.0
 
             B, Pn, T, _ = neighbors_future.shape
@@ -74,24 +75,26 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
 
             neighbor_current_mask = (
                 torch.sum(torch.ne(neighbors_current[..., :4], 0), dim=-1) == 0
-            )
+            )  # (B, Pn)
             neighbor_mask = torch.concat(
                 (neighbor_current_mask.unsqueeze(-1), neighbor_future_mask), dim=-1
-            )
+            )  # (B, Pn, T + 1)
 
             gt_future = torch.cat(
                 [ego_future[:, None, :, :], neighbors_future[..., :]], dim=1
-            )
+            )  # (B, Pn + 1, T, 4)
             current_states = torch.cat([ego_current[:, None], neighbors_current], dim=1)
-            P = gt_future.shape[1]
+            # (B, Pn + 1, 4)
 
-            all_gt = torch.cat([current_states[:, :, None, :], gt_future], dim=2)
+            all_gt = torch.cat(
+                [current_states[:, :, None, :], gt_future], dim=2
+            )  # (B, Pn + 1, T + 1, 4)
             all_gt[:, 1:][neighbor_mask] = 0.0
 
             prediction = outputs["prediction"]
 
             neighbors_future_valid = ~neighbor_future_mask
-            all_gt = all_gt[:, :, 1:, :]
+            all_gt = all_gt[:, :, 1:, :] # (B, Pn + 1, T, 4)
             loss_tensor = (prediction - all_gt) ** 2
             loss_ego = loss_tensor[:, 0, :]
             loss_nei = loss_tensor[:, 1:, :]
