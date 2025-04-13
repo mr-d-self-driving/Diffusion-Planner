@@ -44,9 +44,8 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
             ego_future = torch.cat(
                 [
                     ego_future[..., :2],
-                    torch.stack(
-                        [ego_future[..., 2].cos(), ego_future[..., 2].sin()], dim=-1
-                    ),
+                    ego_future[..., 2:3].cos(),
+                    ego_future[..., 2:3].sin(),
                 ],
                 dim=-1,
             )
@@ -57,13 +56,8 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
             neighbors_future = torch.cat(
                 [
                     neighbors_future[..., :2],
-                    torch.stack(
-                        [
-                            neighbors_future[..., 2].cos(),
-                            neighbors_future[..., 2].sin(),
-                        ],
-                        dim=-1,
-                    ),
+                    neighbors_future[..., 2:3].cos(),
+                    neighbors_future[..., 2:3].sin(),
                 ],
                 dim=-1,
             )
@@ -91,9 +85,7 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
             current_states = torch.cat([ego_current[:, None], neighbors_current], dim=1)
             P = gt_future.shape[1]
 
-            all_gt = torch.cat(
-                [current_states[:, :, None, :], gt_future], dim=2
-            )
+            all_gt = torch.cat([current_states[:, :, None, :], gt_future], dim=2)
             all_gt[:, 1:][neighbor_mask] = 0.0
 
             prediction = outputs["prediction"]
@@ -102,9 +94,7 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
             all_gt = all_gt[:, :, 1:, :]
             loss_tensor = (prediction - all_gt) ** 2
             loss_ego = loss_tensor[:, 0, :]
-            loss_ego[:, :, 0:2] /= 20 ** 2
             loss_nei = loss_tensor[:, 1:, :]
-            loss_nei[:, :, :, 0:2] /= 20 ** 2
             loss_nei = loss_nei[neighbors_future_valid]
             total_loss_ego += loss_ego.mean().item() * B
             total_loss_neighbor += loss_nei.mean().item() * B
@@ -394,5 +384,7 @@ if __name__ == "__main__":
     if args.ddp:
         torch.distributed.barrier()
 
-    avg_loss_ego, ave_loss_neighbor = validate_model(diffusion_planner, train_loader, args, args.device)
+    avg_loss_ego, ave_loss_neighbor = validate_model(
+        diffusion_planner, train_loader, args, args.device
+    )
     print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
