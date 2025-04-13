@@ -275,7 +275,12 @@ if __name__ == "__main__":
             max_timesteps=FUTURE_TIME_STEPS,
         ).squeeze(0)
         # (32, 80, 11) -> (32, 80, 3)
-        # TODO
+        neighbor_future_tensor = neighbor_future_tensor[:, :, :4]
+        # fixed cos(2) sin(3) -> heading
+        neighbor_future_tensor[:, :, 2] = np.arctan2(
+            neighbor_future_tensor[:, :, 3], neighbor_future_tensor[:, :, 2]
+        )
+        neighbor_future_tensor = neighbor_future_tensor[:, :, :3]
 
         static_objects = np.zeros((STATIC_NUM, 10), dtype=np.float32)
 
