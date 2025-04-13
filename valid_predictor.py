@@ -325,7 +325,7 @@ if __name__ == "__main__":
         batch_size=batch_size // ddp.get_world_size(),
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
-        drop_last=True,
+        drop_last=False,
     )
 
     if global_rank == 0:
