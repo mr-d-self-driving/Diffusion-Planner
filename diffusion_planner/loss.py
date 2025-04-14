@@ -113,9 +113,9 @@ def flow_matching_loss_func(
     _, decoder_output = model(merged_inputs) # [B, P, 1 + T, 4]
     v = decoder_output["score"][:, :, 1:, :] # [B, P, T, 4]
 
-    target  = (all_gt[:, :, 1:, :] - z)
+    target_v  = (all_gt[:, :, 1:, :] - z)
 
-    dpm_loss = torch.sum((v - target)**2, dim=-1)
+    dpm_loss = torch.sum((v - target_v)**2, dim=-1)
     
     masked_prediction_loss = dpm_loss[:, 1:, :][neighbors_future_valid]
 

@@ -32,6 +32,7 @@ class Decoder(nn.Module):
         )
         
         self._state_normalizer: StateNormalizer = config.state_normalizer
+        self._use_flow_matching = config.use_flow_matching
         
     @property
     def sde(self):
@@ -97,6 +98,25 @@ class Decoder(nn.Module):
                     ).reshape(B, P, -1, 4)
                 }
         else:
+            if self._use_flow_matching:
+                # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+                x = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.5], dim=2).reshape(B, P, -1)
+                NUM_STEP = 10
+                DT = 1.0 / NUM_STEP
+                for i in range(NUM_STEP):
+                    v = self.dit(
+                        x, 
+                        torch.ones(B).to(x.device) * (i * DT),
+                        ego_neighbor_encoding,
+                        route_lanes,
+                        neighbor_current_mask
+                    )
+                    x += v * DT
+                x = self._state_normalizer.inverse(x.reshape(B, P, -1, 4))[:, :, 1:]
+                return {
+                    "prediction": x
+                }
+
             # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
             xT = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.5], dim=2).reshape(B, P, -1)
 

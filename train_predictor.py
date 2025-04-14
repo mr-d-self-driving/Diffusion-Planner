@@ -87,6 +87,7 @@ def get_args():
     parser.add_argument('--num_heads', type=int, help='number of multi-head', default=6)
     parser.add_argument('--hidden_dim', type=int, help='hidden dimension', default=192)
     parser.add_argument('--diffusion_model_type', type=str, help='type of diffusion model [x_start, score]', choices=['score', 'x_start'], default='x_start')
+    parser.add_argument('--use_flow_matching', default=False, type=boolean)
 
     # decoder
     parser.add_argument('--predicted_neighbor_num', type=int, help='number of neighbor agents to predict', default=10)
@@ -217,7 +218,7 @@ def model_training(args):
         if global_rank == 0:
             print(f"Epoch {epoch+1}/{train_epochs}")
         train_loss, train_total_loss = train_epoch(train_loader, diffusion_planner, optimizer, args, model_ema, aug)
-        
+
         valid_loss_ego, valid_loss_neighbor = validate_model(diffusion_planner, valid_loader, args, args.device)
 
         if global_rank == 0:

@@ -5,7 +5,7 @@ from torch import nn
 from diffusion_planner.utils.data_augmentation import StatePerturbation   
 from diffusion_planner.utils.train_utils import get_epoch_mean_loss
 from diffusion_planner.utils import ddp
-from diffusion_planner.loss import diffusion_loss_func
+from diffusion_planner.loss import diffusion_loss_func, flow_matching_loss_func
 
 
 def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation=None):
@@ -91,15 +91,24 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
             optimizer.zero_grad()
             loss = {}
 
-            loss, _ = diffusion_loss_func(
-                model,
-                inputs,
-                ddp.get_model(model, args.ddp).sde.marginal_prob,
-                (ego_future, neighbors_future, mask),
-                args.state_normalizer,
-                loss,
-                args.diffusion_model_type
-            )
+            if args.use_flow_matching:
+                loss, _ = flow_matching_loss_func(
+                    model,
+                    inputs,
+                    (ego_future, neighbors_future, mask),
+                    args.state_normalizer,
+                    loss,
+                )
+            else:
+                loss, _ = diffusion_loss_func(
+                    model,
+                    inputs,
+                    ddp.get_model(model, args.ddp).sde.marginal_prob,
+                    (ego_future, neighbors_future, mask),
+                    args.state_normalizer,
+                    loss,
+                    args.diffusion_model_type
+                )
 
             loss['loss'] = loss['neighbor_prediction_loss'] + args.alpha_planning_loss * loss['ego_planning_loss']
 
