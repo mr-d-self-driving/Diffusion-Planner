@@ -311,7 +311,6 @@ class DiffusionPlannerNode(Node):
                 s = input_dict[key].shape
                 ones = [1] * (len(s) - 1)
                 input_dict[key] = input_dict[key].repeat(self.batch_size, *ones)
-                print(f"input_dict[{key}].shape: {input_dict[key].shape}")
         input_dict = self.config_obj.observation_normalizer(input_dict)
         # visualize_inputs(
         #     input_dict, self.config_obj.observation_normalizer, "./input.png"
@@ -322,11 +321,11 @@ class DiffusionPlannerNode(Node):
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
-        pred = out["prediction"]  # ([bs, 11, T, 4])
+        pred = out["prediction"].detach().cpu().numpy()  # ([bs, 11, T, 4])
 
         # Publish
         for b in range(0, self.batch_size):
-            curr_pred = pred[b, 0].detach().cpu().numpy().astype(np.float64)
+            curr_pred = pred[b, 0]
             curr_heading = np.arctan2(curr_pred[:, 3], curr_pred[:, 2])[..., None]
             curr_pred = np.concatenate([curr_pred[..., :2], curr_heading], axis=-1)
             trajectory_msg = convert_prediction_to_msg(
