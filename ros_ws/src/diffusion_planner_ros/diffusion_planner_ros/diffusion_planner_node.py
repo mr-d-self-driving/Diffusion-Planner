@@ -306,6 +306,7 @@ class DiffusionPlannerNode(Node):
             "static_objects": torch.zeros((1, 5, 10), device=dev),
         }
         if self.batch_size > 1:
+            # copy the input dict for batch size
             for key in input_dict.keys():
                 s = input_dict[key].shape
                 ones = [1] * (len(s) - 1)
@@ -321,31 +322,24 @@ class DiffusionPlannerNode(Node):
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
+        pred = out["prediction"]  # ([bs, 11, T, 4])
 
-        pred = out["prediction"]  # ([1, 11, T, 4])
-        pred0 = pred[0, 0].detach().cpu().numpy().astype(np.float64)  # T, 4
-        heading = np.arctan2(pred0[:, 3], pred0[:, 2])[..., None]
-        pred0 = np.concatenate(
-            [pred0[..., :2], heading], axis=-1
-        )  # T, 3(x, y, heading)
+        # Publish
+        for b in range(0, self.batch_size):
+            curr_pred = pred[b, 0].detach().cpu().numpy().astype(np.float64)
+            curr_heading = np.arctan2(curr_pred[:, 3], curr_pred[:, 2])[..., None]
+            curr_pred = np.concatenate([curr_pred[..., :2], curr_heading], axis=-1)
+            trajectory_msg = convert_prediction_to_msg(
+                curr_pred, bl2map_matrix_4x4, stamp
+            )
+            curr_marker_array = create_trajectory_marker(trajectory_msg)
+            for i in range(len(curr_marker_array.markers)):
+                curr_marker_array.markers[i].id += b
 
-        # Publish the trajectory
-        trajectory_msg = convert_prediction_to_msg(pred0, bl2map_matrix_4x4, stamp)
-        self.pub_trajectory.publish(trajectory_msg)
-
-        # Publish the trajectory marker
-        marker_array = create_trajectory_marker(trajectory_msg)
-        if self.batch_size > 1:
-            for b in range(1, self.batch_size):
-                curr_pred = pred[b, 0].detach().cpu().numpy().astype(np.float64)
-                curr_heading = np.arctan2(curr_pred[:, 3], curr_pred[:, 2])[..., None]
-                curr_pred = np.concatenate([curr_pred[..., :2], curr_heading], axis=-1)
-                trajectory_msg = convert_prediction_to_msg(
-                    curr_pred, bl2map_matrix_4x4, stamp
-                )
-                curr_marker_array = create_trajectory_marker(trajectory_msg)
-                for i in range(len(curr_marker_array.markers)):
-                    curr_marker_array.markers[i].id += b
+            if b == 0:
+                marker_array = curr_marker_array
+                self.pub_trajectory.publish(trajectory_msg)
+            else:
                 marker_array.markers.extend(curr_marker_array.markers)
         self.pub_trajectory_marker.publish(marker_array)
 
