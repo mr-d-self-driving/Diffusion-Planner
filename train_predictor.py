@@ -86,8 +86,7 @@ def get_args():
     parser.add_argument('--decoder_depth', type=int, help='number of decoding layers', default=3)
     parser.add_argument('--num_heads', type=int, help='number of multi-head', default=6)
     parser.add_argument('--hidden_dim', type=int, help='hidden dimension', default=192)
-    parser.add_argument('--diffusion_model_type', type=str, help='type of diffusion model [x_start, score]', choices=['score', 'x_start'], default='x_start')
-    parser.add_argument('--use_flow_matching', default=False, type=boolean)
+    parser.add_argument('--diffusion_model_type', type=str, help='type of diffusion model [x_start, score]', choices=['score', 'x_start', 'flow_matching'], default='x_start')
 
     # decoder
     parser.add_argument('--predicted_neighbor_num', type=int, help='number of neighbor agents to predict', default=10)
