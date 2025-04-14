@@ -30,7 +30,6 @@ from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     create_lane_tensor,
     fix_point_num,
-    process_segment,
 )
 from .utils import (
     convert_prediction_to_msg,
