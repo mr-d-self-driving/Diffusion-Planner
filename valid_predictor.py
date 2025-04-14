@@ -49,7 +49,6 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
                 ],
                 dim=-1,
             )  # (B, T, 4)
-            print(f"{ego_future.shape=}")
             neighbors_future = batch[3].to(args.device)
             neighbor_future_mask = (
                 torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
