@@ -83,6 +83,10 @@ class DiffusionPlannerNode(Node):
         self.wheel_base = self.declare_parameter("wheel_base", value=5.0).value
         self.get_logger().info(f"Wheel base: {self.wheel_base}")
 
+        # param(5) batch_size
+        self.batch_size = self.declare_parameter("batch_size", value=1).value
+        self.get_logger().info(f"Batch size: {self.batch_size}")
+
         ###############
         # Subscribers #
         ###############
@@ -301,6 +305,12 @@ class DiffusionPlannerNode(Node):
             "route_lanes_has_speed_limit": route_has_speed_limit,
             "static_objects": torch.zeros((1, 5, 10), device=dev),
         }
+        if self.batch_size > 1:
+            for key in input_dict.keys():
+                s = input_dict[key].shape
+                ones = [1] * (len(s) - 1)
+                input_dict[key] = input_dict[key].repeat(self.batch_size, *ones)
+                print(f"input_dict[{key}].shape: {input_dict[key].shape}")
         input_dict = self.config_obj.observation_normalizer(input_dict)
         # visualize_inputs(
         #     input_dict, self.config_obj.observation_normalizer, "./input.png"
@@ -313,16 +323,30 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
 
         pred = out["prediction"]  # ([1, 11, T, 4])
-        pred = pred[0, 0].detach().cpu().numpy().astype(np.float64)  # T, 4
-        heading = np.arctan2(pred[:, 3], pred[:, 2])[..., None]
-        pred = np.concatenate([pred[..., :2], heading], axis=-1)  # T, 3(x, y, heading)
+        pred0 = pred[0, 0].detach().cpu().numpy().astype(np.float64)  # T, 4
+        heading = np.arctan2(pred0[:, 3], pred0[:, 2])[..., None]
+        pred0 = np.concatenate(
+            [pred0[..., :2], heading], axis=-1
+        )  # T, 3(x, y, heading)
 
         # Publish the trajectory
-        trajectory_msg = convert_prediction_to_msg(pred, bl2map_matrix_4x4, stamp)
+        trajectory_msg = convert_prediction_to_msg(pred0, bl2map_matrix_4x4, stamp)
         self.pub_trajectory.publish(trajectory_msg)
 
         # Publish the trajectory marker
         marker_array = create_trajectory_marker(trajectory_msg)
+        if self.batch_size > 1:
+            for b in range(1, self.batch_size):
+                curr_pred = pred[b, 0].detach().cpu().numpy().astype(np.float64)
+                curr_heading = np.arctan2(curr_pred[:, 3], curr_pred[:, 2])[..., None]
+                curr_pred = np.concatenate([curr_pred[..., :2], curr_heading], axis=-1)
+                trajectory_msg = convert_prediction_to_msg(
+                    curr_pred, bl2map_matrix_4x4, stamp
+                )
+                curr_marker_array = create_trajectory_marker(trajectory_msg)
+                for i in range(len(curr_marker_array.markers)):
+                    curr_marker_array.markers[i].id += b
+                marker_array.markers.extend(curr_marker_array.markers)
         self.pub_trajectory_marker.publish(marker_array)
 
 
