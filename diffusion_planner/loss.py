@@ -73,14 +73,12 @@ def diffusion_loss_func(
 def flow_matching_loss_func(
     model: nn.Module,
     inputs: Dict[str, torch.Tensor],
-    marginal_prob: Callable[[torch.Tensor], torch.Tensor],
 
     futures: Tuple[torch.Tensor, torch.Tensor],
     
     norm: StateNormalizer,
     loss: Dict[str, Any],
 
-    model_type: str,
     eps: float = 1e-3,
 ):   
     ego_future, neighbors_future, neighbor_future_mask = futures
@@ -101,12 +99,14 @@ def flow_matching_loss_func(
     all_gt[:, 1:][neighbor_mask] = 0.0
 
     # t=0 is noise, t=1 is data
-    xT = (1-t) * z + t * all_gt[:, :, 1:, :] # [B, P, T, 4]
-    xT = torch.cat([all_gt[:, :, :1, :], xT], dim=2)  # [B, P, 1 + T, 4]
+    t = t.reshape(-1, *([1] * (len(all_gt.shape)-1)))  # [B, 1, 1, 1]
+    x_t = (1-t) * z + t * all_gt[:, :, 1:, :] # [B, P, T, 4]
+    x_t = torch.cat([all_gt[:, :, :1, :], x_t], dim=2)  # [B, P, 1 + T, 4]
+    t = t.reshape(-1) # [B,]
 
     merged_inputs = {
         **inputs,
-        "sampled_trajectories": xT,
+        "sampled_trajectories": x_t,
         "diffusion_time": t,
     }
 
