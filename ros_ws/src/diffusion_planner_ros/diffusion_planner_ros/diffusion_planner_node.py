@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import io
 import json
 import time
 
@@ -24,12 +23,10 @@ from visualization_msgs.msg import MarkerArray
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.config import Config
-from diffusion_planner.utils.visualize_input import visualize_inputs
 
 from .lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     create_lane_tensor,
-    fix_point_num,
 )
 from .utils import (
     convert_prediction_to_msg,
@@ -37,8 +34,8 @@ from .utils import (
     create_current_ego_state,
     get_nearest_msg,
     get_transform_matrix,
-    tracking_one_step,
     parse_traffic_light_recognition,
+    tracking_one_step,
 )
 from .visualization import (
     create_neighbor_marker,
@@ -58,7 +55,6 @@ class DiffusionPlannerNode(Node):
         vector_map_path = self.declare_parameter("vector_map_path", value="None").value
         self.get_logger().info(f"Vector map path: {vector_map_path}")
         self.static_map = convert_lanelet(vector_map_path)
-        self.static_map = fix_point_num(self.static_map)
 
         # param(2) config
         config_json_path = self.declare_parameter(
