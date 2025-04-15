@@ -7,6 +7,8 @@ import time
 import numpy as np
 import rclpy
 import torch
+import onnxruntime as ort
+
 from autoware_perception_msgs.msg import TrackedObjects, TrafficLightGroupArray
 from autoware_planning_msgs.msg import LaneletRoute, Trajectory
 from geometry_msgs.msg import AccelWithCovarianceStamped
@@ -52,7 +54,8 @@ class DiffusionPlannerNode(Node):
         # Parameters #
         ##############
         # param(1) vector_map
-        vector_map_path = self.declare_parameter("vector_map_path", value="None").value
+        vector_map_path = self.declare_parameter(
+            "vector_map_path", value="None").value
         self.get_logger().info(f"Vector map path: {vector_map_path}")
         self.static_map = convert_lanelet(vector_map_path)
 
@@ -78,6 +81,14 @@ class DiffusionPlannerNode(Node):
         state_dict = ckpt["model"]
         new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         self.diffusion_planner.load_state_dict(new_state_dict)
+
+        sess_options = ort.SessionOptions()
+        # sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+        # ort_session = ort.InferenceSession(
+        #     "model.onnx", sess_options, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+
+        self.ort_session = ort.InferenceSession(
+            "/home/danielsanchez/Diffusion-Planner/ros_ws/src/diffusion_planner_ros/diffusion_planner_ros/conversion/model.onnx", sess_options, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
 
         # param(4) wheel_base
         self.wheel_base = self.declare_parameter("wheel_base", value=5.0).value
@@ -206,11 +217,13 @@ class DiffusionPlannerNode(Node):
         stamp = msg.header.stamp
         # stamp = self.get_clock().now().to_msg()
 
-        curr_kinematic_state, idx = get_nearest_msg(self.kinematic_state_list, stamp)
+        curr_kinematic_state, idx = get_nearest_msg(
+            self.kinematic_state_list, stamp)
         self.kinematic_state_list = self.kinematic_state_list[idx:]
         curr_acceleration, idx = get_nearest_msg(self.acceleration_list, stamp)
         self.acceleration_list = self.acceleration_list[idx:]
-        curr_traffic_light, idx = get_nearest_msg(self.traffic_light_list, stamp)
+        curr_traffic_light, idx = get_nearest_msg(
+            self.traffic_light_list, stamp)
         self.traffic_light_list = self.traffic_light_list[idx:]
 
         if curr_kinematic_state is None:
@@ -301,8 +314,8 @@ class DiffusionPlannerNode(Node):
             "lanes_speed_limit": lanes_speed_limit,
             "lanes_has_speed_limit": lanes_has_speed_limit,
             "route_lanes": route_tensor,
-            "route_lanes_speed_limit": route_speed_limit,
-            "route_lanes_has_speed_limit": route_has_speed_limit,
+            # "route_lanes_speed_limit": route_speed_limit,
+            # "route_lanes_has_speed_limit": route_has_speed_limit,
             "static_objects": torch.zeros((1, 5, 10), device=dev),
         }
         if self.batch_size > 1:
@@ -310,14 +323,35 @@ class DiffusionPlannerNode(Node):
             for key in input_dict.keys():
                 s = input_dict[key].shape
                 ones = [1] * (len(s) - 1)
-                input_dict[key] = input_dict[key].repeat(self.batch_size, *ones)
+                input_dict[key] = input_dict[key].repeat(
+                    self.batch_size, *ones)
+                input_dict[key] = input_dict[key]
+
         input_dict = self.config_obj.observation_normalizer(input_dict)
+
+        print("input dict")
+        for key in input_dict.keys():
+            input_dict[key] = input_dict[key]
+            print(
+                f"key {key}, shape {input_dict[key].shape}, type {input_dict[key].dtype}")
+        print("onnx reqs")
+        for i in self.ort_session.get_inputs():
+            print(f"Name: {i.name}, Shape: {i.shape}, Type: {i.type}")
+
         # visualize_inputs(
         #     input_dict, self.config_obj.observation_normalizer, "./input.png"
         # )
+        input_dict = {k: (v.cpu().numpy() if hasattr(v, "cpu") else v)
+                      for k, v in input_dict.items()}
+        for key, arr in input_dict.items():
+            input_dict[key] = np.ascontiguousarray(arr)
+
         start = time.time()
-        with torch.no_grad():
-            out = self.diffusion_planner(input_dict)[1]
+        # with torch.no_grad():
+        #     out = self.diffusion_planner(input_dict)[1]
+        out = self.ort_session.run(None, input_dict)
+        out = out[0]
+
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
@@ -326,8 +360,10 @@ class DiffusionPlannerNode(Node):
         # Publish
         for b in range(0, self.batch_size):
             curr_pred = pred[b, 0]
-            curr_heading = np.arctan2(curr_pred[:, 3], curr_pred[:, 2])[..., None]
-            curr_pred = np.concatenate([curr_pred[..., :2], curr_heading], axis=-1)
+            curr_heading = np.arctan2(
+                curr_pred[:, 3], curr_pred[:, 2])[..., None]
+            curr_pred = np.concatenate(
+                [curr_pred[..., :2], curr_heading], axis=-1)
             trajectory_msg = convert_prediction_to_msg(
                 curr_pred, bl2map_matrix_4x4, stamp
             )
