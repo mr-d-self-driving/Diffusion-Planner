@@ -100,7 +100,7 @@ class Decoder(nn.Module):
         else:
             if self._model_type == "flow_matching":
                 # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
-                x = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device)], dim=2).reshape(B, P, -1)
+                x = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.1], dim=2).reshape(B, P, -1)
                 NUM_STEP = 10
                 DT = 1.0 / NUM_STEP
                 for i in range(NUM_STEP):

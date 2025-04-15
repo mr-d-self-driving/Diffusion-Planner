@@ -42,6 +42,7 @@ def diffusion_loss_func(
     if model_type == "flow_matching":
         # t=0 is noise, t=1 is data
         t = t.reshape(-1, *([1] * (len(all_gt.shape)-1)))  # [B, 1, 1, 1]
+        z *= 0.1
         xT = (1-t) * z + t * all_gt[:, :, 1:, :] # [B, P, T, 4]
         t = t.reshape(-1) # [B,]
     else:
