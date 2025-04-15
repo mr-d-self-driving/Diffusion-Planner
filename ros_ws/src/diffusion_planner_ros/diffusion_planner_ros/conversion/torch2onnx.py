@@ -9,6 +9,8 @@ from mmengine import fileio
 import io
 import numpy as np
 import onnxruntime as ort
+import random
+
 torch.backends.mha.set_fastpath_enabled(False)
 
 
@@ -39,6 +41,11 @@ class ONNXWrapper(nn.Module):
         encoder_outputs, decoder_outputs = self.model(inputs)
         return decoder_outputs
 
+
+seed = 42
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
 
 # Load config
 config_json_path = "args.json"
@@ -72,6 +79,16 @@ dummy_inputs = {
     'route_lanes': torch.tensor(np.random.randn(25, 20, 12).astype(np.float32)).unsqueeze(0),
 }
 
+# dummy_inputs = {
+#     'ego_current_state': torch.full((1, 10), 0.5, dtype=torch.float32),
+#     'neighbor_agents_past': torch.full((1, 32, 21, 11), 0.5, dtype=torch.float32),
+#     'static_objects': torch.full((1, 5, 10), 0.5, dtype=torch.float32),
+#     'lanes': torch.full((1, 70, 20, 12), 0.5, dtype=torch.float32),
+#     'lanes_speed_limit': torch.full((1, 70, 1), 0.5, dtype=torch.float32),
+#     'lanes_has_speed_limit': torch.full((1, 70, 1), True, dtype=torch.bool),
+#     'route_lanes': torch.full((1, 25, 20, 12), 0.5, dtype=torch.float32),
+# }
+
 
 dummy_inputs = config_obj.observation_normalizer(dummy_inputs)
 torch_inputs = copy.deepcopy(dummy_inputs)
@@ -103,29 +120,22 @@ with torch.no_grad():
         print(f"Output {key} shape:", output[key].shape)
         torch_out = output[key].cpu().numpy()
 
-onnx_model = torch.onnx.export(
-    wrapper,
-    input_tuple,
-    "model.onnx",
-    input_names=input_names,
-    output_names=["output"],
-    # dynamic_axes=None,
-    dynamic_axes={name: {0: 'batch'}
-                  for name in input_names},  # optional, but useful
-    opset_version=20,
-)
+# onnx_model = torch.onnx.export(
+#     wrapper,
+#     input_tuple,
+#     "model.onnx",
+#     input_names=input_names,
+#     output_names=["output"],
+#     # dynamic_axes=None,
+#     dynamic_axes={name: {0: 'batch'}
+#                   for name in input_names},  # optional, but useful
+#     opset_version=20,
+# )
 
-
+sess_options = ort.SessionOptions()
+sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
 ort_session = ort.InferenceSession(
-    "model.onnx", providers=['CPUExecutionProvider'])
-
-onnx_model = onnx.load("model.onnx")
-print("Inputs:")
-for input in onnx_model.graph.input:
-    print(input.name)
-print("\nOutputs:")
-for output in onnx_model.graph.output:
-    print(output.name)
+    "model.onnx", sess_options, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
 
 inputs = {
     'ego_current_state': onnx_inputs['ego_current_state'].cpu().numpy(),
@@ -157,7 +167,59 @@ print(
     f"Close? {np.allclose(torch_out, onnx_output[0], rtol=1e-03, atol=1e-05)}")
 
 
-for input in ort_session.get_inputs():
-    print(f"{input.name}: {input.type}, {input.shape}")
+# TEST WITH SAMPLE INPUT
+print("Comparison with sample input")
+# Load the sample input
+sample_input_temp = np.load("sample_input.npz")
+sample_input = {}
+for key in sample_input_temp:
+    if key in ['map_name', 'token', 'ego_agent_future', 'neighbor_agents_future', 'route_speed_limit', 'route_has_speed_limit']:
+        continue
+    val = sample_input_temp[key]
+    if isinstance(val, np.ndarray):
+        if val.dtype.kind in {'U', 'S'}:  # Unicode or string
+            continue
+        sample_input[key] = torch.tensor(val).unsqueeze(
+            0) if val.ndim > 0 else torch.tensor([val])
 
-print({k: v.dtype for k, v in dummy_inputs.items()})
+sample_input = config_obj.observation_normalizer(sample_input)
+
+input_tuple = (
+    sample_input['ego_current_state'],
+    sample_input['neighbor_agents_past'],
+    sample_input['static_objects'],
+    sample_input['lanes'],
+    sample_input['lanes_speed_limit'],
+    sample_input['lanes_has_speed_limit'],
+    sample_input['route_lanes'],
+)
+
+
+with torch.no_grad():
+    output = wrapper(*input_tuple)
+    for key in output.keys():
+        # print(f"Output {key} shape:", output[key].shape)
+        torch_out = output[key].cpu().numpy()
+
+inputs = {
+    'ego_current_state': sample_input['ego_current_state'].cpu().numpy(),
+    'neighbor_agents_past': sample_input['neighbor_agents_past'].cpu().numpy(),
+    'static_objects': sample_input['static_objects'].cpu().numpy(),
+    'lanes': sample_input['lanes'].cpu().numpy(),
+    'lanes_speed_limit': sample_input['lanes_speed_limit'].cpu().numpy(),
+    'lanes_has_speed_limit': sample_input['lanes_has_speed_limit'].cpu().numpy(),
+    'route_lanes': sample_input['route_lanes'].cpu().numpy(),
+}
+onnx_output = ort_session.run(None, inputs)
+print(f"torch output, with shape {torch_out.shape}:")
+# print(torch_out)
+print(f"onnx output, with shape {onnx_output[0].shape}:")
+# print(onnx_output[0])
+
+abs_diff = np.abs(torch_out - onnx_output[0])
+print(f"Max diff: {abs_diff.max()}")
+print(f"Mean diff: {abs_diff.mean()}")
+print(
+    f"Close? {np.allclose(torch_out, onnx_output[0], rtol=1e-03, atol=1e-05)}")
+for i in ort_session.get_inputs():
+    print(f"Name: {i.name}, Shape: {i.shape}, Type: {i.type}")
