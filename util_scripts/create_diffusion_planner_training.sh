@@ -20,7 +20,7 @@ set -eu
 # ]
 
 target_dir=$1
-output_file="./diffusion_planner_training.json"
+output_file="$target_dir/../diffusion_planner_training.json"
 
 body=$(ls $target_dir | sed 's/^/    "/g' | sed 's/$/"/g' | sed 's/$/,/g' | sed '$ s/.$//')
 

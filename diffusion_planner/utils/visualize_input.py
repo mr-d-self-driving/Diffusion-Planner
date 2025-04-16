@@ -327,19 +327,20 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
         #     color="black",
         # )
 
-        # print index
-        ax.text(
-            (left_x + next_left_x) / 2,
-            (left_y + next_left_y) / 2,
-            f"Route{i}",
-            fontsize=8,
-            color="black",
-        )
-
         num_skipped = sum(skipped)
         if num_skipped != 0 and num_skipped != 20:
             print(f"{num_skipped}")
             exit(0)
+
+        # print index
+        if num_skipped != 20:
+            ax.text(
+                (left_x + next_left_x) / 2,
+                (left_y + next_left_y) / 2,
+                f"Route{i}",
+                fontsize=8,
+                color="black",
+            )
 
     # プロットの装飾
     ax.set_xlabel("X [m]")

@@ -1,27 +1,33 @@
 import argparse
 from pathlib import Path
 import rosbag2_py
-from cv_bridge import CvBridge
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from collections import defaultdict
 import numpy as np
 from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     convert_lanelet,
+    create_lane_tensor,
 )
 from diffusion_planner_ros.utils import (
     create_current_ego_state,
+    get_nearest_msg,
+    parse_timestamp,
+    tracking_one_step,
+    convert_tracked_objects_to_tensor,
+    get_transform_matrix,
+    parse_traffic_light_recognition,
 )
-import secrets
 from dataclasses import dataclass
 from autoware_perception_msgs.msg import (
-    DetectedObjects,
     TrackedObjects,
     TrafficLightGroupArray,
 )
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from sensor_msgs.msg import CompressedImage
+from scipy.spatial.transform import Rotation
+from tqdm import tqdm
 
 
 @dataclass
@@ -38,29 +44,61 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("rosbag_path", type=Path)
     parser.add_argument("vector_map_path", type=Path)
-    parser.add_argument("--limit", type=int, default=1000)
+    parser.add_argument("save_dir", type=Path)
+    parser.add_argument("--step", type=int, default=1)
+    parser.add_argument("--limit", type=int, default=-1)
     return parser.parse_args()
 
 
-def parse_timestamp(stamp) -> int:
-    return stamp.sec * int(1e9) + stamp.nanosec
+def tracking_list(tracking_object_msg_list: list):
+    tracking_obj = {}
+    for tracking_object_msg in tracking_object_msg_list:
+        tracking_obj = tracking_one_step(tracking_object_msg, tracking_obj)
+    return tracking_obj
 
 
-def get_latest_index(list_of_msg, index, target_timestamp):
-    """listのうちindexの位置から線形探索をしてtarget_timestampを超えないような最新のメッセージを取得する"""
-    for i in range(index, len(list_of_msg)):
-        msg = list_of_msg[i]
-        stamp = msg.header.stamp if hasattr(msg, "header") else msg.stamp
-        timestamp = parse_timestamp(stamp)
-        if timestamp > target_timestamp:
-            return i - 1
-    return len(list_of_msg) - 1
+def create_ego_future(data_list, i, future_time_steps, map2bl_matrix_4x4):
+    ego_future_x = []
+    ego_future_y = []
+    ego_future_yaw = []
+    for j in range(future_time_steps):
+        x = data_list[i + j + 1].kinematic_state.pose.pose.position.x
+        y = data_list[i + j + 1].kinematic_state.pose.pose.position.y
+        z = data_list[i + j + 1].kinematic_state.pose.pose.position.z
+        qx = data_list[i + j + 1].kinematic_state.pose.pose.orientation.x
+        qy = data_list[i + j + 1].kinematic_state.pose.pose.orientation.y
+        qz = data_list[i + j + 1].kinematic_state.pose.pose.orientation.z
+        qw = data_list[i + j + 1].kinematic_state.pose.pose.orientation.w
+        rot = Rotation.from_quat([qx, qy, qz, qw])
+        pose_in_map = np.eye(4)
+        pose_in_map[:3, :3] = rot.as_matrix()
+        pose_in_map[0, 3] = x
+        pose_in_map[1, 3] = y
+        pose_in_map[2, 3] = z
+        pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
+        ego_future_x.append(pose_in_bl[0, 3])
+        ego_future_y.append(pose_in_bl[1, 3])
+        rot = Rotation.from_matrix(pose_in_bl[:3, :3])
+        yaw = rot.as_euler("xyz")[2]
+        ego_future_yaw.append(yaw)
+
+    ego_future_np = np.concatenate(
+        [
+            np.array(ego_future_x).reshape(-1, 1),
+            np.array(ego_future_y).reshape(-1, 1),
+            np.array(ego_future_yaw).reshape(-1, 1),
+        ],
+        axis=1,
+    )
+    return ego_future_np
 
 
 if __name__ == "__main__":
     args = parse_args()
     rosbag_path = args.rosbag_path
     vector_map_path = args.vector_map_path
+    save_dir = args.save_dir
+    step = args.step
     limit = args.limit
 
     vector_map = convert_lanelet(str(vector_map_path))
@@ -109,15 +147,14 @@ if __name__ == "__main__":
     for key, value in topic_name_to_data.items():
         print(f"{key}: {len(value)} msgs")
 
-    # 最初にmsgsの10Hzでの整形(tracked_objects基準)を行う
+    route_msg = topic_name_to_data["/planning/mission_planning/route"][0]
+
+    # convert to FrameData
+    # The base topic is "/perception/object_recognition/tracking/objects" (10Hz)
     n = len(topic_name_to_data["/perception/object_recognition/tracking/objects"])
+    print(f"{n=}")
+    progress_bar = tqdm(total=n)
     data_list = []
-    indices = {
-        "/localization/kinematic_state": 0,
-        "/localization/acceleration": 0,
-        "/perception/traffic_light_recognition/traffic_signals": 0,
-        "/sensing/camera/camera0/image_rect_color/compressed": 0,
-    }
     for i in range(n):
         tracking = topic_name_to_data[
             "/perception/object_recognition/tracking/objects"
@@ -131,12 +168,11 @@ if __name__ == "__main__":
         }
 
         for key in latest_msgs.keys():
-            curr_index = get_latest_index(
-                topic_name_to_data[key], indices[key], timestamp
+            curr_msg, curr_index = get_nearest_msg(
+                topic_name_to_data[key], tracking.header.stamp
             )
-            curr_msg = topic_name_to_data[key][curr_index]
+            topic_name_to_data[key] = topic_name_to_data[key][curr_index:]
             latest_msgs[key] = curr_msg
-            indices[key] = curr_index
 
         data_list.append(
             FrameData(
@@ -152,6 +188,7 @@ if __name__ == "__main__":
                 ],
             )
         )
+        progress_bar.update(1)
 
     """
     作りたいnpz
@@ -178,15 +215,117 @@ if __name__ == "__main__":
     ROUTE_NUM = 25
     ROUTE_LEN = 20
 
-    map_name = "autoware_map"
+    map_name = rosbag_path.stem
 
-    # これをrosbagのデータから作る
-    # 時刻の基準とするデータは "/perception/object_recognition/tracking/objects" (10Hz)
-    # 重複が出ないように8秒ごとに作る
-    for i in range(PAST_TIME_STEPS, n, FUTURE_TIME_STEPS):
-        # 2秒前からここまでのトラッキング（入力用）
-        # 2秒前から8秒後までのトラッキング（GT用）
+    # list[FrameData] -> npz
+    progress = tqdm(total=(n - PAST_TIME_STEPS - FUTURE_TIME_STEPS) // step)
+    for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, step):
+        token = f"{i:016d}"
 
-        ego_state = create_current_ego_state(
-            data_list[i].kinematic_state, data_list[i].acceleration
+        # 2 sec tracking (for input)
+        tracking_past = tracking_list(
+            [
+                frame_data.tracked_objects
+                for frame_data in data_list[i - PAST_TIME_STEPS : i]
+            ]
         )
+        # 8 sec tracking (for ground truth)
+        tracking_future = tracking_list(
+            [
+                frame_data.tracked_objects
+                for frame_data in data_list[i : i + FUTURE_TIME_STEPS]
+            ]
+        )
+
+        # filter tracking_future by indices in tracking_past
+        tracking_past_keys = set(tracking_past.keys())
+        filtered_tracking_future = {}
+        for key in tracking_future.keys():
+            if key in tracking_past_keys:
+                filtered_tracking_future[key] = tracking_future[key]
+
+        bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
+            data_list[i].kinematic_state
+        )
+
+        traffic_light_recognition = parse_traffic_light_recognition(
+            data_list[i].traffic_signals
+        )
+
+        ego_tensor = create_current_ego_state(
+            data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
+        ).squeeze(0)
+
+        ego_future_np = create_ego_future(
+            data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4
+        )
+
+        neighbor_past_tensor = convert_tracked_objects_to_tensor(
+            tracked_objs=tracking_past,
+            map2bl_matrix_4x4=map2bl_matrix_4x4,
+            max_num_objects=NEIGHBOR_NUM,
+            max_timesteps=PAST_TIME_STEPS,
+        ).squeeze(0)
+
+        neighbor_future_tensor = convert_tracked_objects_to_tensor(
+            tracked_objs=filtered_tracking_future,
+            map2bl_matrix_4x4=map2bl_matrix_4x4,
+            max_num_objects=NEIGHBOR_NUM,
+            max_timesteps=FUTURE_TIME_STEPS,
+        ).squeeze(0)
+        # (32, 80, 11) -> (32, 80, 3)
+        neighbor_future_tensor = neighbor_future_tensor[:, :, :4]
+        # fixed cos(2) sin(3) -> heading
+        neighbor_future_tensor[:, :, 2] = np.arctan2(
+            neighbor_future_tensor[:, :, 3], neighbor_future_tensor[:, :, 2]
+        )
+        neighbor_future_tensor = neighbor_future_tensor[:, :, :3]
+
+        static_objects = np.zeros((STATIC_NUM, 10), dtype=np.float32)
+
+        lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
+            vector_map.lane_segments.values(),
+            map2bl_mat4x4=map2bl_matrix_4x4,
+            center_x=data_list[i].kinematic_state.pose.pose.position.x,
+            center_y=data_list[i].kinematic_state.pose.pose.position.y,
+            mask_range=100,
+            traffic_light_recognition=traffic_light_recognition,
+            num_segments=70,
+            dev="cpu",
+        )
+
+        target_segments = [
+            vector_map.lane_segments[segment.preferred_primitive.id]
+            for segment in route_msg.segments
+        ]
+        route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
+            target_segments,
+            map2bl_mat4x4=map2bl_matrix_4x4,
+            center_x=data_list[i].kinematic_state.pose.pose.position.x,
+            center_y=data_list[i].kinematic_state.pose.pose.position.y,
+            mask_range=100,
+            traffic_light_recognition=traffic_light_recognition,
+            num_segments=25,
+            dev="cpu",
+        )
+
+        curr_data = {
+            "map_name": map_name,
+            "token": token,
+            "ego_current_state": ego_tensor.numpy(),
+            "ego_agent_future": ego_future_np,
+            "neighbor_agents_past": neighbor_past_tensor.numpy(),
+            "neighbor_agents_future": neighbor_future_tensor.numpy(),
+            "static_objects": static_objects,
+            "lanes": lanes_tensor.squeeze(0).numpy(),
+            "lanes_speed_limit": lanes_speed_limit.squeeze(0).numpy(),
+            "lanes_has_speed_limit": lanes_has_speed_limit.squeeze(0).numpy(),
+            "route_lanes": route_tensor.squeeze(0).numpy(),
+            "route_lanes_speed_limit": route_speed_limit.squeeze(0).numpy(),
+            "route_lanes_has_speed_limit": route_has_speed_limit.squeeze(0).numpy(),
+        }
+        # save the data
+        save_dir.mkdir(parents=True, exist_ok=True)
+        output_file = f"{save_dir}/{map_name}_{token}.npz"
+        np.savez(output_file, **curr_data)
+        progress.update(1)

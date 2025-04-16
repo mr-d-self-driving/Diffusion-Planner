@@ -1,36 +1,26 @@
-import os
 import argparse
-import random
-import numpy as np
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from timm.utils import ModelEma
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.dataset import DiffusionPlannerData
 from diffusion_planner.utils.normalizer import StateNormalizer, ObservationNormalizer
-from diffusion_planner.utils.train_utils import set_seed, save_model, resume_model
+from diffusion_planner.utils.train_utils import set_seed, resume_model
 from diffusion_planner.utils.lr_schedule import CosineAnnealingWarmUpRestarts
-from diffusion_planner.utils.tb_log import TensorBoardLogger
 from diffusion_planner.utils.data_augmentation import StatePerturbation
 from diffusion_planner.utils import ddp
-from diffusion_planner.train_epoch import train_epoch
-from diffusion_planner.utils.config import Config
-from diffusion_planner.model.diffusion_utils.sampling import dpm_sampler
 
 from torch import optim
 from torch.utils.data import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 
-from diffusion_planner.utils.tb_log import TensorBoardLogger as Logger
-
-
-def validate_model(model, val_loader, args, device):
-    """検証データセットでモデルを評価し、損失を計算する"""
+def validate_model(model, val_loader, args, device) -> tuple[float, float]:
+    """return: ave_loss_ego, ave_loss_neighbor"""
     model.eval()
-    total_loss = 0.0
+    total_loss_ego = 0.0
+    total_loss_neighbor = 0.0
     total_samples = 0
 
     with torch.no_grad():
@@ -54,29 +44,23 @@ def validate_model(model, val_loader, args, device):
             ego_future = torch.cat(
                 [
                     ego_future[..., :2],
-                    torch.stack(
-                        [ego_future[..., 2].cos(), ego_future[..., 2].sin()], dim=-1
-                    ),
+                    ego_future[..., 2:3].cos(),
+                    ego_future[..., 2:3].sin(),
                 ],
                 dim=-1,
-            )
+            )  # (B, T, 4)
             neighbors_future = batch[3].to(args.device)
             neighbor_future_mask = (
                 torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
-            )
+            )  # (B, Pn, T)
             neighbors_future = torch.cat(
                 [
                     neighbors_future[..., :2],
-                    torch.stack(
-                        [
-                            neighbors_future[..., 2].cos(),
-                            neighbors_future[..., 2].sin(),
-                        ],
-                        dim=-1,
-                    ),
+                    neighbors_future[..., 2:3].cos(),
+                    neighbors_future[..., 2:3].sin(),
                 ],
                 dim=-1,
-            )
+            )  # (B, Pn, T, 4)
             neighbors_future[neighbor_future_mask] = 0.0
 
             B, Pn, T, _ = neighbors_future.shape
@@ -90,39 +74,37 @@ def validate_model(model, val_loader, args, device):
 
             neighbor_current_mask = (
                 torch.sum(torch.ne(neighbors_current[..., :4], 0), dim=-1) == 0
-            )
+            )  # (B, Pn)
             neighbor_mask = torch.concat(
                 (neighbor_current_mask.unsqueeze(-1), neighbor_future_mask), dim=-1
-            )
+            )  # (B, Pn, T + 1)
 
             gt_future = torch.cat(
                 [ego_future[:, None, :, :], neighbors_future[..., :]], dim=1
-            )
+            )  # (B, Pn + 1, T, 4)
             current_states = torch.cat([ego_current[:, None], neighbors_current], dim=1)
-            P = gt_future.shape[1]
+            # (B, Pn + 1, 4)
 
             all_gt = torch.cat(
                 [current_states[:, :, None, :], gt_future], dim=2
-            )
+            )  # (B, Pn + 1, T + 1, 4)
             all_gt[:, 1:][neighbor_mask] = 0.0
 
             prediction = outputs["prediction"]
 
             neighbors_future_valid = ~neighbor_future_mask
-            all_gt = all_gt[:, :, 1:, :]
+            all_gt = all_gt[:, :, 1:, :] # (B, Pn + 1, T, 4)
             loss_tensor = (prediction - all_gt) ** 2
             loss_ego = loss_tensor[:, 0, :]
-            loss_ego[:, :, 0:2] /= 20 ** 2
             loss_nei = loss_tensor[:, 1:, :]
-            loss_nei[:, :, :, 0:2] /= 20 ** 2
             loss_nei = loss_nei[neighbors_future_valid]
-            loss = loss_ego.mean() + loss_nei.mean()
-            total_loss += loss.item() * B
+            total_loss_ego += loss_ego.mean().item() * B
+            total_loss_neighbor += loss_nei.mean().item() * B
             total_samples += B
 
-    print(f"{total_loss=}, {total_samples=}")
-    avg_loss = total_loss / total_samples
-    return avg_loss
+    avg_loss_ego = total_loss_ego / total_samples
+    avg_loss_neighbor = total_loss_neighbor / total_samples
+    return avg_loss_ego, avg_loss_neighbor
 
 
 def boolean(v):
@@ -139,15 +121,6 @@ def boolean(v):
 def get_args():
     # Arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--name",
-        type=str,
-        help='log name (default: "diffusion-planner-training")',
-        default="diffusion-planner-training",
-    )
-    parser.add_argument(
-        "--save_dir", type=str, help="save dir for model ckpt", default="."
-    )
 
     # Data
     parser.add_argument(
@@ -219,7 +192,7 @@ def get_args():
         "--train_epochs", type=int, help="epochs of training", default=500
     )
     parser.add_argument(
-        "--batch_size", type=int, help="batch size (default: 2048)", default=2048
+        "--batch_size", type=int, help="batch size (default: 2048)", default=1024
     )
     parser.add_argument(
         "--learning_rate",
@@ -344,7 +317,7 @@ if __name__ == "__main__":
         batch_size=batch_size // ddp.get_world_size(),
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
-        drop_last=True,
+        drop_last=False,
     )
 
     if global_rank == 0:
@@ -361,7 +334,7 @@ if __name__ == "__main__":
 
     if args.ddp:
         diffusion_planner = DDP(
-            diffusion_planner, device_ids=[rank], find_unused_parameters=True
+            diffusion_planner, device_ids=[rank], find_unused_parameters=False
         )
 
     if args.use_ema:
@@ -413,5 +386,7 @@ if __name__ == "__main__":
     if args.ddp:
         torch.distributed.barrier()
 
-    avg_loss = validate_model(diffusion_planner, train_loader, args, args.device)
-    print(f"{avg_loss}")
+    avg_loss_ego, ave_loss_neighbor = validate_model(
+        diffusion_planner, train_loader, args, args.device
+    )
+    print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")

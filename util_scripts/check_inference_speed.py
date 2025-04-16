@@ -2,7 +2,6 @@ import argparse
 from pathlib import Path
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.config import Config
-from mmengine import fileio
 import io
 import json
 import torch
@@ -33,9 +32,7 @@ if __name__ == "__main__":
     diffusion_planner.cuda()
     diffusion_planner.decoder.decoder.training = False
 
-    ckpt = fileio.get(ckpt_path)
-    with io.BytesIO(ckpt) as f:
-        ckpt = torch.load(f)
+    ckpt = torch.load(ckpt_path)
     state_dict = ckpt["model"]
     new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
     diffusion_planner.load_state_dict(new_state_dict)

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import argparse
+
+import matplotlib.pyplot as plt
+import numpy as np
 from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     create_lane_tensor,
-    fix_point_num,
 )
-import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation
-import numpy as np
 
 
 def parse_args():
@@ -26,7 +26,6 @@ if __name__ == "__main__":
     map_path = args.map_path
 
     vector_map = convert_lanelet(map_path)
-    vector_map = fix_point_num(vector_map)
     print(f"{type(vector_map)=}")
 
     ego_x = 3734.4
@@ -48,7 +47,14 @@ if __name__ == "__main__":
     map2bl_mat4x4 = np.linalg.inv(map2bl_mat4x4)
 
     lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
-        vector_map.lane_segments.values(), map2bl_mat4x4, ego_x, ego_y, RANGE, {}, 70, "cpu"
+        vector_map.lane_segments.values(),
+        map2bl_mat4x4,
+        ego_x,
+        ego_y,
+        RANGE,
+        {},
+        70,
+        "cpu",
     )
     print(f"{lanes_tensor.shape=}")
 

@@ -35,6 +35,7 @@ class Decoder(nn.Module):
         self._observation_normalizer: ObservationNormalizer = config.observation_normalizer
         
         self._guidance_fn = config.guidance_fn
+        self._model_type = config.diffusion_model_type
         
     @property
     def sde(self):
@@ -101,6 +102,28 @@ class Decoder(nn.Module):
                     ).reshape(B, P, -1, 4)
                 }
         else:
+            if self._model_type == "flow_matching":
+                # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+                x = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.1], dim=2).reshape(B, P, -1)
+                NUM_STEP = 10
+                DT = 1.0 / NUM_STEP
+                for i in range(NUM_STEP):
+                    v = self.dit(
+                        x, 
+                        torch.ones(B).to(x.device) * (i * DT),
+                        ego_neighbor_encoding,
+                        route_lanes,
+                        neighbor_current_mask
+                    )
+                    v = v.reshape(B, P, -1, 4)
+                    x = x.reshape(B, P, -1, 4)
+                    x[:, :, 1:] += v[:, :, 1:] * DT
+                    x = x.reshape(B, P, -1)
+                x = self._state_normalizer.inverse(x.reshape(B, P, -1, 4))[:, :, 1:]
+                return {
+                    "prediction": x
+                }
+
             # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
             xT = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.5], dim=2).reshape(B, P, -1)
 
@@ -194,7 +217,7 @@ class DiT(nn.Module):
     def __init__(self, sde: SDE, route_encoder: nn.Module, depth, output_dim, hidden_dim=192, heads=6, dropout=0.1, mlp_ratio=4.0, model_type="x_start"):
         super().__init__()
         
-        assert model_type in ["score", "x_start"], f"Unknown model type: {model_type}"
+        assert model_type in ["score", "x_start", "flow_matching"], f"Unknown model type: {model_type}"
         self._model_type = model_type
         self.route_encoder = route_encoder
         self.agent_embedding = nn.Embedding(2, hidden_dim)
@@ -239,6 +262,8 @@ class DiT(nn.Module):
         if self._model_type == "score":
             return x / (self.marginal_prob_std(t)[:, None, None] + 1e-6)
         elif self._model_type == "x_start":
+            return x
+        elif self._model_type == "flow_matching":
             return x
         else:
             raise ValueError(f"Unknown model type: {self._model_type}")

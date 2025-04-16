@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from autoware_perception_msgs.msg import TrackedObjects
+from autoware_perception_msgs.msg import TrackedObjects, TrafficLightGroupArray
 from autoware_planning_msgs.msg import Trajectory, TrajectoryPoint
 from builtin_interfaces.msg import Duration
 from nav_msgs.msg import Odometry
@@ -276,3 +276,23 @@ def convert_prediction_to_msg(
         prev_y = curr_y
 
     return trajectory_msg
+
+
+def parse_traffic_light_recognition(msg: TrafficLightGroupArray):
+    traffic_light_recognition = {}
+    for traffic_light_group in msg.traffic_light_groups:
+        traffic_light_group_id = traffic_light_group.traffic_light_group_id
+        elements = traffic_light_group.elements
+        if len(elements) == 1:
+            traffic_light_recognition[traffic_light_group_id] = elements[0].color
+        else:
+            print("Traffic light group has more than one element.")
+            # Ex.) RED(color=1) for CIRCLE(shape=1), but GREEN(color=3) for RIGHT_ARROW(shape=3)
+            # In this case, we take the minimum value of the color
+            traffic_light_recognition[traffic_light_group_id] = 4  # (WHITE)
+            for element in elements:
+                print(f"{element=}")
+                traffic_light_recognition[traffic_light_group_id] = min(
+                    traffic_light_recognition[traffic_light_group_id], element.color
+                )
+    return traffic_light_recognition

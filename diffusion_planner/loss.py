@@ -39,7 +39,15 @@ def diffusion_loss_func(
     mean, std = marginal_prob(all_gt[..., 1:, :], t)
     std = std.view(-1, *([1] * (len(all_gt[..., 1:, :].shape)-1)))
 
-    xT = mean + std * z
+    if model_type == "flow_matching":
+        # t=0 is noise, t=1 is data
+        t = t.reshape(-1, *([1] * (len(all_gt.shape)-1)))  # [B, 1, 1, 1]
+        z *= 0.1
+        xT = (1-t) * z + t * all_gt[:, :, 1:, :] # [B, P, T, 4]
+        t = t.reshape(-1) # [B,]
+    else:
+        xT = mean + std * z
+
     xT = torch.cat([all_gt[:, :, :1, :], xT], dim=2)
     
     merged_inputs = {
@@ -55,6 +63,9 @@ def diffusion_loss_func(
         dpm_loss = torch.sum((score * std + z)**2, dim=-1)
     elif model_type == "x_start":
         dpm_loss = torch.sum((score - all_gt[:, :, 1:, :])**2, dim=-1)
+    elif model_type == "flow_matching":
+        target_v  = (all_gt[:, :, 1:, :] - z)
+        dpm_loss = torch.sum((score - target_v)**2, dim=-1)
     
     masked_prediction_loss = dpm_loss[:, 1:, :][neighbors_future_valid]
 

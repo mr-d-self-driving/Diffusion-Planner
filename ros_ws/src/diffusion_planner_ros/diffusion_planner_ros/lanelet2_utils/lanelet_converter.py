@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import torch
 import sys
 
 import numpy as np
+import torch
 from scipy.interpolate import interp1d
 
 try:
@@ -415,15 +415,17 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
 
     # generate uuid from map filepath
     map_id = uuid(filename, digit=16)
-    return AWMLStaticMap(
+    map = AWMLStaticMap(
         map_id,
         lane_segments=lane_segments,
         crosswalk_segments=crosswalk_segments,
         boundary_segments=boundary_segments,
     )
+    map = _fix_point_num(map)
+    return map
 
 
-def fix_point_num(map: AWMLStaticMap):
+def _fix_point_num(map: AWMLStaticMap):
     for segment_id, segment in map.lane_segments.items():
         centerlines = segment.polyline.waypoints
         left_boundaries = segment.left_boundaries[0].polyline.waypoints
@@ -486,10 +488,13 @@ def process_segment(
     diff_centerlines = np.insert(diff_centerlines, diff_centerlines.shape[0], 0, axis=0)
 
     traffic_light = [0, 0, 0, 0]  # (green, yellow, red, unknown)
-    assert len(segment.traffic_lights) <= 1
     if len(segment.traffic_lights) == 0:
         traffic_light = [0, 0, 0, 1]  # unknown
     else:
+        if len(segment.traffic_lights) > 1:
+            print(
+                f"Warning: more than one traffic light in segment {segment.id}, using the first one."
+            )
         traffic_light_id = segment.traffic_lights[0].id
         if traffic_light_id in traffic_light_recognition:
             traffic_light_color = traffic_light_recognition[traffic_light_id]

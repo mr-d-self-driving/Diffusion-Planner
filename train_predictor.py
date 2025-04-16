@@ -5,18 +5,20 @@ from torch import optim
 from timm.utils import ModelEma
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
+import wandb
+import json
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 
 from diffusion_planner.utils.train_utils import set_seed, save_model, resume_model
 from diffusion_planner.utils.normalizer import ObservationNormalizer, StateNormalizer
 from diffusion_planner.utils.lr_schedule import CosineAnnealingWarmUpRestarts
-from diffusion_planner.utils.tb_log import TensorBoardLogger as Logger
 from diffusion_planner.utils.data_augmentation import StatePerturbation
 from diffusion_planner.utils.dataset import DiffusionPlannerData
 from diffusion_planner.utils import ddp
 
 from diffusion_planner.train_epoch import train_epoch
+from valid_predictor import validate_model
 
 def boolean(v):
     if isinstance(v, bool):
@@ -84,7 +86,7 @@ def get_args():
     parser.add_argument('--decoder_depth', type=int, help='number of decoding layers', default=3)
     parser.add_argument('--num_heads', type=int, help='number of multi-head', default=6)
     parser.add_argument('--hidden_dim', type=int, help='hidden dimension', default=192)
-    parser.add_argument('--diffusion_model_type', type=str, help='type of diffusion model [x_start, score]', choices=['score', 'x_start'], default='x_start')
+    parser.add_argument('--diffusion_model_type', type=str, help='type of diffusion model [x_start, score]', choices=['score', 'x_start', 'flow_matching'], default='x_start')
 
     # decoder
     parser.add_argument('--predicted_neighbor_num', type=int, help='number of neighbor agents to predict', default=10)
@@ -131,8 +133,9 @@ def model_training(args):
         args_dict = vars(args)
         args_dict = {k: v if not isinstance(v, (StateNormalizer, ObservationNormalizer)) else v.to_dict() for k, v in args_dict.items() }
 
-        from mmengine.fileio import dump
-        dump(args_dict, os.path.join(save_path, 'args.json'), file_format='json', indent=4)
+        with open(os.path.join(save_path, 'args.json'), 'w', encoding='utf-8') as f:
+            json.dump(args_dict, f, indent=4)
+
     else:
         save_path = None
 
@@ -146,10 +149,19 @@ def model_training(args):
     
     # set up data loaders
     aug = StatePerturbation(augment_prob=args.augment_prob, device=args.device) if args.use_data_augment else None
-    train_set = DiffusionPlannerData(args.train_set, args.train_set_list, args.agent_num, args.predicted_neighbor_num, args.future_len)
+    data_set = DiffusionPlannerData(args.train_set, args.train_set_list, args.agent_num, args.predicted_neighbor_num, args.future_len)
+
+    # split valid dataset (10%)
+    total_size = len(data_set)
+    valid_size = int(total_size * 0.1)
+    train_size = total_size - valid_size
+    train_set, valid_set = torch.utils.data.random_split(data_set, [train_size, valid_size])
+
     train_sampler = DistributedSampler(train_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=True)
     train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=batch_size//ddp.get_world_size(), num_workers=args.num_workers, pin_memory=args.pin_mem, drop_last=True)
-   
+    valid_sampler = DistributedSampler(valid_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=False)
+    valid_loader = DataLoader(valid_set, sampler=valid_sampler, batch_size=batch_size//ddp.get_world_size(), num_workers=args.num_workers, pin_memory=args.pin_mem, drop_last=False)
+
     if global_rank == 0:
         print("Dataset Prepared: {} train data\n".format(len(train_set)))
 
@@ -161,7 +173,7 @@ def model_training(args):
     diffusion_planner = diffusion_planner.to(rank if args.device == 'cuda' else args.device)
 
     if args.ddp:
-        diffusion_planner = DDP(diffusion_planner, device_ids=[rank], find_unused_parameters=True)
+        diffusion_planner = DDP(diffusion_planner, device_ids=[rank], find_unused_parameters=False)
 
     if args.use_ema:
         model_ema = ModelEma(
@@ -187,7 +199,15 @@ def model_training(args):
         wandb_id = None
 
     # logger
-    wandb_logger = Logger(args.name, args.notes, args, wandb_resume_id=wandb_id, save_path=save_path, rank=global_rank) 
+    if global_rank == 0:
+        os.environ["WANDB_MODE"] = "online" if args.use_wandb else "offline"
+        wandb.init(project='Diffusion-Planner', 
+            name=args.name, 
+            notes=args.notes,
+            resume="allow",
+            id=wandb_id,
+            dir=f'{save_path}')
+        wandb.config.update(args)
 
     if args.ddp:
         torch.distributed.barrier()
@@ -197,17 +217,22 @@ def model_training(args):
         if global_rank == 0:
             print(f"Epoch {epoch+1}/{train_epochs}")
         train_loss, train_total_loss = train_epoch(train_loader, diffusion_planner, optimizer, args, model_ema, aug)
-        
 
+        valid_loss_ego, valid_loss_neighbor = validate_model(diffusion_planner, valid_loader, args, args.device)
+        print(f"{valid_loss_ego=}, {valid_loss_neighbor=}")
 
         if global_rank == 0:
             lr_dict = {'lr': optimizer.param_groups[0]['lr']}
-            wandb_logger.log_metrics({f"train_loss/{k}": v for k, v in train_loss.items()}, step=epoch+1)
-            wandb_logger.log_metrics({f"lr/{k}": v for k, v in lr_dict.items()}, step=epoch+1)
+            wandb.log({
+                **{f"train_loss/{k}": v for k, v in train_loss.items()},
+                **{f"lr/{k}": v for k, v in lr_dict.items()},
+                "valid_loss/ego": valid_loss_ego,
+                "valid_loss/neighbors": valid_loss_neighbor
+            }, step=epoch+1)
 
             if (epoch + 1) % save_utd == 0:
                 # save model at the end of epoch
-                save_model(diffusion_planner, optimizer, scheduler, save_path, epoch, train_total_loss, wandb_logger.id, model_ema.ema)
+                save_model(diffusion_planner, optimizer, scheduler, save_path, epoch, train_total_loss, wandb_id, model_ema.ema)
                 print(f"Model saved in {save_path}\n")
 
         scheduler.step()
