@@ -69,28 +69,28 @@ new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
 model.load_state_dict(new_state_dict)
 
 # # Dummy inputs
-dummy_inputs = {
-    'ego_current_state': torch.tensor(np.random.randn(10).astype(np.float32)).unsqueeze(0),
-    'neighbor_agents_past': torch.tensor(np.random.randn(32, 21, 11).astype(np.float32)).unsqueeze(0),
-    'static_objects': torch.tensor(np.random.randn(5, 10).astype(np.float32)).unsqueeze(0),
-    'lanes': torch.tensor(np.random.randn(70, 20, 12).astype(np.float32)).unsqueeze(0),
-    'lanes_speed_limit': torch.tensor(np.random.randn(70, 1).astype(np.float32)).unsqueeze(0),
-    'lanes_has_speed_limit': torch.tensor(np.random.randn(70, 1).astype(np.bool_)).unsqueeze(0),
-    'route_lanes': torch.tensor(np.random.randn(25, 20, 12).astype(np.float32)).unsqueeze(0),
-}
-
 # dummy_inputs = {
-#     'ego_current_state': torch.full((1, 10), 0.5, dtype=torch.float32),
-#     'neighbor_agents_past': torch.full((1, 32, 21, 11), 0.5, dtype=torch.float32),
-#     'static_objects': torch.full((1, 5, 10), 0.5, dtype=torch.float32),
-#     'lanes': torch.full((1, 70, 20, 12), 0.5, dtype=torch.float32),
-#     'lanes_speed_limit': torch.full((1, 70, 1), 0.5, dtype=torch.float32),
-#     'lanes_has_speed_limit': torch.full((1, 70, 1), True, dtype=torch.bool),
-#     'route_lanes': torch.full((1, 25, 20, 12), 0.5, dtype=torch.float32),
+#     'ego_current_state': torch.tensor(np.random.randn(10).astype(np.float32)).unsqueeze(0),
+#     'neighbor_agents_past': torch.tensor(np.random.randn(32, 21, 11).astype(np.float32)).unsqueeze(0),
+#     'static_objects': torch.tensor(np.random.randn(5, 10).astype(np.float32)).unsqueeze(0),
+#     'lanes': torch.tensor(np.random.randn(70, 20, 12).astype(np.float32)).unsqueeze(0),
+#     'lanes_speed_limit': torch.tensor(np.random.randn(70, 1).astype(np.float32)).unsqueeze(0),
+#     'lanes_has_speed_limit': torch.tensor(np.random.randn(70, 1).astype(np.bool_)).unsqueeze(0),
+#     'route_lanes': torch.tensor(np.random.randn(25, 20, 12).astype(np.float32)).unsqueeze(0),
 # }
 
+dummy_inputs = {
+    'ego_current_state': torch.full((1, 10), 0.5, dtype=torch.float32),
+    'neighbor_agents_past': torch.full((1, 32, 21, 11), 0.5, dtype=torch.float32),
+    'static_objects': torch.full((1, 5, 10), 0.5, dtype=torch.float32),
+    'lanes': torch.full((1, 70, 20, 12), 0.5, dtype=torch.float32),
+    'lanes_speed_limit': torch.full((1, 70, 1), 0.5, dtype=torch.float32),
+    'lanes_has_speed_limit': torch.full((1, 70, 1), True, dtype=torch.bool),
+    'route_lanes': torch.full((1, 25, 20, 12), 0.5, dtype=torch.float32),
+}
 
-dummy_inputs = config_obj.observation_normalizer(dummy_inputs)
+
+# dummy_inputs = config_obj.observation_normalizer(dummy_inputs)
 torch_inputs = copy.deepcopy(dummy_inputs)
 onnx_inputs = copy.deepcopy(dummy_inputs)
 
@@ -149,6 +149,14 @@ inputs = {
 inputs['lanes_has_speed_limit'] = inputs['lanes_has_speed_limit'].astype(
     np.bool_)
 
+
+print("input dict")
+for key in inputs.keys():
+    print(
+        f"key {key}, shape {inputs[key].shape}, type {inputs[key].dtype}")
+print("onnx reqs")
+for i in ort_session.get_inputs():
+    print(f"Name: {i.name}, Shape: {i.shape}, Type: {i.type}")
 
 print("ONNX model input names:")
 for i in ort_session.get_inputs():

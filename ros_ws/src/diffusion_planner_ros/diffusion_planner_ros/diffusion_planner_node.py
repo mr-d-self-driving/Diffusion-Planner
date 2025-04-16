@@ -79,11 +79,12 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info(f"Checkpoint path: {ckpt_path}")
         ckpt = torch.load(ckpt_path)
         state_dict = ckpt["model"]
-        new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+        new_state_dict = {k.replace("module.", "")
+                                    : v for k, v in state_dict.items()}
         self.diffusion_planner.load_state_dict(new_state_dict)
 
         sess_options = ort.SessionOptions()
-        # sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
         # ort_session = ort.InferenceSession(
         #     "model.onnx", sess_options, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
 
@@ -331,20 +332,18 @@ class DiffusionPlannerNode(Node):
 
         print("input dict")
         for key in input_dict.keys():
-            input_dict[key] = input_dict[key]
+            input_dict[key] = input_dict[key].cpu().numpy()
             print(
                 f"key {key}, shape {input_dict[key].shape}, type {input_dict[key].dtype}")
         print("onnx reqs")
         for i in self.ort_session.get_inputs():
             print(f"Name: {i.name}, Shape: {i.shape}, Type: {i.type}")
 
+        input_dict['lanes_has_speed_limit'] = input_dict['lanes_has_speed_limit'].astype(
+            np.bool_)
         # visualize_inputs(
         #     input_dict, self.config_obj.observation_normalizer, "./input.png"
         # )
-        input_dict = {k: (v.cpu().numpy() if hasattr(v, "cpu") else v)
-                      for k, v in input_dict.items()}
-        for key, arr in input_dict.items():
-            input_dict[key] = np.ascontiguousarray(arr)
 
         start = time.time()
         # with torch.no_grad():
@@ -354,9 +353,10 @@ class DiffusionPlannerNode(Node):
 
         end = time.time()
         elapsed_msec = (end - start) * 1000
+        print("passed????")
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
-        pred = out["prediction"].detach().cpu().numpy()  # ([bs, 11, T, 4])
-
+        # pred = out["prediction"].detach().cpu().numpy()  # ([bs, 11, T, 4])
+        pred = out
         # Publish
         for b in range(0, self.batch_size):
             curr_pred = pred[b, 0]
