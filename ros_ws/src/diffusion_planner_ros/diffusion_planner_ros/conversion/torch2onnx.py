@@ -120,22 +120,22 @@ with torch.no_grad():
         print(f"Output {key} shape:", output[key].shape)
         torch_out = output[key].cpu().numpy()
 
-# onnx_model = torch.onnx.export(
-#     wrapper,
-#     input_tuple,
-#     "model.onnx",
-#     input_names=input_names,
-#     output_names=["output"],
-#     # dynamic_axes=None,
-#     dynamic_axes={name: {0: 'batch'}
-#                   for name in input_names},  # optional, but useful
-#     opset_version=20,
-# )
+onnx_model = torch.onnx.export(
+    wrapper,
+    input_tuple,
+    "model.onnx",
+    input_names=input_names,
+    output_names=["output"],
+    # dynamic_axes=None,
+    dynamic_axes={name: {0: 'batch'}
+                  for name in input_names},  # optional, but useful
+    opset_version=20,
+)
 
-sess_options = ort.SessionOptions()
-sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+# sess_options = ort.SessionOptions()
+# sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
 ort_session = ort.InferenceSession(
-    "model.onnx", sess_options, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+    "model.onnx",  providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
 
 inputs = {
     'ego_current_state': onnx_inputs['ego_current_state'].cpu().numpy(),
@@ -164,9 +164,9 @@ for i in ort_session.get_inputs():
 
 onnx_output = ort_session.run(None, inputs)
 print(f"torch output, with shape {torch_out.shape}:")
-# print(torch_out)
+print(torch_out)
 print(f"onnx output, with shape {onnx_output[0].shape}:")
-# print(onnx_output[0])
+print(onnx_output[0])
 
 abs_diff = np.abs(torch_out - onnx_output[0])
 print(f"Max diff: {abs_diff.max()}")

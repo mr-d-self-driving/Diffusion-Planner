@@ -75,21 +75,27 @@ class DiffusionPlannerNode(Node):
         print(f"{self.config_obj.state_normalizer=}")
 
         # param(3) checkpoint
-        ckpt_path = self.declare_parameter("ckpt_path", value="None").value
-        self.get_logger().info(f"Checkpoint path: {ckpt_path}")
-        ckpt = torch.load(ckpt_path)
-        state_dict = ckpt["model"]
-        new_state_dict = {k.replace("module.", "")
-                                    : v for k, v in state_dict.items()}
-        self.diffusion_planner.load_state_dict(new_state_dict)
+        self.backend = self.declare_parameter(
+            "backend", value="PYTHORCH").value
 
-        sess_options = ort.SessionOptions()
-        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
-        # ort_session = ort.InferenceSession(
-        #     "model.onnx", sess_options, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
-
-        self.ort_session = ort.InferenceSession(
-            "/home/danielsanchez/Diffusion-Planner/ros_ws/src/diffusion_planner_ros/diffusion_planner_ros/conversion/model.onnx", sess_options, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+        if self.backend == "PYTHORCH":
+            ckpt_path = self.declare_parameter("ckpt_path", value="None").value
+            self.get_logger().info(f"Checkpoint path: {ckpt_path}")
+            ckpt = torch.load(ckpt_path)
+            state_dict = ckpt["model"]
+            new_state_dict = {
+                k.replace("module.", ""): v for k, v in state_dict.items()}
+            self.diffusion_planner.load_state_dict(new_state_dict)
+        elif self.backend == "ONNXRUNTIME":
+            onnx_path = self.declare_parameter("onnx_path", value="None").value
+            sess_options = ort.SessionOptions()
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+            self.ort_session = ort.InferenceSession(
+                onnx_path, sess_options, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+        else:
+            self.get_logger().error(
+                f"backend must be PYTHORCH or ONNXRUNTIME, but {self.backend} was given")
+            exit()
 
         # param(4) wheel_base
         self.wheel_base = self.declare_parameter("wheel_base", value=5.0).value
@@ -330,33 +336,28 @@ class DiffusionPlannerNode(Node):
 
         input_dict = self.config_obj.observation_normalizer(input_dict)
 
-        print("input dict")
-        for key in input_dict.keys():
-            input_dict[key] = input_dict[key].cpu().numpy()
-            print(
-                f"key {key}, shape {input_dict[key].shape}, type {input_dict[key].dtype}")
-        print("onnx reqs")
-        for i in self.ort_session.get_inputs():
-            print(f"Name: {i.name}, Shape: {i.shape}, Type: {i.type}")
+        if self.backend == "ONNXRUNTIME":
+            for key in input_dict.keys():
+                input_dict[key] = input_dict[key].cpu().numpy()
 
-        input_dict['lanes_has_speed_limit'] = input_dict['lanes_has_speed_limit'].astype(
-            np.bool_)
+            input_dict['lanes_has_speed_limit'] = input_dict['lanes_has_speed_limit'].astype(
+                np.bool_)
         # visualize_inputs(
         #     input_dict, self.config_obj.observation_normalizer, "./input.png"
         # )
 
         start = time.time()
-        # with torch.no_grad():
-        #     out = self.diffusion_planner(input_dict)[1]
-        out = self.ort_session.run(None, input_dict)
-        out = out[0]
-
+        if self.backend == "PYTHORCH":
+            with torch.no_grad():
+                out = self.diffusion_planner(input_dict)[1]
+                pred = out["prediction"].detach().cpu().numpy()
+        elif self.backend == "ONNXRUNTIME":
+            out = self.ort_session.run(None, input_dict)[0]
+            pred = out
         end = time.time()
         elapsed_msec = (end - start) * 1000
-        print("passed????")
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
-        # pred = out["prediction"].detach().cpu().numpy()  # ([bs, 11, T, 4])
-        pred = out
+        # ([bs, 11, T, 4])
         # Publish
         for b in range(0, self.batch_size):
             curr_pred = pred[b, 0]
