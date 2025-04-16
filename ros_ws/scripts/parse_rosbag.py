@@ -8,7 +8,6 @@ import numpy as np
 from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     convert_lanelet,
     create_lane_tensor,
-    fix_point_num,
 )
 from diffusion_planner_ros.utils import (
     create_current_ego_state,
@@ -101,7 +100,6 @@ if __name__ == "__main__":
     limit = args.limit
 
     vector_map = convert_lanelet(str(vector_map_path))
-    vector_map = fix_point_num(vector_map)
 
     serialization_format = "cdr"
     storage_options = rosbag2_py.StorageOptions(
