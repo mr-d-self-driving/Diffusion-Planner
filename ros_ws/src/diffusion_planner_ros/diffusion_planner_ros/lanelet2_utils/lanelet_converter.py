@@ -488,10 +488,13 @@ def process_segment(
     diff_centerlines = np.insert(diff_centerlines, diff_centerlines.shape[0], 0, axis=0)
 
     traffic_light = [0, 0, 0, 0]  # (green, yellow, red, unknown)
-    assert len(segment.traffic_lights) <= 1
     if len(segment.traffic_lights) == 0:
         traffic_light = [0, 0, 0, 1]  # unknown
     else:
+        if len(segment.traffic_lights) > 1:
+            print(
+                f"Warning: more than one traffic light in segment {segment.id}, using the first one."
+            )
         traffic_light_id = segment.traffic_lights[0].id
         if traffic_light_id in traffic_light_recognition:
             traffic_light_color = traffic_light_recognition[traffic_light_id]

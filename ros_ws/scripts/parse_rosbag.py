@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("rosbag_path", type=Path)
     parser.add_argument("vector_map_path", type=Path)
     parser.add_argument("save_dir", type=Path)
+    parser.add_argument("--step", type=int, default=1)
     parser.add_argument("--limit", type=int, default=-1)
     return parser.parse_args()
 
@@ -97,6 +98,7 @@ if __name__ == "__main__":
     rosbag_path = args.rosbag_path
     vector_map_path = args.vector_map_path
     save_dir = args.save_dir
+    step = args.step
     limit = args.limit
 
     vector_map = convert_lanelet(str(vector_map_path))
@@ -147,7 +149,8 @@ if __name__ == "__main__":
 
     route_msg = topic_name_to_data["/planning/mission_planning/route"][0]
 
-    # 最初にmsgsの10Hzでの整形(tracked_objects基準)を行う
+    # convert to FrameData
+    # The base topic is "/perception/object_recognition/tracking/objects" (10Hz)
     n = len(topic_name_to_data["/perception/object_recognition/tracking/objects"])
     print(f"{n=}")
     progress_bar = tqdm(total=n)
@@ -214,21 +217,19 @@ if __name__ == "__main__":
 
     map_name = rosbag_path.stem
 
-    # これをrosbagのデータから作る
-    # 時刻の基準とするデータは "/perception/object_recognition/tracking/objects" (10Hz)
-    # 重複が出ないように8秒ごとに作る
-    for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, FUTURE_TIME_STEPS):
-        print(f"{i=}")
+    # list[FrameData] -> npz
+    progress = tqdm(total=(n - PAST_TIME_STEPS - FUTURE_TIME_STEPS) // step)
+    for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, step):
         token = f"{i:016d}"
 
-        # 2秒前からここまでのトラッキング（入力用）
+        # 2 sec tracking (for input)
         tracking_past = tracking_list(
             [
                 frame_data.tracked_objects
                 for frame_data in data_list[i - PAST_TIME_STEPS : i]
             ]
         )
-        # ここから8秒後までのトラッキング（GT用）
+        # 8 sec tracking (for ground truth)
         tracking_future = tracking_list(
             [
                 frame_data.tracked_objects
@@ -327,4 +328,4 @@ if __name__ == "__main__":
         save_dir.mkdir(parents=True, exist_ok=True)
         output_file = f"{save_dir}/{map_name}_{token}.npz"
         np.savez(output_file, **curr_data)
-        print(f"Saved {output_file}")
+        progress.update(1)
