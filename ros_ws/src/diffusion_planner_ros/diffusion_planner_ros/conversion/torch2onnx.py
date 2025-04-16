@@ -49,6 +49,8 @@ torch.manual_seed(seed)
 
 # Load config
 config_json_path = "args.json"
+ckpt_path = "latest.pth"
+
 with open(config_json_path, "r") as f:
     config_json = json.load(f)
 config_obj = Config(config_json_path)
@@ -60,7 +62,6 @@ model.encoder.encoder.eval()
 model.decoder.decoder.eval()
 model.decoder.decoder.training = False
 
-ckpt_path = "latest.pth"
 ckpt = fileio.get(ckpt_path)
 with io.BytesIO(ckpt) as f:
     ckpt = torch.load(f)
