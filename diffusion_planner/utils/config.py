@@ -9,7 +9,7 @@ class Config:
     def __init__(
             self,
             args_file,
-            guidance_fn
+            guidance_fn=None
     ):
         with open(args_file, 'r') as f:
             args_dict = json.load(f)

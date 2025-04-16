@@ -34,7 +34,8 @@ class Decoder(nn.Module):
         self._state_normalizer: StateNormalizer = config.state_normalizer
         self._observation_normalizer: ObservationNormalizer = config.observation_normalizer
         
-        self._guidance_fn = config.guidance_fn
+        # self._guidance_fn = config.guidance_fn
+        self._guidance_fn = config.guidance_fn if config.__dict__.get("guidance_fn") is not None else None
         self._model_type = config.diffusion_model_type
         
     @property
