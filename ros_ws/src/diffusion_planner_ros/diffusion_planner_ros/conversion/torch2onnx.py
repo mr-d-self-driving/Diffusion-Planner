@@ -4,7 +4,6 @@ import torch.nn as nn
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.config import Config
 import json
-from mmengine import fileio
 import io
 import numpy as np
 import onnxruntime as ort
@@ -84,9 +83,7 @@ if __name__ == "__main__":
     model.decoder.decoder.eval()
     model.decoder.decoder.training = False
 
-    ckpt = fileio.get(ckpt_path)
-    with io.BytesIO(ckpt) as f:
-        ckpt = torch.load(f)
+    ckpt = torch.load(ckpt_path)
     state_dict = ckpt["model"]
     new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
     model.load_state_dict(new_state_dict)
