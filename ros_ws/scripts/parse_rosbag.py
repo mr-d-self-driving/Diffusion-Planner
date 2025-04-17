@@ -23,6 +23,7 @@ from autoware_perception_msgs.msg import (
     TrackedObjects,
     TrafficLightGroupArray,
 )
+from autoware_planning_msgs.msg import LaneletRoute
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from sensor_msgs.msg import CompressedImage
@@ -37,6 +38,7 @@ class FrameData:
     kinematic_state: Odometry
     acceleration: AccelWithCovarianceStamped
     traffic_signals: TrafficLightGroupArray
+    route: LaneletRoute
     image: CompressedImage
 
 
@@ -147,8 +149,7 @@ if __name__ == "__main__":
     for key, value in topic_name_to_data.items():
         print(f"{key}: {len(value)} msgs")
 
-    assert len(topic_name_to_data["/planning/mission_planning/route"]) == 1
-    route_msg = topic_name_to_data["/planning/mission_planning/route"][0]
+    route_msgs = topic_name_to_data["/planning/mission_planning/route"]
 
     # convert to FrameData
     # The base topic is "/perception/object_recognition/tracking/objects" (10Hz)
@@ -184,7 +185,7 @@ if __name__ == "__main__":
             msg_stamp_int = parse_timestamp(msg_stamp)
             diff = abs(timestamp - msg_stamp_int)
             if diff > int(0.1 * 1e9):
-                print(f"{key} {len(topic_name_to_data[key])=}, {diff=}")
+                print(f"Over 100 msec: {key} {len(topic_name_to_data[key])=}, {diff=:,}")
                 ok = False
 
         # check kinematic_state
@@ -192,8 +193,22 @@ if __name__ == "__main__":
         covariance = kinematic_state.pose.covariance
         covariance_xx = covariance[0]
         covariance_yy = covariance[7]
-        if covariance_xx > 1e-2 or covariance_yy > 1e-2:
+        if covariance_xx > 1e-1 or covariance_yy > 1e-1:
             print(f"Invalid kinematic_state {covariance_xx=:.5f}, {covariance_yy=:.5f}")
+            ok = False
+
+        # check route
+        # find the latest route msg
+        max_route_index = -1
+        max_route_timestamp = 0
+        for j in range(len(route_msgs)):
+            route_msg = route_msgs[j]
+            route_stamp = parse_timestamp(route_msg.header.stamp)
+            if route_stamp <= timestamp and route_stamp > max_route_timestamp:
+                max_route_timestamp = route_stamp
+                max_route_index = j
+        if max_route_index == -1:
+            print("Cannot find route msg")
             ok = False
 
         if not ok:
@@ -216,6 +231,7 @@ if __name__ == "__main__":
                 traffic_signals=latest_msgs[
                     "/perception/traffic_light_recognition/traffic_signals"
                 ],
+                route=route_msgs[max_route_index],
                 image=latest_msgs[
                     "/sensing/camera/camera0/image_rect_color/compressed"
                 ],
@@ -249,6 +265,8 @@ if __name__ == "__main__":
     ROUTE_LEN = 20
 
     map_name = rosbag_path.stem
+    n = len(data_list)
+    print(f"Total {n} frames")
 
     # list[FrameData] -> npz
     progress = tqdm(total=(n - PAST_TIME_STEPS - FUTURE_TIME_STEPS) // step)
@@ -329,7 +347,7 @@ if __name__ == "__main__":
 
         target_segments = [
             vector_map.lane_segments[segment.preferred_primitive.id]
-            for segment in route_msg.segments
+            for segment in data_list[i].route.segments
         ]
         route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
             target_segments,
