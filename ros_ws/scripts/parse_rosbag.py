@@ -147,6 +147,7 @@ if __name__ == "__main__":
     for key, value in topic_name_to_data.items():
         print(f"{key}: {len(value)} msgs")
 
+    assert len(topic_name_to_data["/planning/mission_planning/route"]) == 1
     route_msg = topic_name_to_data["/planning/mission_planning/route"][0]
 
     # convert to FrameData
@@ -167,12 +168,44 @@ if __name__ == "__main__":
             "/sensing/camera/camera0/image_rect_color/compressed": None,
         }
 
+        ok = True
         for key in latest_msgs.keys():
             curr_msg, curr_index = get_nearest_msg(
                 topic_name_to_data[key], tracking.header.stamp
             )
+            if curr_msg is None:
+                print(f"Cannot find {key} msg")
+                ok = False
             topic_name_to_data[key] = topic_name_to_data[key][curr_index:]
             latest_msgs[key] = curr_msg
+            msg_stamp = (
+                curr_msg.header.stamp if hasattr(curr_msg, "header") else curr_msg.stamp
+            )
+            msg_stamp_int = parse_timestamp(msg_stamp)
+            diff = abs(timestamp - msg_stamp_int)
+            if diff > int(0.1 * 1e9):
+                print(f"{key} {len(topic_name_to_data[key])=}, {diff=}")
+                ok = False
+
+        # check kinematic_state
+        kinematic_state = latest_msgs["/localization/kinematic_state"]
+        covariance = kinematic_state.pose.covariance
+        covariance_xx = covariance[0]
+        covariance_yy = covariance[7]
+        if covariance_xx > 1e-2 or covariance_yy > 1e-2:
+            print(f"Invalid kinematic_state {covariance_xx=:.5f}, {covariance_yy=:.5f}")
+            ok = False
+
+        if not ok:
+            if len(data_list) == 0:
+                # At the beginning of recording, some msgs may be missing
+                # Skip this frame
+                print(f"Skip this frame {i=}/{n=}")
+                continue
+            else:
+                # If the msg is missing in the middle of recording, we can use the msgs to this point
+                print(f"Finish at this frame {i=}/{n=}")
+                break
 
         data_list.append(
             FrameData(
