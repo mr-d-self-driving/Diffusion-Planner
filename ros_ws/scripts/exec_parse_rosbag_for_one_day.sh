@@ -1,8 +1,8 @@
 #!/bin/bash
 set -eu
 
-cd $(dirname $0)
 target_dir=$(readlink -f $1)
+cd $(dirname $0)
 
 bag_dir_list=$(find $target_dir -mindepth 1 -maxdepth 1 -type d | sort)
 
