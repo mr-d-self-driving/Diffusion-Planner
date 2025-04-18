@@ -20,7 +20,7 @@ pip install -r requirements.txt
 pip install -e .
 
 # check torch
-python3 -c "import torch"
+python3 -c "import torch; print(torch.cuda.is_available())"
 
 # (Optional) ros
 ./util_scripts/download_ros-hubmle.sh
