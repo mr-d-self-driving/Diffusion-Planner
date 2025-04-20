@@ -22,7 +22,7 @@ set -eu
 target_dir=$1
 output_file="$target_dir/../diffusion_planner_training.json"
 
-body=$(ls $target_dir | sed 's/^/    "/g' | sed 's/$/"/g' | sed 's/$/,/g' | sed '$ s/.$//')
+body=$(find $target_dir -name "*.npz" | sed 's/^/    "/g' | sed 's/$/"/g' | sed 's/$/,/g' | sed '$ s/.$//')
 
 echo "[" > $output_file
 echo "$body" >> $output_file
