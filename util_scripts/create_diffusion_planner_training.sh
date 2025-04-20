@@ -20,10 +20,12 @@ set -eu
 # ]
 
 target_dir=$1
-output_file="$target_dir/../diffusion_planner_training.json"
+basename=$(basename $target_dir)
+output_file="$target_dir/../$basename.json"
 
 body=$(find $target_dir -name "*.npz" | sed 's/^/    "/g' | sed 's/$/"/g' | sed 's/$/,/g' | sed '$ s/.$//')
 
 echo "[" > $output_file
 echo "$body" >> $output_file
 echo "]" >> $output_file
+echo "output_file: $output_file"
