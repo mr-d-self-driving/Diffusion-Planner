@@ -218,7 +218,7 @@ def model_training(args):
             print(f"Epoch {epoch+1}/{train_epochs}")
         train_loss, train_total_loss = train_epoch(train_loader, diffusion_planner, optimizer, args, model_ema, aug)
 
-        valid_loss_ego, valid_loss_neighbor = validate_model(diffusion_planner, valid_loader, args, args.device)
+        valid_loss_ego, valid_loss_neighbor = validate_model(diffusion_planner, valid_loader, args)
         print(f"{valid_loss_ego=}, {valid_loss_neighbor=}")
 
         if global_rank == 0:

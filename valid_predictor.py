@@ -16,8 +16,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import json
 
 
-def validate_model(model, val_loader, args, device) -> tuple[float, float]:
+def validate_model(model, val_loader, args) -> tuple[float, float]:
     """return: ave_loss_ego, ave_loss_neighbor"""
+    device = args.device
     model.eval()
     total_loss_ego = 0.0
     total_loss_neighbor = 0.0
@@ -49,7 +50,7 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
                 ],
                 dim=-1,
             )  # (B, T, 4)
-            neighbors_future = batch[3].to(args.device)
+            neighbors_future = batch[3].to(device)
             neighbor_future_mask = (
                 torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
             )  # (B, Pn, T)
@@ -134,7 +135,6 @@ def get_args():
         "--future_len", type=int, help="number of time point", default=80
     )
     parser.add_argument("--agent_num", type=int, help="number of agents", default=32)
-
 
     # DataLoader parameters
     parser.add_argument("--num_workers", default=4, type=int)
@@ -264,9 +264,7 @@ if __name__ == "__main__":
     ]
 
     optimizer = optim.AdamW(params)
-    scheduler = CosineAnnealingWarmUpRestarts(
-        optimizer, train_epochs, 0.0
-    )
+    scheduler = CosineAnnealingWarmUpRestarts(optimizer, train_epochs, 0.0)
 
     if args.resume_model_path is not None:
         print(f"Model loaded from {args.resume_model_path}")
@@ -293,6 +291,6 @@ if __name__ == "__main__":
         torch.distributed.barrier()
 
     avg_loss_ego, ave_loss_neighbor = validate_model(
-        diffusion_planner, train_loader, config_obj, args.device
+        diffusion_planner, train_loader, config_obj
     )
     print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
