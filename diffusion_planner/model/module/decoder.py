@@ -1,15 +1,13 @@
-import math
 import torch
 import torch.nn as nn
 from timm.models.layers import Mlp
-from timm.layers import DropPath
 
 from diffusion_planner.model.diffusion_utils.sampling import dpm_sampler
 from diffusion_planner.model.diffusion_utils.sde import SDE, VPSDE_linear
 from diffusion_planner.utils.normalizer import ObservationNormalizer, StateNormalizer
 from diffusion_planner.model.module.mixer import MixerBlock
 from diffusion_planner.model.module.dit import TimestepEmbedder, DiTBlock, FinalLayer
-
+from functools import partial
 
 class Decoder(nn.Module):
     def __init__(self, config):
@@ -108,14 +106,11 @@ class Decoder(nn.Module):
                 x = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.1], dim=2).reshape(B, P, -1)
                 NUM_STEP = 10
                 DT = 1.0 / NUM_STEP
+                func  = partial(self.dit, cross_c=ego_neighbor_encoding, route_lanes=route_lanes, neighbor_current_mask=neighbor_current_mask)
                 for i in range(NUM_STEP):
-                    v = self.dit(
-                        x, 
-                        torch.ones(B).to(x.device) * (i * DT),
-                        ego_neighbor_encoding,
-                        route_lanes,
-                        neighbor_current_mask
-                    )
+                    v = func(
+                        x,
+                        torch.ones(B).to(x.device) * (i * DT))
                     v = v.reshape(B, P, -1, 4)
                     x = x.reshape(B, P, -1, 4)
                     x[:, :, 1:] += v[:, :, 1:] * DT
