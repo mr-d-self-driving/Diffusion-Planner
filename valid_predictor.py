@@ -14,6 +14,8 @@ from torch import optim
 from torch.utils.data import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 import json
+import numpy as np
+from pathlib import Path
 
 
 def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, float]:
@@ -178,6 +180,9 @@ def get_args():
     parser.add_argument(
         "--args_json_path", type=str, help="path to resume model", required=True
     )
+    parser.add_argument(
+        "--save_predictions_dir", type=str, help="path to save prediction", default=None
+    )
 
     # distributed training parameters
     parser.add_argument("--ddp", default=True, type=boolean, help="use ddp or not")
@@ -223,7 +228,7 @@ if __name__ == "__main__":
         args.future_len,
     )
     train_sampler = DistributedSampler(
-        train_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=True
+        train_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=False
     )
     train_loader = DataLoader(
         train_set,
@@ -301,3 +306,15 @@ if __name__ == "__main__":
     )
     print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
     print(f"{predictions.shape=}")
+
+    if args.save_predictions_dir is None:
+        exit(0)
+
+    save_predictions_dir = Path(args.save_predictions_dir)
+    save_predictions_dir.mkdir(parents=True, exist_ok=True)
+    for i in range(predictions.shape[0]):
+        prediction = predictions[i].cpu().numpy()
+        np.savez(
+            save_predictions_dir / f"prediction{i:08d}.npz",
+            prediction=prediction,
+        )
