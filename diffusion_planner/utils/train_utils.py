@@ -11,7 +11,7 @@ def openjson(path):
     return dict
 
 def opendata(path):
-    npz_data = np.load(path)
+    npz_data = np.load(path, allow_pickle=True)
     return npz_data
 
 def set_seed(CUR_SEED):

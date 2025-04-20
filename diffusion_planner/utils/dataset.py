@@ -1,5 +1,6 @@
 import os
 from torch.utils.data import Dataset
+import numpy as np
 
 from diffusion_planner.utils.train_utils import openjson, opendata
 
@@ -16,10 +17,11 @@ class DiffusionPlannerData(Dataset):
 
     def __getitem__(self, idx):
 
-        data = opendata(os.path.join(self.data_dir, self.data_list[idx]))
+        data = opendata(self.data_list[idx])
 
         ego_current_state = data['ego_current_state']
-        ego_agent_future = data['ego_agent_future']
+        ego_agent_future = data['ego_agent_future'].astype(np.float32)
+
 
         neighbor_agents_past = data['neighbor_agents_past'][:self._past_neighbor_num]
         neighbor_agents_future = data['neighbor_agents_future'][:self._predicted_neighbor_num]

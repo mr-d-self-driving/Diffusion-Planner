@@ -23,6 +23,7 @@ from autoware_perception_msgs.msg import (
     TrackedObjects,
     TrafficLightGroupArray,
 )
+from autoware_planning_msgs.msg import LaneletRoute
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from sensor_msgs.msg import CompressedImage
@@ -38,6 +39,17 @@ class FrameData:
     acceleration: AccelWithCovarianceStamped
     traffic_signals: TrafficLightGroupArray
     image: CompressedImage
+
+
+@dataclass
+class SequenceData:
+    """This class means one sequence of data.
+    It contains exactly one route msg and multiple other msgs.
+    A rosbag may contain multiple sequences.
+    """
+
+    data_list: list[FrameData]
+    route: LaneletRoute
 
 
 def parse_args() -> argparse.Namespace:
@@ -103,6 +115,7 @@ if __name__ == "__main__":
 
     vector_map = convert_lanelet(str(vector_map_path))
 
+    # parse rosbag
     serialization_format = "cdr"
     storage_options = rosbag2_py.StorageOptions(
         uri=str(rosbag_path), storage_id="sqlite3"
@@ -147,14 +160,14 @@ if __name__ == "__main__":
     for key, value in topic_name_to_data.items():
         print(f"{key}: {len(value)} msgs")
 
-    route_msg = topic_name_to_data["/planning/mission_planning/route"][0]
+    route_msgs = topic_name_to_data["/planning/mission_planning/route"]
+    sequence_data_list = [SequenceData([], route_msg) for route_msg in route_msgs]
 
     # convert to FrameData
     # The base topic is "/perception/object_recognition/tracking/objects" (10Hz)
     n = len(topic_name_to_data["/perception/object_recognition/tracking/objects"])
     print(f"{n=}")
     progress_bar = tqdm(total=n)
-    data_list = []
     for i in range(n):
         tracking = topic_name_to_data[
             "/perception/object_recognition/tracking/objects"
@@ -167,14 +180,64 @@ if __name__ == "__main__":
             "/sensing/camera/camera0/image_rect_color/compressed": None,
         }
 
+        ok = True
         for key in latest_msgs.keys():
             curr_msg, curr_index = get_nearest_msg(
                 topic_name_to_data[key], tracking.header.stamp
             )
+            if curr_msg is None:
+                print(f"Cannot find {key} msg")
+                ok = False
             topic_name_to_data[key] = topic_name_to_data[key][curr_index:]
             latest_msgs[key] = curr_msg
+            msg_stamp = (
+                curr_msg.header.stamp if hasattr(curr_msg, "header") else curr_msg.stamp
+            )
+            msg_stamp_int = parse_timestamp(msg_stamp)
+            diff = abs(timestamp - msg_stamp_int)
+            if diff > int(0.1 * 1e9):
+                print(
+                    f"Over 100 msec: {key} {len(topic_name_to_data[key])=}, {diff=:,}"
+                )
+                ok = False
 
-        data_list.append(
+        # check kinematic_state
+        kinematic_state = latest_msgs["/localization/kinematic_state"]
+        covariance = kinematic_state.pose.covariance
+        covariance_xx = covariance[0]
+        covariance_yy = covariance[7]
+        if covariance_xx > 1e-1 or covariance_yy > 1e-1:
+            print(f"Invalid kinematic_state {covariance_xx=:.5f}, {covariance_yy=:.5f}")
+            ok = False
+
+        # check route
+        # find the latest route msg
+        max_route_index = -1
+        max_route_timestamp = 0
+        for j in range(len(route_msgs)):
+            route_msg = route_msgs[j]
+            route_stamp = parse_timestamp(route_msg.header.stamp)
+            if route_stamp <= timestamp and route_stamp > max_route_timestamp:
+                max_route_timestamp = route_stamp
+                max_route_index = j
+        if max_route_index == -1:
+            print("Cannot find route msg")
+            continue
+
+        sequence = sequence_data_list[max_route_index]
+
+        if not ok:
+            if len(sequence.data_list) == 0:
+                # At the beginning of recording, some msgs may be missing
+                # Skip this frame
+                print(f"Skip this frame {i=}/{n=}")
+                continue
+            else:
+                # If the msg is missing in the middle of recording, we can use the msgs to this point
+                print(f"Finish at this frame {i=}/{n=}")
+                break
+
+        sequence.data_list.append(
             FrameData(
                 timestamp=timestamp,
                 tracked_objects=tracking,
@@ -216,116 +279,130 @@ if __name__ == "__main__":
     ROUTE_LEN = 20
 
     map_name = rosbag_path.stem
+    sequence_num = len(sequence_data_list)
+    print(f"Total {sequence_num} sequences")
 
-    # list[FrameData] -> npz
-    progress = tqdm(total=(n - PAST_TIME_STEPS - FUTURE_TIME_STEPS) // step)
-    for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, step):
-        token = f"{i:016d}"
+    for seq_id, seq in enumerate(sequence_data_list):
+        print(f"Processing sequence {seq_id + 1}/{sequence_num}")
 
-        # 2 sec tracking (for input)
-        tracking_past = tracking_list(
-            [
-                frame_data.tracked_objects
-                for frame_data in data_list[i - PAST_TIME_STEPS : i]
+        data_list = seq.data_list
+        n = len(data_list)
+        print(f"Total {n} frames")
+
+        # if less than 1800 frames (= 3 min), skip this sequence
+        if n < 1800:
+            print(f"Skip this sequence because the number of frames {n} is less than 1800 frames")
+            continue
+
+        # list[FrameData] -> npz
+        progress = tqdm(total=(n - PAST_TIME_STEPS - FUTURE_TIME_STEPS) // step)
+        for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, step):
+            token = f"{seq_id:08d}{i:08d}"
+
+            # 2 sec tracking (for input)
+            tracking_past = tracking_list(
+                [
+                    frame_data.tracked_objects
+                    for frame_data in data_list[i - PAST_TIME_STEPS : i]
+                ]
+            )
+            # 8 sec tracking (for ground truth)
+            tracking_future = tracking_list(
+                [
+                    frame_data.tracked_objects
+                    for frame_data in data_list[i : i + FUTURE_TIME_STEPS]
+                ]
+            )
+
+            # filter tracking_future by indices in tracking_past
+            tracking_past_keys = set(tracking_past.keys())
+            filtered_tracking_future = {}
+            for key in tracking_future.keys():
+                if key in tracking_past_keys:
+                    filtered_tracking_future[key] = tracking_future[key]
+
+            bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
+                data_list[i].kinematic_state
+            )
+
+            traffic_light_recognition = parse_traffic_light_recognition(
+                data_list[i].traffic_signals
+            )
+
+            ego_tensor = create_current_ego_state(
+                data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
+            ).squeeze(0)
+
+            ego_future_np = create_ego_future(
+                data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4
+            )
+
+            neighbor_past_tensor = convert_tracked_objects_to_tensor(
+                tracked_objs=tracking_past,
+                map2bl_matrix_4x4=map2bl_matrix_4x4,
+                max_num_objects=NEIGHBOR_NUM,
+                max_timesteps=PAST_TIME_STEPS,
+            ).squeeze(0)
+
+            neighbor_future_tensor = convert_tracked_objects_to_tensor(
+                tracked_objs=filtered_tracking_future,
+                map2bl_matrix_4x4=map2bl_matrix_4x4,
+                max_num_objects=NEIGHBOR_NUM,
+                max_timesteps=FUTURE_TIME_STEPS,
+            ).squeeze(0)
+            # (32, 80, 11) -> (32, 80, 3)
+            neighbor_future_tensor = neighbor_future_tensor[:, :, :4]
+            # fixed cos(2) sin(3) -> heading
+            neighbor_future_tensor[:, :, 2] = np.arctan2(
+                neighbor_future_tensor[:, :, 3], neighbor_future_tensor[:, :, 2]
+            )
+            neighbor_future_tensor = neighbor_future_tensor[:, :, :3]
+
+            static_objects = np.zeros((STATIC_NUM, 10), dtype=np.float32)
+
+            lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
+                vector_map.lane_segments.values(),
+                map2bl_mat4x4=map2bl_matrix_4x4,
+                center_x=data_list[i].kinematic_state.pose.pose.position.x,
+                center_y=data_list[i].kinematic_state.pose.pose.position.y,
+                mask_range=100,
+                traffic_light_recognition=traffic_light_recognition,
+                num_segments=70,
+                dev="cpu",
+            )
+
+            target_segments = [
+                vector_map.lane_segments[segment.preferred_primitive.id]
+                for segment in seq.route.segments
             ]
-        )
-        # 8 sec tracking (for ground truth)
-        tracking_future = tracking_list(
-            [
-                frame_data.tracked_objects
-                for frame_data in data_list[i : i + FUTURE_TIME_STEPS]
-            ]
-        )
+            route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
+                target_segments,
+                map2bl_mat4x4=map2bl_matrix_4x4,
+                center_x=data_list[i].kinematic_state.pose.pose.position.x,
+                center_y=data_list[i].kinematic_state.pose.pose.position.y,
+                mask_range=100,
+                traffic_light_recognition=traffic_light_recognition,
+                num_segments=25,
+                dev="cpu",
+            )
 
-        # filter tracking_future by indices in tracking_past
-        tracking_past_keys = set(tracking_past.keys())
-        filtered_tracking_future = {}
-        for key in tracking_future.keys():
-            if key in tracking_past_keys:
-                filtered_tracking_future[key] = tracking_future[key]
-
-        bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
-            data_list[i].kinematic_state
-        )
-
-        traffic_light_recognition = parse_traffic_light_recognition(
-            data_list[i].traffic_signals
-        )
-
-        ego_tensor = create_current_ego_state(
-            data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
-        ).squeeze(0)
-
-        ego_future_np = create_ego_future(
-            data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4
-        )
-
-        neighbor_past_tensor = convert_tracked_objects_to_tensor(
-            tracked_objs=tracking_past,
-            map2bl_matrix_4x4=map2bl_matrix_4x4,
-            max_num_objects=NEIGHBOR_NUM,
-            max_timesteps=PAST_TIME_STEPS,
-        ).squeeze(0)
-
-        neighbor_future_tensor = convert_tracked_objects_to_tensor(
-            tracked_objs=filtered_tracking_future,
-            map2bl_matrix_4x4=map2bl_matrix_4x4,
-            max_num_objects=NEIGHBOR_NUM,
-            max_timesteps=FUTURE_TIME_STEPS,
-        ).squeeze(0)
-        # (32, 80, 11) -> (32, 80, 3)
-        neighbor_future_tensor = neighbor_future_tensor[:, :, :4]
-        # fixed cos(2) sin(3) -> heading
-        neighbor_future_tensor[:, :, 2] = np.arctan2(
-            neighbor_future_tensor[:, :, 3], neighbor_future_tensor[:, :, 2]
-        )
-        neighbor_future_tensor = neighbor_future_tensor[:, :, :3]
-
-        static_objects = np.zeros((STATIC_NUM, 10), dtype=np.float32)
-
-        lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
-            vector_map.lane_segments.values(),
-            map2bl_mat4x4=map2bl_matrix_4x4,
-            center_x=data_list[i].kinematic_state.pose.pose.position.x,
-            center_y=data_list[i].kinematic_state.pose.pose.position.y,
-            mask_range=100,
-            traffic_light_recognition=traffic_light_recognition,
-            num_segments=70,
-            dev="cpu",
-        )
-
-        target_segments = [
-            vector_map.lane_segments[segment.preferred_primitive.id]
-            for segment in route_msg.segments
-        ]
-        route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
-            target_segments,
-            map2bl_mat4x4=map2bl_matrix_4x4,
-            center_x=data_list[i].kinematic_state.pose.pose.position.x,
-            center_y=data_list[i].kinematic_state.pose.pose.position.y,
-            mask_range=100,
-            traffic_light_recognition=traffic_light_recognition,
-            num_segments=25,
-            dev="cpu",
-        )
-
-        curr_data = {
-            "map_name": map_name,
-            "token": token,
-            "ego_current_state": ego_tensor.numpy(),
-            "ego_agent_future": ego_future_np,
-            "neighbor_agents_past": neighbor_past_tensor.numpy(),
-            "neighbor_agents_future": neighbor_future_tensor.numpy(),
-            "static_objects": static_objects,
-            "lanes": lanes_tensor.squeeze(0).numpy(),
-            "lanes_speed_limit": lanes_speed_limit.squeeze(0).numpy(),
-            "lanes_has_speed_limit": lanes_has_speed_limit.squeeze(0).numpy(),
-            "route_lanes": route_tensor.squeeze(0).numpy(),
-            "route_lanes_speed_limit": route_speed_limit.squeeze(0).numpy(),
-            "route_lanes_has_speed_limit": route_has_speed_limit.squeeze(0).numpy(),
-        }
-        # save the data
-        save_dir.mkdir(parents=True, exist_ok=True)
-        output_file = f"{save_dir}/{map_name}_{token}.npz"
-        np.savez(output_file, **curr_data)
-        progress.update(1)
+            curr_data = {
+                "map_name": map_name,
+                "token": token,
+                "ego_current_state": ego_tensor.numpy(),
+                "ego_agent_future": ego_future_np,
+                "neighbor_agents_past": neighbor_past_tensor.numpy(),
+                "neighbor_agents_future": neighbor_future_tensor.numpy(),
+                "static_objects": static_objects,
+                "lanes": lanes_tensor.squeeze(0).numpy(),
+                "lanes_speed_limit": lanes_speed_limit.squeeze(0).numpy(),
+                "lanes_has_speed_limit": lanes_has_speed_limit.squeeze(0).numpy(),
+                "route_lanes": route_tensor.squeeze(0).numpy(),
+                "route_lanes_speed_limit": route_speed_limit.squeeze(0).numpy(),
+                "route_lanes_has_speed_limit": route_has_speed_limit.squeeze(0).numpy(),
+            }
+            # save the data
+            save_dir.mkdir(parents=True, exist_ok=True)
+            output_file = f"{save_dir}/{map_name}_{token}.npz"
+            np.savez(output_file, **curr_data)
+            progress.update(1)
