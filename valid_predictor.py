@@ -9,11 +9,13 @@ from diffusion_planner.utils.normalizer import StateNormalizer, ObservationNorma
 from diffusion_planner.utils.train_utils import set_seed, resume_model
 from diffusion_planner.utils.lr_schedule import CosineAnnealingWarmUpRestarts
 from diffusion_planner.utils.data_augmentation import StatePerturbation
+from diffusion_planner.utils.config import Config
 from diffusion_planner.utils import ddp
 
 from torch import optim
 from torch.utils.data import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
+import json
 
 
 def validate_model(model, val_loader, args, device) -> tuple[float, float]:
@@ -256,9 +258,9 @@ def get_args():
     parser.add_argument(
         "--resume_model_path", type=str, help="path to resume model", required=True
     )
-
-    parser.add_argument("--use_wandb", default=False, type=boolean)
-    parser.add_argument("--notes", default="", type=str)
+    parser.add_argument(
+        "--args_json_path", type=str, help="path to resume model", required=True
+    )
 
     # distributed training parameters
     parser.add_argument("--ddp", default=True, type=boolean, help="use ddp or not")
@@ -274,6 +276,12 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
+
+    config_json_path = args.args_json_path
+
+    with open(config_json_path, "r") as f:
+        config_json = json.load(f)
+    config_obj = Config(config_json_path)
 
     # init ddp
     global_rank, rank, _ = ddp.ddp_setup_universal(True, args)
@@ -327,7 +335,7 @@ if __name__ == "__main__":
         torch.distributed.barrier()
 
     # set up model
-    diffusion_planner = Diffusion_Planner(args)
+    diffusion_planner = Diffusion_Planner(config_obj)
     diffusion_planner = diffusion_planner.to(
         rank if args.device == "cuda" else args.device
     )
