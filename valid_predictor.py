@@ -5,10 +5,8 @@ from timm.utils import ModelEma
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.dataset import DiffusionPlannerData
-from diffusion_planner.utils.normalizer import StateNormalizer, ObservationNormalizer
 from diffusion_planner.utils.train_utils import set_seed, resume_model
 from diffusion_planner.utils.lr_schedule import CosineAnnealingWarmUpRestarts
-from diffusion_planner.utils.data_augmentation import StatePerturbation
 from diffusion_planner.utils.config import Config
 from diffusion_planner.utils import ddp
 
@@ -135,50 +133,10 @@ def get_args():
     parser.add_argument(
         "--future_len", type=int, help="number of time point", default=80
     )
-    parser.add_argument("--time_len", type=int, help="number of time point", default=21)
-
-    parser.add_argument(
-        "--agent_state_dim", type=int, help="past state dim for agents", default=11
-    )
     parser.add_argument("--agent_num", type=int, help="number of agents", default=32)
 
-    parser.add_argument(
-        "--static_objects_state_dim",
-        type=int,
-        help="state dim for static objects",
-        default=10,
-    )
-    parser.add_argument(
-        "--static_objects_num", type=int, help="number of static objects", default=5
-    )
-
-    parser.add_argument("--lane_len", type=int, help="number of lane point", default=20)
-    parser.add_argument(
-        "--lane_state_dim", type=int, help="state dim for lane point", default=12
-    )
-    parser.add_argument("--lane_num", type=int, help="number of lanes", default=70)
-
-    parser.add_argument(
-        "--route_len", type=int, help="number of route lane point", default=20
-    )
-    parser.add_argument(
-        "--route_state_dim", type=int, help="state dim for route lane point", default=12
-    )
-    parser.add_argument(
-        "--route_num", type=int, help="number of route lanes", default=25
-    )
 
     # DataLoader parameters
-    parser.add_argument(
-        "--augment_prob", type=float, help="augmentation probability", default=0.5
-    )
-    parser.add_argument(
-        "--normalization_file_path",
-        default="normalization.json",
-        help="filepath of normalizaiton.json",
-        type=str,
-    )
-    parser.add_argument("--use_data_augment", default=True, type=boolean)
     parser.add_argument("--num_workers", default=4, type=int)
     parser.add_argument(
         "--pin-mem",
@@ -219,12 +177,7 @@ def get_args():
     parser.add_argument("--ddp", default=True, type=boolean, help="use ddp or not")
     parser.add_argument("--port", default="22323", type=str, help="port")
 
-    args = parser.parse_args()
-
-    args.state_normalizer = StateNormalizer.from_json(args)
-    args.observation_normalizer = ObservationNormalizer.from_json(args)
-
-    return args
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
@@ -256,11 +209,6 @@ if __name__ == "__main__":
     batch_size = args.batch_size
 
     # set up data loaders
-    aug = (
-        StatePerturbation(augment_prob=args.augment_prob, device=args.device)
-        if args.use_data_augment
-        else None
-    )
     train_set = DiffusionPlannerData(
         args.train_set,
         args.train_set_list,
@@ -345,6 +293,6 @@ if __name__ == "__main__":
         torch.distributed.barrier()
 
     avg_loss_ego, ave_loss_neighbor = validate_model(
-        diffusion_planner, train_loader, args, args.device
+        diffusion_planner, train_loader, config_obj, args.device
     )
     print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
