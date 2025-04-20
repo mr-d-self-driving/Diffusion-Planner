@@ -219,7 +219,7 @@ def model_training(args):
         train_loss, train_total_loss = train_epoch(train_loader, diffusion_planner, optimizer, args, model_ema, aug)
 
         valid_loss_ego, valid_loss_neighbor, _ = validate_model(diffusion_planner, valid_loader, args)
-        print(f"{valid_loss_ego=}, {valid_loss_neighbor=}")
+        print(f"{valid_loss_ego=:.3f}, {valid_loss_neighbor=:.3f}")
 
         if global_rank == 0:
             lr_dict = {'lr': optimizer.param_groups[0]['lr']}
