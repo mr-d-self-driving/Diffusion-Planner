@@ -16,13 +16,15 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import json
 
 
-def validate_model(model, val_loader, args) -> tuple[float, float]:
+def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, float]:
     """return: ave_loss_ego, ave_loss_neighbor"""
     device = args.device
     model.eval()
     total_loss_ego = 0.0
     total_loss_neighbor = 0.0
     total_samples = 0
+
+    predictions = []
 
     with torch.no_grad():
         for batch in val_loader:
@@ -92,6 +94,8 @@ def validate_model(model, val_loader, args) -> tuple[float, float]:
             all_gt[:, 1:][neighbor_mask] = 0.0
 
             prediction = outputs["prediction"]
+            if return_pred:
+                predictions.append(prediction)
 
             neighbors_future_valid = ~neighbor_future_mask
             all_gt = all_gt[:, :, 1:, :]  # (B, Pn + 1, T, 4)
@@ -105,7 +109,9 @@ def validate_model(model, val_loader, args) -> tuple[float, float]:
 
     avg_loss_ego = total_loss_ego / total_samples
     avg_loss_neighbor = total_loss_neighbor / total_samples
-    return avg_loss_ego, avg_loss_neighbor
+    if return_pred:
+        predictions = torch.cat(predictions, dim=0)
+    return avg_loss_ego, avg_loss_neighbor, predictions
 
 
 def boolean(v):
@@ -290,7 +296,8 @@ if __name__ == "__main__":
     if args.ddp:
         torch.distributed.barrier()
 
-    avg_loss_ego, ave_loss_neighbor = validate_model(
-        diffusion_planner, train_loader, config_obj
+    avg_loss_ego, ave_loss_neighbor, predictions = validate_model(
+        diffusion_planner, train_loader, config_obj, return_pred=True
     )
     print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
+    print(f"{predictions.shape=}")
