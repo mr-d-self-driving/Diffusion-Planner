@@ -16,8 +16,8 @@ for bag_dir in $bag_dir_list; do
     map_dir=$bag_dir/../../../map/$date
     map_path=$map_dir/lanelet2_map.osm
 
-    # out_dir=/.../driving_dataset/preprocessed_for_diffusion_planner/2024-07-18/10-10-58
-    out_dir=$bag_dir/../../../preprocessed_for_diffusion_planner/$date/$time
+    # out_dir=/.../driving_dataset/preprocessed_for_diffusion_planner2/2024-07-18/10-10-58
+    out_dir=$bag_dir/../../../preprocessed_for_diffusion_planner2/$date/$time
 
     if [ -d $out_dir ]; then
         echo "Already exists: $out_dir"
@@ -27,3 +27,5 @@ for bag_dir in $bag_dir_list; do
     echo $out_dir
     python3 ./parse_rosbag.py $bag_dir $map_path $out_dir --step 1
 done
+
+zip -r $bag_dir/../../../preprocessed_for_diffusion_planner2/$date.zip $bag_dir/../../../preprocessed_for_diffusion_planner2/$date
