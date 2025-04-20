@@ -7,6 +7,7 @@ from diffusion_planner.model.diffusion_utils.sde import SDE, VPSDE_linear
 from diffusion_planner.utils.normalizer import ObservationNormalizer, StateNormalizer
 from diffusion_planner.model.module.mixer import MixerBlock
 from diffusion_planner.model.module.dit import TimestepEmbedder, DiTBlock, FinalLayer
+from diffusion_planner.model.flow_matching_utils.ode_solver import euler_integration, heun_integration, rk4_integration
 from functools import partial
 
 class Decoder(nn.Module):
@@ -105,14 +106,10 @@ class Decoder(nn.Module):
                 # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
                 x = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.1], dim=2).reshape(B, P, -1)
                 NUM_STEP = 10
-                DT = 1.0 / NUM_STEP
                 func  = partial(self.dit, cross_c=ego_neighbor_encoding, route_lanes=route_lanes, neighbor_current_mask=neighbor_current_mask)
-                for i in range(NUM_STEP):
-                    v = func(x, torch.ones(B).to(x.device) * (i * DT))
-                    v = v.reshape(B, P, -1, 4)
-                    x = x.reshape(B, P, -1, 4)
-                    x[:, :, 1:] += v[:, :, 1:] * DT
-                    x = x.reshape(B, P, -1)
+                # x = euler_integration(func, x, NUM_STEP)
+                # x = heun_integration(func, x, NUM_STEP)
+                x = rk4_integration(func, x, NUM_STEP)
                 x = self._state_normalizer.inverse(x.reshape(B, P, -1, 4))[:, :, 1:]
                 return {
                     "prediction": x
