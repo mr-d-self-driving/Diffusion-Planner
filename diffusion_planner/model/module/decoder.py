@@ -108,9 +108,7 @@ class Decoder(nn.Module):
                 DT = 1.0 / NUM_STEP
                 func  = partial(self.dit, cross_c=ego_neighbor_encoding, route_lanes=route_lanes, neighbor_current_mask=neighbor_current_mask)
                 for i in range(NUM_STEP):
-                    v = func(
-                        x,
-                        torch.ones(B).to(x.device) * (i * DT))
+                    v = func(x, torch.ones(B).to(x.device) * (i * DT))
                     v = v.reshape(B, P, -1, 4)
                     x = x.reshape(B, P, -1, 4)
                     x[:, :, 1:] += v[:, :, 1:] * DT
