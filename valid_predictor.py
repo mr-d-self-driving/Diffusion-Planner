@@ -95,7 +95,7 @@ def validate_model(model, val_loader, args, device) -> tuple[float, float]:
             prediction = outputs["prediction"]
 
             neighbors_future_valid = ~neighbor_future_mask
-            all_gt = all_gt[:, :, 1:, :] # (B, Pn + 1, T, 4)
+            all_gt = all_gt[:, :, 1:, :]  # (B, Pn + 1, T, 4)
             loss_tensor = (prediction - all_gt) ** 2
             loss_ego = loss_tensor[:, 0, :]
             loss_nei = loss_tensor[:, 1:, :]
@@ -196,56 +196,9 @@ def get_args():
     parser.add_argument(
         "--batch_size", type=int, help="batch size (default: 2048)", default=1024
     )
-    parser.add_argument(
-        "--learning_rate",
-        type=float,
-        help="learning rate (default: 5e-4)",
-        default=5e-4,
-    )
-    parser.add_argument(
-        "--warm_up_epoch", type=int, help="number of warm up", default=5
-    )
-    parser.add_argument(
-        "--encoder_drop_path_rate",
-        type=float,
-        help="encoder drop out rate",
-        default=0.1,
-    )
-    parser.add_argument(
-        "--decoder_drop_path_rate",
-        type=float,
-        help="decoder drop out rate",
-        default=0.1,
-    )
-
-    parser.add_argument(
-        "--alpha_planning_loss",
-        type=float,
-        help="coefficient of planning loss (default: 1.0)",
-        default=1.0,
-    )
 
     parser.add_argument(
         "--device", type=str, help="run on which device (default: cuda)", default="cuda"
-    )
-
-    parser.add_argument("--use_ema", default=True, type=boolean)
-
-    # Model
-    parser.add_argument(
-        "--encoder_depth", type=int, help="number of encoding layers", default=3
-    )
-    parser.add_argument(
-        "--decoder_depth", type=int, help="number of decoding layers", default=3
-    )
-    parser.add_argument("--num_heads", type=int, help="number of multi-head", default=6)
-    parser.add_argument("--hidden_dim", type=int, help="hidden dimension", default=192)
-    parser.add_argument(
-        "--diffusion_model_type",
-        type=str,
-        help="type of diffusion model [x_start, score]",
-        choices=["score", "x_start"],
-        default="x_start",
     )
 
     # decoder
@@ -290,7 +243,6 @@ if __name__ == "__main__":
     if global_rank == 0:
         # Logging
         print("Batch size: {}".format(args.batch_size))
-        print("Learning rate: {}".format(args.learning_rate))
         print("Use device: {}".format(args.device))
 
     else:
@@ -345,13 +297,6 @@ if __name__ == "__main__":
             diffusion_planner, device_ids=[rank], find_unused_parameters=False
         )
 
-    if args.use_ema:
-        model_ema = ModelEma(
-            diffusion_planner,
-            decay=0.999,
-            device=args.device,
-        )
-
     if global_rank == 0:
         print(
             "Model Params: {}".format(
@@ -366,17 +311,22 @@ if __name__ == "__main__":
     params = [
         {
             "params": ddp.get_model(diffusion_planner, args.ddp).parameters(),
-            "lr": args.learning_rate,
+            "lr": 0.0,
         }
     ]
 
     optimizer = optim.AdamW(params)
     scheduler = CosineAnnealingWarmUpRestarts(
-        optimizer, train_epochs, args.warm_up_epoch
+        optimizer, train_epochs, 0.0
     )
 
     if args.resume_model_path is not None:
         print(f"Model loaded from {args.resume_model_path}")
+        model_ema = ModelEma(
+            diffusion_planner,
+            decay=0.999,
+            device=args.device,
+        )
         diffusion_planner, optimizer, scheduler, init_epoch, wandb_id, model_ema = (
             resume_model(
                 args.resume_model_path,
