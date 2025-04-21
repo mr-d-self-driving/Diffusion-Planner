@@ -1,18 +1,12 @@
 import torch
 import random
 import numpy as np
-import io
-import os
 import json
 
 def openjson(path):
     with open(path, 'r', encoding="utf-8") as f:
         dict = json.load(f)
     return dict
-
-def opendata(path):
-    npz_data = np.load(path, allow_pickle=True)
-    return npz_data
 
 def set_seed(CUR_SEED):
     random.seed(CUR_SEED)
