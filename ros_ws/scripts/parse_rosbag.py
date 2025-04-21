@@ -188,6 +188,7 @@ if __name__ == "__main__":
             if curr_msg is None:
                 print(f"Cannot find {key} msg")
                 ok = False
+                break
             topic_name_to_data[key] = topic_name_to_data[key][curr_index:]
             latest_msgs[key] = curr_msg
             msg_stamp = (
