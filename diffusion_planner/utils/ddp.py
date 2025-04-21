@@ -3,6 +3,7 @@ import torch
 import torch.distributed as dist
 from torch.distributed import init_process_group
 import subprocess
+from datetime import timedelta
 
 
 def ddp_setup_universal(verbose=False, args=None):
@@ -37,7 +38,7 @@ def ddp_setup_universal(verbose=False, args=None):
        dist_backend = 'nccl'
        dist_url = "env://"
        print('| distributed init (rank {}): {}, gpu {}'.format(rank, dist_url, gpu), flush=True)
-       init_process_group(backend=dist_backend, world_size=world_size, rank=rank)
+       init_process_group(backend=dist_backend, world_size=world_size, rank=rank, timeout=timedelta(seconds=10))
        torch.distributed.barrier()
        if verbose:
               setup_for_distributed(rank == 0)
