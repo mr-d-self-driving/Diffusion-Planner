@@ -10,6 +10,8 @@ MODEL_PATH="REPLACE_WITH_MODEL_PATH"
 ARGS_JSON_PATH="REPLACE_WITH_MODEL_PATH"
 ###################################
 
+rm -f /tmp/tmp_dist_init
+
 python3 -m torch.distributed.run --nnodes 1 --nproc-per-node 8 --standalone valid_predictor.py \
 --train_set_list  $TRAIN_SET_LIST_PATH \
 --resume_model_path $MODEL_PATH \
