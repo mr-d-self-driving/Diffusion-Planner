@@ -221,7 +221,6 @@ if __name__ == "__main__":
 
     # set up data loaders
     train_set = DiffusionPlannerData(
-        args.train_set,
         args.train_set_list,
         args.agent_num,
         args.predicted_neighbor_num,

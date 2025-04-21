@@ -149,7 +149,7 @@ def model_training(args):
     
     # set up data loaders
     aug = StatePerturbation(augment_prob=args.augment_prob, device=args.device) if args.use_data_augment else None
-    data_set = DiffusionPlannerData(args.train_set, args.train_set_list, args.agent_num, args.predicted_neighbor_num, args.future_len)
+    data_set = DiffusionPlannerData(args.train_set_list, args.agent_num, args.predicted_neighbor_num, args.future_len)
 
     # split valid dataset (10%)
     total_size = len(data_set)
