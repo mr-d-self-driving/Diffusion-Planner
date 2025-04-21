@@ -5,8 +5,7 @@ import numpy as np
 from diffusion_planner.utils.train_utils import openjson, opendata
 
 class DiffusionPlannerData(Dataset):
-    def __init__(self, data_dir, data_list, past_neighbor_num, predicted_neighbor_num, future_len):
-        self.data_dir = data_dir
+    def __init__(self, data_list, past_neighbor_num, predicted_neighbor_num, future_len):
         self.data_list = openjson(data_list)
         self._past_neighbor_num = past_neighbor_num
         self._predicted_neighbor_num = predicted_neighbor_num
