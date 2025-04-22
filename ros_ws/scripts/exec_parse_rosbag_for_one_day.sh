@@ -6,9 +6,14 @@ cd $(dirname $0)
 
 bag_dir_list=$(find $target_dir -mindepth 1 -maxdepth 1 -type d | sort)
 
+date=$(basename $target_dir)
+save_root=$target_dir/../../../../private_workspace/diffusion_planner/preprocessed_for_diffusion_planner2/$date
+mkdir -p $save_root
+save_root=$(readlink -f $save_root)
+echo $save_root
+
 for bag_dir in $bag_dir_list; do
     # bag_dir=/.../driving_dataset/bag/2024-07-18/10-10-58
-    date=$(basename $(dirname $bag_dir))
     time=$(basename $bag_dir)
 
     # map_dir=/.../driving_dataset/map/2024-07-18
@@ -17,7 +22,7 @@ for bag_dir in $bag_dir_list; do
     map_path=$map_dir/lanelet2_map.osm
 
     # out_dir=/.../driving_dataset/preprocessed_for_diffusion_planner2/2024-07-18/10-10-58
-    out_dir=$bag_dir/../../../preprocessed_for_diffusion_planner2/$date/$time
+    out_dir=$save_root/$time
 
     if [ -d $out_dir ]; then
         echo "Already exists: $out_dir"
@@ -28,4 +33,4 @@ for bag_dir in $bag_dir_list; do
     python3 ./parse_rosbag.py $bag_dir $map_path $out_dir --step 1
 done
 
-zip -r $bag_dir/../../../preprocessed_for_diffusion_planner2/$date.zip $bag_dir/../../../preprocessed_for_diffusion_planner2/$date
+zip -r $save_root.zip $save_root
