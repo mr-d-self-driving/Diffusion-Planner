@@ -11,7 +11,7 @@ sudo apt upgrade -y
 sudo apt install -y ros-humble-desktop ros-humble-ros-base
 sudo apt install -y python3-colcon-common-extensions
 sudo apt install -y python3-rosdep
-pip install lanelet2
+pip install lanelet2 catkin_pkg empy==3.3.4 lark
 sudo rosdep init
 rosdep update
 echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
