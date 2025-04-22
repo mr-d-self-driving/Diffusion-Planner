@@ -26,7 +26,6 @@ from autoware_perception_msgs.msg import (
 from autoware_planning_msgs.msg import LaneletRoute
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import AccelWithCovarianceStamped
-from sensor_msgs.msg import CompressedImage
 from scipy.spatial.transform import Rotation
 from tqdm import tqdm
 
@@ -38,7 +37,6 @@ class FrameData:
     kinematic_state: Odometry
     acceleration: AccelWithCovarianceStamped
     traffic_signals: TrafficLightGroupArray
-    image: CompressedImage
 
 
 @dataclass
@@ -139,7 +137,6 @@ if __name__ == "__main__":
         "/perception/object_recognition/tracking/objects",
         "/perception/traffic_light_recognition/traffic_signals",
         "/planning/mission_planning/route",
-        "/sensing/camera/camera0/image_rect_color/compressed",
     ]
 
     storage_filter = rosbag2_py.StorageFilter(topics=target_topic_list)
@@ -177,7 +174,6 @@ if __name__ == "__main__":
             "/localization/kinematic_state": None,
             "/localization/acceleration": None,
             "/perception/traffic_light_recognition/traffic_signals": None,
-            "/sensing/camera/camera0/image_rect_color/compressed": None,
         }
 
         ok = True
@@ -246,9 +242,6 @@ if __name__ == "__main__":
                 acceleration=latest_msgs["/localization/acceleration"],
                 traffic_signals=latest_msgs[
                     "/perception/traffic_light_recognition/traffic_signals"
-                ],
-                image=latest_msgs[
-                    "/sensing/camera/camera0/image_rect_color/compressed"
                 ],
             )
         )
