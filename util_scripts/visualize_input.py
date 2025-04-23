@@ -5,6 +5,7 @@ from diffusion_planner.utils.config import Config
 import json
 import numpy as np
 import torch
+from shutil import rmtree
 
 
 def parse_args():
@@ -35,12 +36,7 @@ if __name__ == "__main__":
             data[key] = torch.tensor(np.expand_dims(value, axis=0))
         data = config_obj.observation_normalizer(data)
 
-        visualize_inputs(
-            data,
-            config_obj.observation_normalizer,
-            save_path,
-            config_obj.state_normalizer,
-        )
+        visualize_inputs(data, config_obj.observation_normalizer, save_path)
         print(f"Saved to {save_path}")
 
     if ext == ".npz":
@@ -48,8 +44,12 @@ if __name__ == "__main__":
     elif ext == ".json":
         with open(input_path, "r") as f:
             path_list = json.load(f)
+        path_list = sorted(path_list)
+        save_path.mkdir(parents=True, exist_ok=True)
         assert save_path.is_dir()
-        for path in path_list[:10]:
+        rmtree(save_path)
+        save_path.mkdir(parents=True, exist_ok=True)
+        for path in path_list:
             path = Path(path)
             basename = path.stem
             curr_save_path = save_path / f"{basename}.png"

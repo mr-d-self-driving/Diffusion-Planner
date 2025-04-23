@@ -7,10 +7,7 @@ from copy import deepcopy
 
 
 def visualize_inputs(
-    inputs: dict,
-    obs_normalizer: ObservationNormalizer,
-    save_path: Path,
-    state_normalizer=None,
+    inputs: dict, obs_normalizer: ObservationNormalizer, save_path: Path
 ):
     """
     draw the input data of the diffusion_planner model on the xy plane
@@ -88,17 +85,14 @@ def visualize_inputs(
             ],
             dim=-1,
         )
-
-        print(f"{ego_future.shape=}")
-        ego_future = state_normalizer.inverse(ego_future)
-        print(f"{ego_future=}")
-        for i in range(ego_future.shape[0]):
-            ego_future_x = ego_future[i, 0]
-            ego_future_y = ego_future[i, 1]
+        for i in range(ego_future.shape[2]):
+            ego_future_x = ego_future[0, 0, i, 0]
+            ego_future_y = ego_future[0, 0, i, 1]
+            t = i / (ego_future.shape[2] - 1)
             ax.scatter(
                 ego_future_x,
                 ego_future_y,
-                color="red",
+                color=[1.0 * t, 0.0, 1.0 * (1 - t)],
                 alpha=0.5,
                 s=20,
             )
