@@ -6,7 +6,12 @@ from diffusion_planner.utils.normalizer import ObservationNormalizer
 from copy import deepcopy
 
 
-def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_path: Path):
+def visualize_inputs(
+    inputs: dict,
+    obs_normalizer: ObservationNormalizer,
+    save_path: Path,
+    state_normalizer=None,
+):
     """
     draw the input data of the diffusion_planner model on the xy plane
     """
@@ -70,6 +75,33 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
         alpha=0.7,
         label="Ego Vehicle",
     )
+
+    if "ego_agent_future" in inputs:
+        ego_future = inputs["ego_agent_future"][0]
+        # state_normalizer accepts [B, P, T, 4], tensor
+        ego_future = torch.tensor(ego_future)[None, None, :, :]
+        ego_future = torch.cat(
+            [
+                ego_future[..., :2],
+                ego_future[..., 2:3].cos(),
+                ego_future[..., 2:3].sin(),
+            ],
+            dim=-1,
+        )
+
+        print(f"{ego_future.shape=}")
+        ego_future = state_normalizer.inverse(ego_future)
+        print(f"{ego_future=}")
+        for i in range(ego_future.shape[0]):
+            ego_future_x = ego_future[i, 0]
+            ego_future_y = ego_future[i, 1]
+            ax.scatter(
+                ego_future_x,
+                ego_future_y,
+                color="red",
+                alpha=0.5,
+                s=20,
+            )
 
     # ==== Neighbor agents ====
     neighbors = inputs["neighbor_agents_past"][0]  # Use the first sample in the batch

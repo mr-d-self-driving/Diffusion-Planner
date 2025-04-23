@@ -39,5 +39,10 @@ if __name__ == "__main__":
     inputs = deepcopy(data)
     for key, value in inputs.items():
         inputs[key] = value[0:1]
-    visualize_inputs(inputs, config_obj.observation_normalizer, save_path)
+    visualize_inputs(
+        inputs,
+        config_obj.observation_normalizer,
+        save_path,
+        config_obj.state_normalizer,
+    )
     print(f"Saved to {save_path}")
