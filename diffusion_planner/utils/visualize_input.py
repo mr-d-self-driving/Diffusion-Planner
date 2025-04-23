@@ -3,7 +3,6 @@ import numpy as np
 import torch
 from pathlib import Path
 from diffusion_planner.utils.normalizer import ObservationNormalizer
-from copy import deepcopy
 
 
 def visualize_inputs(
@@ -69,7 +68,6 @@ def visualize_inputs(
         fc="r",
         ec="r",
         alpha=0.7,
-        label="Ego Vehicle",
     )
 
     if "ego_agent_future" in inputs:
@@ -285,14 +283,12 @@ def visualize_inputs(
         #     color="black",
         # )
 
-
-    # プロットの装飾
     ax.set_xlabel("X [m]")
     ax.set_ylabel("Y [m]")
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.3)
 
-    # 自車両の速度・加速度・舵角などをテキストで表示
+    # print status
     ax.text(
         99,
         99,
@@ -308,18 +304,10 @@ def visualize_inputs(
         va="top",
     )
 
-    # エゴ車両中心の表示範囲を設定
     view_range = 110
     ax.set_xlim(ego_x - view_range, ego_x + view_range)
     ax.set_ylim(ego_y - view_range, ego_y + view_range)
 
-    # 凡例を追加
-    handles, labels = ax.get_legend_handles_labels()
-    if handles:
-        ax.legend(loc="upper right")
-
     plt.tight_layout()
-
-    # 保存
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.savefig(save_path, dpi=100, bbox_inches="tight")
     plt.close()
