@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 from diffusion_planner.utils.visualize_input import visualize_inputs
 from diffusion_planner.utils.config import Config
-from copy import deepcopy
+import json
 import numpy as np
 import torch
 
@@ -24,20 +24,33 @@ if __name__ == "__main__":
     ext = input_path.suffix
     config_obj = Config(args_json)
 
-    loaded = np.load(input_path)
-    data = {}
-    for key, value in loaded.items():
-        print(f"{key}\t{value.dtype}\t{value.shape}")
-        if key == "map_name" or key == "token":
-            continue
-        # add batch size axis
-        data[key] = torch.tensor(np.expand_dims(value, axis=0))
-    data = config_obj.observation_normalizer(data)
+    def process_one_data(input_path: Path, save_path: Path):
+        loaded = np.load(input_path)
+        data = {}
+        for key, value in loaded.items():
+            print(f"{key}\t{value.dtype}\t{value.shape}")
+            if key == "map_name" or key == "token":
+                continue
+            # add batch size axis
+            data[key] = torch.tensor(np.expand_dims(value, axis=0))
+        data = config_obj.observation_normalizer(data)
 
-    visualize_inputs(
-        data,
-        config_obj.observation_normalizer,
-        save_path,
-        config_obj.state_normalizer,
-    )
-    print(f"Saved to {save_path}")
+        visualize_inputs(
+            data,
+            config_obj.observation_normalizer,
+            save_path,
+            config_obj.state_normalizer,
+        )
+        print(f"Saved to {save_path}")
+
+    if ext == ".npz":
+        process_one_data(input_path, save_path)
+    elif ext == ".json":
+        with open(input_path, "r") as f:
+            path_list = json.load(f)
+        assert save_path.is_dir()
+        for path in path_list[:10]:
+            path = Path(path)
+            basename = path.stem
+            curr_save_path = save_path / f"{basename}.png"
+            process_one_data(Path(path), curr_save_path)
