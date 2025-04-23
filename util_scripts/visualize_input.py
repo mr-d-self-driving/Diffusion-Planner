@@ -6,7 +6,8 @@ import json
 import numpy as np
 import torch
 from shutil import rmtree
-import time
+from multiprocessing import Pool
+from tqdm import tqdm
 
 
 def parse_args():
@@ -37,7 +38,6 @@ if __name__ == "__main__":
         data = config_obj.observation_normalizer(data)
 
         visualize_inputs(data, config_obj.observation_normalizer, save_path)
-        print(f"Saved to {save_path}")
 
     if ext == ".npz":
         process_one_data(input_path, save_path)
@@ -49,16 +49,17 @@ if __name__ == "__main__":
         assert save_path.is_dir()
         rmtree(save_path)
         save_path.mkdir(parents=True, exist_ok=True)
-        sum = 0.0
-        num = 0
-        for path in path_list:
+
+        def process_path(path: str):
             path = Path(path)
+            dirname = path.parent.name
             basename = path.stem
-            curr_save_path = save_path / f"{basename}.png"
-            start = time.time()
-            process_one_data(Path(path), curr_save_path)
-            end = time.time()
-            elapsed_msec = (end - start) * 1000
-            sum += elapsed_msec
-            num += 1
-            print(f"{sum / num:.2f} ms")
+            curr_save_path = save_path / f"{dirname}_{basename}.png"
+            if curr_save_path.exists():
+                return
+            process_one_data(path, curr_save_path)
+
+        pool = Pool(8)
+        with tqdm(total=len(path_list)) as pbar:
+            for _ in pool.imap_unordered(process_path, path_list):
+                pbar.update(1)
