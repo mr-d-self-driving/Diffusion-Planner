@@ -6,6 +6,7 @@ import json
 import numpy as np
 import torch
 from shutil import rmtree
+import time
 
 
 def parse_args():
@@ -29,7 +30,6 @@ if __name__ == "__main__":
         loaded = np.load(input_path)
         data = {}
         for key, value in loaded.items():
-            print(f"{key}\t{value.dtype}\t{value.shape}")
             if key == "map_name" or key == "token":
                 continue
             # add batch size axis
@@ -49,8 +49,16 @@ if __name__ == "__main__":
         assert save_path.is_dir()
         rmtree(save_path)
         save_path.mkdir(parents=True, exist_ok=True)
+        sum = 0.0
+        num = 0
         for path in path_list:
             path = Path(path)
             basename = path.stem
             curr_save_path = save_path / f"{basename}.png"
+            start = time.time()
             process_one_data(Path(path), curr_save_path)
+            end = time.time()
+            elapsed_msec = (end - start) * 1000
+            sum += elapsed_msec
+            num += 1
+            print(f"{sum / num:.2f} ms")

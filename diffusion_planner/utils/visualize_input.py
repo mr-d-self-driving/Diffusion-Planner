@@ -12,7 +12,6 @@ def visualize_inputs(
     """
     draw the input data of the diffusion_planner model on the xy plane
     """
-    inputs = deepcopy(inputs)
     inputs = obs_normalizer.inverse(inputs)
 
     # Function to convert PyTorch tensors to NumPy arrays
@@ -75,20 +74,10 @@ def visualize_inputs(
 
     if "ego_agent_future" in inputs:
         ego_future = inputs["ego_agent_future"][0]
-        # state_normalizer accepts [B, P, T, 4], tensor
-        ego_future = torch.tensor(ego_future)[None, None, :, :]
-        ego_future = torch.cat(
-            [
-                ego_future[..., :2],
-                ego_future[..., 2:3].cos(),
-                ego_future[..., 2:3].sin(),
-            ],
-            dim=-1,
-        )
-        for i in range(ego_future.shape[2]):
-            ego_future_x = ego_future[0, 0, i, 0]
-            ego_future_y = ego_future[0, 0, i, 1]
-            t = i / (ego_future.shape[2] - 1)
+        for i in range(ego_future.shape[0]):
+            ego_future_x = ego_future[i, 0]
+            ego_future_y = ego_future[i, 1]
+            t = i / (ego_future.shape[0] - 1)
             ax.scatter(
                 ego_future_x,
                 ego_future_y,
@@ -223,58 +212,28 @@ def visualize_inputs(
     lanes_has_speed_limit = inputs["lanes_has_speed_limit"][0]
 
     for i in range(lanes.shape[0]):
-        for j in range(lanes.shape[1]):
-            lane_point = lanes[i, j]
-            traffic_light = lane_point[8:12]
-            color = None
-            if traffic_light[0] == 1:
-                color = "green"
-            elif traffic_light[1] == 1:
-                color = "yellow"
-            elif traffic_light[2] == 1:
-                color = "red"
-            elif traffic_light[3] == 1:
-                color = "gray"
+        traffic_light = lanes[i, 0, 8:12]
+        color = None
+        if traffic_light[0] == 1:
+            color = "green"
+        elif traffic_light[1] == 1:
+            color = "yellow"
+        elif traffic_light[2] == 1:
+            color = "red"
+        elif traffic_light[3] == 1:
+            color = "gray"
 
-            # Skip zero vectors (masked objects)
-            if np.sum(np.abs(lane_point[:4])) < 1e-6:
-                continue
+        # center line
+        ax.plot(lanes[i, :, 0], lanes[i, :, 1], alpha=0.1, linewidth=1, color=color)
 
-            # the lane boundaries
-            left_x = lane_point[0] + lane_point[4]
-            left_y = lane_point[1] + lane_point[5]
+        # left right lane boundaries
+        lx = lanes[i, :, 0] + lanes[i, :, 4]
+        ly = lanes[i, :, 1] + lanes[i, :, 5]
+        ax.plot(lx, ly, alpha=0.25, linewidth=1, color=color)
+        rx = lanes[i, :, 0] + lanes[i, :, 6]
+        ry = lanes[i, :, 1] + lanes[i, :, 7]
+        ax.plot(rx, ry, alpha=0.25, linewidth=1, color=color)
 
-            right_x = lane_point[0] + lane_point[6]
-            right_y = lane_point[1] + lane_point[7]
-
-            if j + 1 < lanes.shape[1]:
-                next_point = lanes[i, j + 1]
-                ax.plot(
-                    [lane_point[0], next_point[0]],
-                    [lane_point[1], next_point[1]],
-                    alpha=0.1,
-                    linewidth=1,
-                    color=color,
-                )
-                next_left_x = next_point[0] + next_point[4]
-                next_left_y = next_point[1] + next_point[5]
-                ax.plot(
-                    [left_x, next_left_x],
-                    [left_y, next_left_y],
-                    alpha=0.25,
-                    linewidth=1,
-                    color=color,
-                )
-
-                next_right_x = next_point[0] + next_point[6]
-                next_right_y = next_point[1] + next_point[7]
-                ax.plot(
-                    [right_x, next_right_x],
-                    [right_y, next_right_y],
-                    alpha=0.25,
-                    linewidth=1,
-                    color=color,
-                )
         # print speed limit
         # ax.text(
         #     (left_x + next_left_x) / 2,
@@ -290,60 +249,33 @@ def visualize_inputs(
     route_lanes_has_speed_limit = inputs["route_lanes_has_speed_limit"][0]
 
     for i in range(route_lanes.shape[0]):
-        skipped = []
-        for j in range(route_lanes.shape[1]):
-            lane_point = route_lanes[i, j]
-            # Skip zero vectors (masked objects)
-            if np.sum(np.abs(lane_point[:4])) < 1e-6:
-                skipped.append(True)
-                continue
-            skipped.append(False)
-            traffic_light = lane_point[8:12]
-            color = None
-            if traffic_light[0] == 1:
-                color = "green"
-            elif traffic_light[1] == 1:
-                color = "yellow"
-            elif traffic_light[2] == 1:
-                color = "red"
-            elif traffic_light[3] == 1:
-                color = "gray"
+        traffic_light = route_lanes[i, 0, 8:12]
+        color = None
+        if traffic_light[0] == 1:
+            color = "green"
+        elif traffic_light[1] == 1:
+            color = "yellow"
+        elif traffic_light[2] == 1:
+            color = "red"
+        elif traffic_light[3] == 1:
+            color = "gray"
 
-            # the lane boundaries
-            left_x = lane_point[0] + lane_point[4]
-            left_y = lane_point[1] + lane_point[5]
+        # center line
+        ax.plot(
+            route_lanes[i, :, 0],
+            route_lanes[i, :, 1],
+            alpha=0.5,
+            linewidth=2,
+            color=color,
+        )
+        # left right lane boundaries
+        lx = route_lanes[i, :, 0] + route_lanes[i, :, 4]
+        ly = route_lanes[i, :, 1] + route_lanes[i, :, 5]
+        ax.plot(lx, ly, alpha=0.5, linewidth=2, color=color)
+        rx = route_lanes[i, :, 0] + route_lanes[i, :, 6]
+        ry = route_lanes[i, :, 1] + route_lanes[i, :, 7]
+        ax.plot(rx, ry, alpha=0.5, linewidth=2, color=color)
 
-            right_x = lane_point[0] + lane_point[6]
-            right_y = lane_point[1] + lane_point[7]
-
-            if j + 1 < route_lanes.shape[1]:
-                next_point = route_lanes[i, j + 1]
-                ax.plot(
-                    [lane_point[0], next_point[0]],
-                    [lane_point[1], next_point[1]],
-                    alpha=0.5,
-                    linewidth=2,
-                    color=color,
-                )
-                next_left_x = next_point[0] + next_point[4]
-                next_left_y = next_point[1] + next_point[5]
-                ax.plot(
-                    [left_x, next_left_x],
-                    [left_y, next_left_y],
-                    alpha=0.5,
-                    linewidth=2,
-                    color=color,
-                )
-
-                next_right_x = next_point[0] + next_point[6]
-                next_right_y = next_point[1] + next_point[7]
-                ax.plot(
-                    [right_x, next_right_x],
-                    [right_y, next_right_y],
-                    alpha=0.5,
-                    linewidth=2,
-                    color=color,
-                )
         # print speed limit
         # ax.text(
         #     (left_x + next_left_x) / 2,
@@ -353,20 +285,6 @@ def visualize_inputs(
         #     color="black",
         # )
 
-        num_skipped = sum(skipped)
-        if num_skipped != 0 and num_skipped != 20:
-            print(f"{num_skipped}")
-            exit(0)
-
-        # print index
-        if num_skipped != 20:
-            ax.text(
-                (left_x + next_left_x) / 2,
-                (left_y + next_left_y) / 2,
-                f"Route{i}",
-                fontsize=8,
-                color="black",
-            )
 
     # プロットの装飾
     ax.set_xlabel("X [m]")
