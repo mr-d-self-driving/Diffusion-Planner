@@ -37,8 +37,8 @@ def get_args():
     parser.add_argument('--save_dir', type=str, help='save dir for model ckpt', default=".")
 
     # Data
-    parser.add_argument('--train_set', type=str, help='path to train data', default=None)
     parser.add_argument('--train_set_list', type=str, help='data list of train data', default=None)
+    parser.add_argument('--valid_set_list', type=str, help='data list of valid data', default=None)
 
     parser.add_argument('--future_len', type=int, help='number of time point', default=80)
     parser.add_argument('--time_len', type=int, help='number of time point', default=21)
@@ -151,11 +151,16 @@ def model_training(args):
     aug = StatePerturbation(augment_prob=args.augment_prob, device=args.device) if args.use_data_augment else None
     data_set = DiffusionPlannerData(args.train_set_list, args.agent_num, args.predicted_neighbor_num, args.future_len)
 
-    # split valid dataset (10%)
-    total_size = len(data_set)
-    valid_size = int(total_size * 0.1)
-    train_size = total_size - valid_size
-    train_set, valid_set = torch.utils.data.random_split(data_set, [train_size, valid_size])
+    # prepare validation set
+    if args.valid_set_list is None:
+        total_size = len(data_set)
+        valid_size = int(total_size * 0.1)
+        train_size = total_size - valid_size
+        train_set, valid_set = torch.utils.data.random_split(data_set, [train_size, valid_size])
+    else:
+        train_set = data_set
+        valid_set = DiffusionPlannerData(args.valid_set_list, args.agent_num, args.predicted_neighbor_num, args.future_len)
+    print(f"Train set size: {len(train_set)}, Valid set size: {len(valid_set)}")
 
     train_sampler = DistributedSampler(train_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=True)
     train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=batch_size//ddp.get_world_size(), num_workers=args.num_workers, pin_memory=args.pin_mem, drop_last=True)
