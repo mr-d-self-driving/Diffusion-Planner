@@ -73,7 +73,7 @@ if __name__ == "__main__":
         ax.plot(
             prediction[0, :, 0],
             prediction[0, :, 1],
-            color="red",
+            color="orange",
             label="prediction",
             linewidth=2,
         )
