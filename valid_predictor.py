@@ -131,8 +131,7 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     # Data
-    parser.add_argument("--train_set", type=str, help="path to train data", default=None)
-    parser.add_argument("--train_set_list", type=str, help="data list of train data", default=None)
+    parser.add_argument("--valid_set_list", type=str, help="data list of train data", default=None)
 
     parser.add_argument("--future_len", type=int, help="number of time point", default=80)
     parser.add_argument("--agent_num", type=int, help="number of agents", default=32)
@@ -206,7 +205,7 @@ if __name__ == "__main__":
 
     # set up data loaders
     train_set = DiffusionPlannerData(
-        args.train_set_list,
+        args.valid_set_list,
         args.agent_num,
         args.predicted_neighbor_num,
         args.future_len,
