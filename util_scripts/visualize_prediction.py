@@ -34,7 +34,6 @@ if __name__ == "__main__":
 
     with open(valid_data_list, "r") as f:
         valid_data_path_list = json.load(f)
-    valid_data_path_list = sorted(valid_data_path_list)
 
     prediction_path_list = sorted(predictions_dir.glob("**/*.npz"))
 
@@ -67,7 +66,6 @@ if __name__ == "__main__":
         loss_ego = np.sqrt(loss_ego)
         loss_nei = np.sqrt(loss_nei)
         loss_ego_mean = np.mean(loss_ego)
-        loss_nei_mean = np.mean(loss_nei)
 
         fig, ax = visualize_inputs(valid_data_dict, config_obj.observation_normalizer)
 
@@ -91,8 +89,9 @@ if __name__ == "__main__":
         ax.set_title(title)
 
         plt.savefig(save_dir / f"{valid_data_path.stem}.png")
+        plt.close()
 
-    pool = Pool(8)
+    pool = Pool(16)
     with tqdm(total=len(valid_data_path_list)) as pbar:
         for _ in pool.imap_unordered(
             process_one_pair, zip(valid_data_path_list, prediction_path_list)
