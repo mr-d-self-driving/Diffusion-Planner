@@ -17,6 +17,7 @@ from diffusion_planner.utils.lr_schedule import CosineAnnealingWarmUpRestarts
 from diffusion_planner.utils.train_utils import resume_model, set_seed
 
 
+@torch.no_grad()
 def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, float]:
     """return: ave_loss_ego, ave_loss_neighbor"""
     device = args.device
@@ -27,86 +28,85 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
 
     predictions = []
 
-    with torch.no_grad():
-        for batch in val_loader:
-            # データの準備
-            inputs = {
-                "ego_current_state": batch[0].to(device),
-                "neighbor_agents_past": batch[2].to(device),
-                "lanes": batch[4].to(device),
-                "lanes_speed_limit": batch[5].to(device),
-                "lanes_has_speed_limit": batch[6].to(device),
-                "route_lanes": batch[7].to(device),
-                "route_lanes_speed_limit": batch[8].to(device),
-                "route_lanes_has_speed_limit": batch[9].to(device),
-                "static_objects": batch[10].to(device),
-            }
+    for batch in val_loader:
+        # データの準備
+        inputs = {
+            "ego_current_state": batch[0].to(device),
+            "neighbor_agents_past": batch[2].to(device),
+            "lanes": batch[4].to(device),
+            "lanes_speed_limit": batch[5].to(device),
+            "lanes_has_speed_limit": batch[6].to(device),
+            "route_lanes": batch[7].to(device),
+            "route_lanes_speed_limit": batch[8].to(device),
+            "route_lanes_has_speed_limit": batch[9].to(device),
+            "static_objects": batch[10].to(device),
+        }
 
-            B = inputs["ego_current_state"].shape[0]
+        B = inputs["ego_current_state"].shape[0]
 
-            ego_future = batch[1].to(device)
-            ego_future = torch.cat(
-                [
-                    ego_future[..., :2],
-                    ego_future[..., 2:3].cos(),
-                    ego_future[..., 2:3].sin(),
-                ],
-                dim=-1,
-            )  # (B, T, 4)
-            neighbors_future = batch[3].to(device)
-            neighbor_future_mask = (
-                torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
-            )  # (B, Pn, T)
-            neighbors_future = torch.cat(
-                [
-                    neighbors_future[..., :2],
-                    neighbors_future[..., 2:3].cos(),
-                    neighbors_future[..., 2:3].sin(),
-                ],
-                dim=-1,
-            )  # (B, Pn, T, 4)
-            neighbors_future[neighbor_future_mask] = 0.0
+        ego_future = batch[1].to(device)
+        ego_future = torch.cat(
+            [
+                ego_future[..., :2],
+                ego_future[..., 2:3].cos(),
+                ego_future[..., 2:3].sin(),
+            ],
+            dim=-1,
+        )  # (B, T, 4)
+        neighbors_future = batch[3].to(device)
+        neighbor_future_mask = (
+            torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
+        )  # (B, Pn, T)
+        neighbors_future = torch.cat(
+            [
+                neighbors_future[..., :2],
+                neighbors_future[..., 2:3].cos(),
+                neighbors_future[..., 2:3].sin(),
+            ],
+            dim=-1,
+        )  # (B, Pn, T, 4)
+        neighbors_future[neighbor_future_mask] = 0.0
 
-            B, Pn, T, _ = neighbors_future.shape
-            ego_current, neighbors_current = (
-                inputs["ego_current_state"][:, :4],
-                inputs["neighbor_agents_past"][:, :Pn, -1, :4],
-            )
-            inputs = args.observation_normalizer(inputs)
+        B, Pn, T, _ = neighbors_future.shape
+        ego_current, neighbors_current = (
+            inputs["ego_current_state"][:, :4],
+            inputs["neighbor_agents_past"][:, :Pn, -1, :4],
+        )
+        inputs = args.observation_normalizer(inputs)
 
-            _, outputs = model(inputs)
+        _, outputs = model(inputs)
 
-            neighbor_current_mask = (
-                torch.sum(torch.ne(neighbors_current[..., :4], 0), dim=-1) == 0
-            )  # (B, Pn)
-            neighbor_mask = torch.concat(
-                (neighbor_current_mask.unsqueeze(-1), neighbor_future_mask), dim=-1
-            )  # (B, Pn, T + 1)
+        neighbor_current_mask = (
+            torch.sum(torch.ne(neighbors_current[..., :4], 0), dim=-1) == 0
+        )  # (B, Pn)
+        neighbor_mask = torch.concat(
+            (neighbor_current_mask.unsqueeze(-1), neighbor_future_mask), dim=-1
+        )  # (B, Pn, T + 1)
 
-            gt_future = torch.cat(
-                [ego_future[:, None, :, :], neighbors_future[..., :]], dim=1
-            )  # (B, Pn + 1, T, 4)
-            current_states = torch.cat([ego_current[:, None], neighbors_current], dim=1)
-            # (B, Pn + 1, 4)
+        gt_future = torch.cat(
+            [ego_future[:, None, :, :], neighbors_future[..., :]], dim=1
+        )  # (B, Pn + 1, T, 4)
+        current_states = torch.cat([ego_current[:, None], neighbors_current], dim=1)
+        # (B, Pn + 1, 4)
 
-            all_gt = torch.cat(
-                [current_states[:, :, None, :], gt_future], dim=2
-            )  # (B, Pn + 1, T + 1, 4)
-            all_gt[:, 1:][neighbor_mask] = 0.0
+        all_gt = torch.cat(
+            [current_states[:, :, None, :], gt_future], dim=2
+        )  # (B, Pn + 1, T + 1, 4)
+        all_gt[:, 1:][neighbor_mask] = 0.0
 
-            prediction = outputs["prediction"]
-            if return_pred:
-                predictions.append(prediction)
+        prediction = outputs["prediction"]
+        if return_pred:
+            predictions.append(prediction)
 
-            neighbors_future_valid = ~neighbor_future_mask
-            all_gt = all_gt[:, :, 1:, :]  # (B, Pn + 1, T, 4)
-            loss_tensor = (prediction - all_gt) ** 2
-            loss_ego = loss_tensor[:, 0, :]
-            loss_nei = loss_tensor[:, 1:, :]
-            loss_nei = loss_nei[neighbors_future_valid]
-            total_loss_ego += loss_ego.mean().item() * B
-            total_loss_neighbor += loss_nei.mean().item() * B
-            total_samples += B
+        neighbors_future_valid = ~neighbor_future_mask
+        all_gt = all_gt[:, :, 1:, :]  # (B, Pn + 1, T, 4)
+        loss_tensor = (prediction - all_gt) ** 2
+        loss_ego = loss_tensor[:, 0, :]
+        loss_nei = loss_tensor[:, 1:, :]
+        loss_nei = loss_nei[neighbors_future_valid]
+        total_loss_ego += loss_ego.mean().item() * B
+        total_loss_neighbor += loss_nei.mean().item() * B
+        total_samples += B
 
     avg_loss_ego = total_loss_ego / total_samples
     avg_loss_neighbor = total_loss_neighbor / total_samples
@@ -204,18 +204,18 @@ if __name__ == "__main__":
     batch_size = args.batch_size
 
     # set up data loaders
-    train_set = DiffusionPlannerData(
+    valid_set = DiffusionPlannerData(
         args.valid_set_list,
         args.agent_num,
         args.predicted_neighbor_num,
         args.future_len,
     )
-    train_sampler = DistributedSampler(
-        train_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=False
+    valid_sampler = DistributedSampler(
+        valid_set, num_replicas=ddp.get_world_size(), rank=global_rank, shuffle=False
     )
-    train_loader = DataLoader(
-        train_set,
-        sampler=train_sampler,
+    valid_loader = DataLoader(
+        valid_set,
+        sampler=valid_sampler,
         batch_size=batch_size // ddp.get_world_size(),
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     )
 
     if global_rank == 0:
-        print("Dataset Prepared: {} train data\n".format(len(train_set)))
+        print("Dataset Prepared: {} valid data\n".format(len(valid_set)))
 
     if args.ddp:
         torch.distributed.barrier()
@@ -276,7 +276,7 @@ if __name__ == "__main__":
         torch.distributed.barrier()
 
     avg_loss_ego, ave_loss_neighbor, predictions = validate_model(
-        diffusion_planner, train_loader, config_obj, return_pred=True
+        diffusion_planner, valid_loader, config_obj, return_pred=True
     )
     print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
     print(f"{predictions.shape=}")
