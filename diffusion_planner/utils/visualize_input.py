@@ -7,7 +7,9 @@ import torch
 from diffusion_planner.utils.normalizer import ObservationNormalizer
 
 
-def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_path: Path):
+def visualize_inputs(
+    inputs: dict, obs_normalizer: ObservationNormalizer, save_path: Path | None = None
+):
     """
     draw the input data of the diffusion_planner model on the xy plane
     """
@@ -304,9 +306,12 @@ def visualize_inputs(inputs: dict, obs_normalizer: ObservationNormalizer, save_p
         va="top",
     )
 
-    view_range = 110
+    view_range = 55
     ax.set_xlim(ego_x - view_range, ego_x + view_range)
     ax.set_ylim(ego_y - view_range, ego_y + view_range)
+
+    if save_path is None:
+        return fig, ax
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=100, bbox_inches="tight")
