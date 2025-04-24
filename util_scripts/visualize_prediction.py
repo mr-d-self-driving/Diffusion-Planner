@@ -91,6 +91,15 @@ if __name__ == "__main__":
         plt.savefig(save_dir / f"{valid_data_path.stem}.png")
         plt.close()
 
+        loss_dict = {
+            "loss_ego_mean": loss_ego_mean,
+        }
+        json.dump(
+            loss_dict,
+            open(save_dir / f"{valid_data_path.stem}.json", "w"),
+            indent=4,
+        )
+
     pool = Pool(16)
     with tqdm(total=len(valid_data_path_list)) as pbar:
         for _ in pool.imap_unordered(
