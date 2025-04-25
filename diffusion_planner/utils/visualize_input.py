@@ -99,7 +99,7 @@ def visualize_inputs(
 
         n_x, n_y = neighbor[0], neighbor[1]
         n_heading = np.arctan2(neighbor[3], neighbor[2])
-        vel_x, vely = neighbor[4], neighbor[5]
+        vel_x, vel_y = neighbor[4], neighbor[5]
         len_x, len_y = neighbor[6], neighbor[7]
 
         # Set color and shape dimensions based on the vehicle type
@@ -142,38 +142,17 @@ def visualize_inputs(
         )
 
         # Draw bounding box
-        ax.add_line(
-            plt.Line2D(
-                [n_x - dx, n_x + dx],
-                [n_y - dy, n_y + dy],
-                color=color,
-                alpha=0.5,
+        dx_coeff = [+1, +1, -1, -1]
+        dy_coeff = [+1, -1, -1, +1]
+        for d in range(4):
+            ax.add_line(
+                plt.Line2D(
+                    [n_x + dx_coeff[d] * dx, n_x + dx_coeff[(d + 1) % 4] * dx],
+                    [n_y + dy_coeff[d] * dy, n_y + dy_coeff[(d + 1) % 4] * dy],
+                    color=color,
+                    alpha=0.5,
+                )
             )
-        )
-        ax.add_line(
-            plt.Line2D(
-                [n_x - dx, n_x + dx],
-                [n_y + dy, n_y - dy],
-                color=color,
-                alpha=0.5,
-            )
-        )
-        ax.add_line(
-            plt.Line2D(
-                [n_x - dx, n_x - dx],
-                [n_y - dy, n_y + dy],
-                color=color,
-                alpha=0.5,
-            )
-        )
-        ax.add_line(
-            plt.Line2D(
-                [n_x + dx, n_x + dx],
-                [n_y - dy, n_y + dy],
-                color=color,
-                alpha=0.5,
-            )
-        )
 
     # ==== Static objects ====
     static_objects = inputs["static_objects"][0]  # Use the first sample in the batch

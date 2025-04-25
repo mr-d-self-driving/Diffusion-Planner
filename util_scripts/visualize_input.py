@@ -43,6 +43,7 @@ if __name__ == "__main__":
 
     if ext == ".npz":
         process_one_data(input_path, save_path)
+        print(f"Saved visualization to {save_path}")
     elif ext == ".json":
         with open(input_path, "r") as f:
             path_list = json.load(f)
