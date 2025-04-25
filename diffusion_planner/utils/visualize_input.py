@@ -142,16 +142,18 @@ def visualize_inputs(
         )
 
         # Draw the velocity as an arrow
-        dx_v = vel_x * np.cos(n_heading)
-        dy_v = vel_y * np.sin(n_heading)
+        dx_v = vel_x
+        dy_v = vel_y
+        v = np.sqrt(dx_v**2 + dy_v**2) / 10
         ax.arrow(
             n_x,
             n_y,
-            dx_v,
-            dy_v,
-            width=vel_y / 2,
-            head_width=vel_x,
-            head_length=vel_x / 3,
+            dx_v / 2,
+            dy_v / 2,
+            width=v / 2,
+            head_width=v,
+            head_length=v / 2,
+            length_includes_head=True,
             fc="orange",
             ec="orange",
             alpha=0.5,
