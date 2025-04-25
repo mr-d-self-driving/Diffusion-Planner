@@ -141,6 +141,22 @@ def visualize_inputs(
             va="center",
         )
 
+        # Draw the velocity as an arrow
+        dx_v = vel_x * np.cos(n_heading)
+        dy_v = vel_y * np.sin(n_heading)
+        ax.arrow(
+            n_x,
+            n_y,
+            dx_v,
+            dy_v,
+            width=vel_y / 2,
+            head_width=vel_x,
+            head_length=vel_x / 3,
+            fc="orange",
+            ec="orange",
+            alpha=0.5,
+        )
+
         # Draw bounding box
         dx_coeff = [+1, +1, -1, -1]
         dy_coeff = [+1, -1, -1, +1]
@@ -149,7 +165,7 @@ def visualize_inputs(
                 plt.Line2D(
                     [n_x + dx_coeff[d] * dx, n_x + dx_coeff[(d + 1) % 4] * dx],
                     [n_y + dy_coeff[d] * dy, n_y + dy_coeff[(d + 1) % 4] * dy],
-                    color=color,
+                    color=("red" if d == 3 else color),
                     alpha=0.5,
                 )
             )
