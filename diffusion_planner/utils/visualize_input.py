@@ -118,7 +118,7 @@ def visualize_inputs(
 
         # Draw the current position as an arrow
         dx = len_x / 2 * np.cos(n_heading)
-        dy = len_y / 2 * np.sin(n_heading)
+        dy = len_x / 2 * np.sin(n_heading)
         ax.arrow(
             n_x,
             n_y,
