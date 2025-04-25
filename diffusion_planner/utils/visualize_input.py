@@ -100,7 +100,7 @@ def visualize_inputs(
         n_x, n_y = neighbor[0], neighbor[1]
         n_heading = np.arctan2(neighbor[3], neighbor[2])
         vel_x, vel_y = neighbor[4], neighbor[5]
-        len_x, len_y = neighbor[6], neighbor[7]
+        len_y, len_x = neighbor[6], neighbor[7]
 
         # Set color and shape dimensions based on the vehicle type
         vehicle_type = np.argmax(neighbor[8:11]) if neighbor.shape[0] > 8 else 0
@@ -161,11 +161,20 @@ def visualize_inputs(
         dx_coeff = [+1, +1, -1, -1]
         dy_coeff = [+1, -1, -1, +1]
         for d in range(4):
+            curr_dx = dx_coeff[(d + 0) % 4] * (len_x / 2)
+            curr_dy = dy_coeff[(d + 0) % 4] * (len_y / 2)
+            next_dx = dx_coeff[(d + 1) % 4] * (len_x / 2)
+            next_dy = dy_coeff[(d + 1) % 4] * (len_y / 2)
+            # rotate
+            rot_cdx = curr_dx * np.cos(n_heading) - curr_dy * np.sin(n_heading)
+            rot_cdy = curr_dx * np.sin(n_heading) + curr_dy * np.cos(n_heading)
+            rot_ndx = next_dx * np.cos(n_heading) - next_dy * np.sin(n_heading)
+            rot_ndy = next_dx * np.sin(n_heading) + next_dy * np.cos(n_heading)
             ax.add_line(
                 plt.Line2D(
-                    [n_x + dx_coeff[d] * dx, n_x + dx_coeff[(d + 1) % 4] * dx],
-                    [n_y + dy_coeff[d] * dy, n_y + dy_coeff[(d + 1) % 4] * dy],
-                    color=("red" if d == 3 else color),
+                    [n_x + rot_cdx, n_x + rot_ndx],
+                    [n_y + rot_cdy, n_y + rot_ndy],
+                    color=("red" if d == 0 else color),
                     alpha=0.5,
                 )
             )
