@@ -13,6 +13,7 @@ def visualize_inputs(
     """
     draw the input data of the diffusion_planner model on the xy plane
     """
+    view_range = 55
     inputs = obs_normalizer.inverse(inputs)
 
     # Function to convert PyTorch tensors to NumPy arrays
@@ -120,15 +121,16 @@ def visualize_inputs(
         dx = len_x / 2 * np.cos(n_heading)
         dy = len_x / 2 * np.sin(n_heading)
 
-        ax.text(
-            n_x + 10,
-            n_y,
-            f"Agent {i}",
-            fontsize=8,
-            color=color,
-            ha="center",
-            va="center",
-        )
+        if -view_range <= n_x <= view_range and -view_range <= n_y <= view_range:
+            ax.text(
+                n_x + 2.5,
+                n_y + 5,
+                f"Agent {i}",
+                fontsize=8,
+                color=color,
+                ha="center",
+                va="center",
+            )
 
         if "neighbor_agents_future" in inputs:
             neighbor_future = inputs["neighbor_agents_future"][0][i]
@@ -143,15 +145,19 @@ def visualize_inputs(
                     alpha=0.5,
                     s=10,
                 )
-            ax.text(
-                neighbor_future[0, 0] + 10,
-                neighbor_future[0, 1] + 5,
-                f"Future {i}",
-                fontsize=8,
-                color=color,
-                ha="center",
-                va="center",
-            )
+            if (
+                -view_range <= neighbor_future_x <= view_range
+                and -view_range <= neighbor_future_y <= view_range
+            ):
+                ax.text(
+                    neighbor_future_x + 5,
+                    neighbor_future_y + 2.5,
+                    f"Future {i}",
+                    fontsize=8,
+                    color=color,
+                    ha="center",
+                    va="center",
+                )
 
         # Draw the velocity as an arrow
         v = np.sqrt(vel_x**2 + vel_y**2) / 10
@@ -307,7 +313,6 @@ def visualize_inputs(
     ax.grid(True, alpha=0.3)
 
     # print status
-    view_range = 55
 
     ax.text(
         view_range - 1,
