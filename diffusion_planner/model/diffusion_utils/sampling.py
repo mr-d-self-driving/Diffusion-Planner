@@ -16,9 +16,9 @@ def dpm_sampler(
     noise_schedule = dpm.NoiseScheduleVP()
 
     model_fn = dpm.model_wrapper(
-        model,  # use your noise prediction model here
+        model,
         noise_schedule,
-        model_type=model.model_type,  # or "x_start" or "v" or "score"
+        model_type=model.model_type,
         model_kwargs=other_model_params,
         **model_wrapper_params,
     )
@@ -28,11 +28,6 @@ def dpm_sampler(
     )  # w.o. dynamic thresholding
 
     # Steps in [10, 20] can generate quite good samples.
-    sample_dpm = dpm_solver.sample(
-        x_T,
-        steps=10,
-        skip_type="logSNR",
-        denoise_to_zero=True,
-    )
+    sample_dpm = dpm_solver.sample(x_T, steps=10, skip_type="logSNR")
 
     return sample_dpm

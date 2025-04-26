@@ -611,12 +611,8 @@ class DPM_Solver:
     def sample(
         self,
         x,
-        steps=20,
-        t_start=None,
-        t_end=None,
+        steps,
         skip_type="time_uniform",
-        lower_order_final=True,
-        denoise_to_zero=False,
         solver_type="dpmsolver",
     ):
         """
@@ -692,10 +688,13 @@ class DPM_Solver:
             x_end: A pytorch tensor. The approximated solution at time `t_end`.
 
         """
+        # Args
         order = 2
         method = "multistep"
-        t_0 = 1.0 / self.noise_schedule.total_N if t_end is None else t_end
-        t_T = self.noise_schedule.T if t_start is None else t_start
+        denoise_to_zero = True
+
+        t_0 = 1.0 / self.noise_schedule.total_N
+        t_T = self.noise_schedule.T
         assert t_0 > 0 and t_T > 0, (
             "Time range needs to be greater than 0. For discrete-time DPMs, it needs to be in [1 / N, 1], where N is the length of betas array"
         )
@@ -731,7 +730,7 @@ class DPM_Solver:
             for step in range(order, steps + 1):
                 t = timesteps[step]
                 # We only use lower order for steps < 10
-                if lower_order_final and steps < 10:
+                if steps < 10:
                     step_order = min(order, steps + 1 - step)
                 else:
                     step_order = order
