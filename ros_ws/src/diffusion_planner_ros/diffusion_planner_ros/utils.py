@@ -197,17 +197,21 @@ def convert_tracked_objects_to_tensor(
             pose_in_map_4x4 = pose_to_mat4x4(kinematics.pose_with_covariance.pose)
             pose_in_bl_4x4 = map2bl_matrix_4x4 @ pose_in_map_4x4
             cos, sin = rot3x3_to_heading_cos_sin(pose_in_bl_4x4[0:3, 0:3])
-            twist_in_map_4x4 = np.eye(4)
-            twist_in_map_4x4[0, 3] = kinematics.twist_with_covariance.twist.linear.x
-            twist_in_map_4x4[1, 3] = kinematics.twist_with_covariance.twist.linear.y
-            twist_in_map_4x4[2, 3] = kinematics.twist_with_covariance.twist.linear.z
-            twist_in_bl_4x4 = map2bl_matrix_4x4 @ twist_in_map_4x4
+            twist_in_local = np.array(
+                [
+                    kinematics.twist_with_covariance.twist.linear.x,
+                    kinematics.twist_with_covariance.twist.linear.y,
+                    kinematics.twist_with_covariance.twist.linear.z,
+                ]
+            )
+            twist_in_map = pose_in_map_4x4[0:3, 0:3] @ twist_in_local
+            twist_in_bl = map2bl_matrix_4x4[0:3, 0:3] @ twist_in_map
             neighbor[0, i, 20 - j, 0] = pose_in_bl_4x4[0, 3]  # x
             neighbor[0, i, 20 - j, 1] = pose_in_bl_4x4[1, 3]  # y
             neighbor[0, i, 20 - j, 2] = cos  # heading cos
             neighbor[0, i, 20 - j, 3] = sin  # heading sin
-            neighbor[0, i, 20 - j, 4] = twist_in_bl_4x4[0, 3]  # velocity x
-            neighbor[0, i, 20 - j, 5] = twist_in_bl_4x4[1, 3]  # velocity y
+            neighbor[0, i, 20 - j, 4] = twist_in_bl[0]  # velocity x
+            neighbor[0, i, 20 - j, 5] = twist_in_bl[1]  # velocity y
             # I don't know why but sometimes the length and width from autoware are 0
             neighbor[0, i, 20 - j, 6] = max(shape.dimensions.y, 1.0)  # width
             neighbor[0, i, 20 - j, 7] = max(shape.dimensions.x, 1.0)  # lendth
