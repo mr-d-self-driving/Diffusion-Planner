@@ -4,19 +4,10 @@ import torch
 class NoiseScheduleVP:
     def __init__(
         self,
-        schedule="discrete",
-        betas=None,
-        alphas_cumprod=None,
         continuous_beta_0=0.1,
         continuous_beta_1=20.0,
-        dtype=torch.float32,
     ):
         """Create a wrapper class for the forward SDE (VP type).
-
-        ***
-        Update: We support discrete-time diffusion models by implementing a picewise linear interpolation for log_alpha_t.
-                We recommend to use schedule='discrete' for the discrete-time diffusion models, especially for high-resolution images.
-        ***
 
         The forward SDE ensures that the condition distribution q_{t|0}(x_t | x_0) = N ( alpha_t * x_0, sigma_t^2 * I ).
         We further define lambda_t = log(alpha_t) - log(sigma_t), which is the half-logSNR (described in the DPM-Solver paper).
@@ -32,97 +23,26 @@ class NoiseScheduleVP:
 
         ===============================================================
 
-        We support both discrete-time DPMs (trained on n = 0, 1, ..., N-1) and continuous-time DPMs (trained on t in [t_0, T]).
-
-        1. For discrete-time DPMs:
-
-            For discrete-time DPMs trained on n = 0, 1, ..., N-1, we convert the discrete steps to continuous time steps by:
-                t_i = (i + 1) / N
-            e.g. for N = 1000, we have t_0 = 1e-3 and T = t_{N-1} = 1.
-            We solve the corresponding diffusion ODE from time T = 1 to time t_0 = 1e-3.
-
-            Args:
-                betas: A `torch.Tensor`. The beta array for the discrete-time DPM. (See the original DDPM paper for details)
-                alphas_cumprod: A `torch.Tensor`. The cumprod alphas for the discrete-time DPM. (See the original DDPM paper for details)
-
-            Note that we always have alphas_cumprod = cumprod(1 - betas). Therefore, we only need to set one of `betas` and `alphas_cumprod`.
-
-            **Important**:  Please pay special attention for the args for `alphas_cumprod`:
-                The `alphas_cumprod` is the \hat{alpha_n} arrays in the notations of DDPM. Specifically, DDPMs assume that
-                    q_{t_n | 0}(x_{t_n} | x_0) = N ( \sqrt{\hat{alpha_n}} * x_0, (1 - \hat{alpha_n}) * I ).
-                Therefore, the notation \hat{alpha_n} is different from the notation alpha_t in DPM-Solver. In fact, we have
-                    alpha_{t_n} = \sqrt{\hat{alpha_n}},
-                and
-                    log(alpha_{t_n}) = 0.5 * log(\hat{alpha_n}).
-
-
-        2. For continuous-time DPMs:
-
-            We support the linear VPSDE for the continuous time setting. The hyperparameters for the noise
-            schedule are the default settings in Yang Song's ScoreSDE:
-
-            Args:
-                beta_min: A `float` number. The smallest beta for the linear schedule.
-                beta_max: A `float` number. The largest beta for the linear schedule.
-                T: A `float` number. The ending time of the forward process.
-
-        ===============================================================
+        We support the linear VPSDE for the continuous time setting. The hyperparameters for the noise
+        schedule are the default settings in Yang Song's ScoreSDE:
 
         Args:
-            schedule: A `str`. The noise schedule of the forward SDE. 'discrete' for discrete-time DPMs,
-                    'linear' for continuous-time DPMs.
-        Returns:
-            A wrapper object of the forward SDE (VP type).
+            beta_min: A `float` number. The smallest beta for the linear schedule.
+            beta_max: A `float` number. The largest beta for the linear schedule.
+            T: A `float` number. The ending time of the forward process.
 
         ===============================================================
 
         Example:
 
-        # For discrete-time DPMs, given betas (the beta array for n = 0, 1, ..., N - 1):
-        >>> ns = NoiseScheduleVP('discrete', betas=betas)
-
-        # For discrete-time DPMs, given alphas_cumprod (the \hat{alpha_n} array for n = 0, 1, ..., N - 1):
-        >>> ns = NoiseScheduleVP('discrete', alphas_cumprod=alphas_cumprod)
-
         # For continuous-time DPMs (VPSDE), linear schedule:
-        >>> ns = NoiseScheduleVP('linear', continuous_beta_0=0.1, continuous_beta_1=20.)
+        >>> ns = NoiseScheduleVP(continuous_beta_0=0.1, continuous_beta_1=20.)
 
         """
-
-        if schedule not in ["discrete", "linear"]:
-            raise ValueError(
-                "Unsupported noise schedule {}. The schedule needs to be 'discrete' or 'linear'".format(
-                    schedule
-                )
-            )
-
-        self.schedule = schedule
-        if schedule == "discrete":
-            if betas is not None:
-                log_alphas = 0.5 * torch.log(1 - betas).cumsum(dim=0)
-            else:
-                assert alphas_cumprod is not None
-                log_alphas = 0.5 * torch.log(alphas_cumprod)
-            self.T = 1.0
-            self.log_alpha_array = (
-                self.numerical_clip_alpha(log_alphas)
-                .reshape(
-                    (
-                        1,
-                        -1,
-                    )
-                )
-                .to(dtype=dtype)
-            )
-            self.total_N = self.log_alpha_array.shape[1]
-            self.t_array = (
-                torch.linspace(0.0, 1.0, self.total_N + 1)[1:].reshape((1, -1)).to(dtype=dtype)
-            )
-        else:
-            self.T = 1.0
-            self.total_N = 1000
-            self.beta_0 = continuous_beta_0
-            self.beta_1 = continuous_beta_1
+        self.T = 1.0
+        self.total_N = 1000
+        self.beta_0 = continuous_beta_0
+        self.beta_1 = continuous_beta_1
 
     def numerical_clip_alpha(self, log_alphas, clipped_lambda=-5.1):
         """
@@ -141,12 +61,7 @@ class NoiseScheduleVP:
         """
         Compute log(alpha_t) of a given continuous-time label t in [0, T].
         """
-        if self.schedule == "discrete":
-            return interpolate_fn(
-                t.reshape((-1, 1)), self.t_array.to(t.device), self.log_alpha_array.to(t.device)
-            ).reshape((-1))
-        elif self.schedule == "linear":
-            return -0.25 * t**2 * (self.beta_1 - self.beta_0) - 0.5 * t * self.beta_0
+        return -0.25 * t**2 * (self.beta_1 - self.beta_0) - 0.5 * t * self.beta_0
 
     def marginal_alpha(self, t):
         """
@@ -172,22 +87,13 @@ class NoiseScheduleVP:
         """
         Compute the continuous-time label t in [0, T] of a given half-logSNR lambda_t.
         """
-        if self.schedule == "linear":
-            tmp = (
-                2.0
-                * (self.beta_1 - self.beta_0)
-                * torch.logaddexp(-2.0 * lamb, torch.zeros((1,)).to(lamb))
-            )
-            Delta = self.beta_0**2 + tmp
-            return tmp / (torch.sqrt(Delta) + self.beta_0) / (self.beta_1 - self.beta_0)
-        elif self.schedule == "discrete":
-            log_alpha = -0.5 * torch.logaddexp(torch.zeros((1,)).to(lamb.device), -2.0 * lamb)
-            t = interpolate_fn(
-                log_alpha.reshape((-1, 1)),
-                torch.flip(self.log_alpha_array.to(lamb.device), [1]),
-                torch.flip(self.t_array.to(lamb.device), [1]),
-            )
-            return t.reshape((-1,))
+        tmp = (
+            2.0
+            * (self.beta_1 - self.beta_0)
+            * torch.logaddexp(-2.0 * lamb, torch.zeros((1,)).to(lamb))
+        )
+        Delta = self.beta_0**2 + tmp
+        return tmp / (torch.sqrt(Delta) + self.beta_0) / (self.beta_1 - self.beta_0)
 
 
 def model_wrapper(
@@ -259,8 +165,7 @@ def model_wrapper(
                 arXiv preprint arXiv:2207.12598 (2022).
 
 
-    The `t_input` is the time label of the model, which may be discrete-time labels (i.e. 0 to 999)
-    or continuous-time labels (i.e. epsilon to T).
+    The `t_input` is the time label of the model, which is continuous-time labels (i.e. epsilon to T).
 
     We wrap the model function to accept only `x` and `t_continuous` as inputs, and outputs the predicted noise:
     ``
@@ -292,15 +197,7 @@ def model_wrapper(
     """
 
     def get_model_input_time(t_continuous):
-        """
-        Convert the continuous-time `t_continuous` (in [epsilon, T]) to the model input time.
-        For discrete-time DPMs, we convert `t_continuous` in [1 / N, 1] to `t_input` in [0, 1000 * (N - 1) / N].
-        For continuous-time DPMs, we just use `t_continuous`.
-        """
-        if noise_schedule.schedule == "discrete":
-            return (t_continuous - 1.0 / noise_schedule.total_N) * 1000.0
-        else:
-            return t_continuous
+        return t_continuous
 
     def noise_pred_fn(x, t_continuous, cond=None):
         t_input = get_model_input_time(t_continuous)
@@ -809,10 +706,7 @@ class DPM_Solver:
             t_end: A `float`. The ending time of the sampling.
                 If `t_end` is None, we use 1. / self.noise_schedule.total_N.
                 e.g. if total_N == 1000, we have `t_end` == 1e-3.
-                For discrete-time DPMs:
-                    - We recommend `t_end` == 1. / self.noise_schedule.total_N.
-                For continuous-time DPMs:
-                    - We recommend `t_end` == 1e-3 when `steps` <= 15; and `t_end` == 1e-4 when `steps` > 15.
+                - We recommend `t_end` == 1e-3 when `steps` <= 15; and `t_end` == 1e-4 when `steps` > 15.
             skip_type: A `str`. The type for the spacing of the time steps. 'time_uniform' or 'logSNR' or 'time_quadratic'.
             method: A `str`. The method for sampling. 'singlestep' or 'multistep' or 'singlestep_fixed' or 'adaptive'.
             denoise_to_zero: A `bool`. Whether to denoise to time 0 at the final step.

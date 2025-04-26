@@ -13,7 +13,7 @@ def dpm_sampler(
     model_wrapper_params: Dict,
     dpm_solver_params: Dict,
 ):
-    noise_schedule = dpm.NoiseScheduleVP(schedule="linear")
+    noise_schedule = dpm.NoiseScheduleVP()
 
     model_fn = dpm.model_wrapper(
         model,  # use your noise prediction model here
