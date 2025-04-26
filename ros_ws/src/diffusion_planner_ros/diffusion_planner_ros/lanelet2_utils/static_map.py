@@ -125,7 +125,6 @@ class LaneSegment:
     ----------
         id (int): Unique ID associated with this lane.
         polyline (Polyline): `Polyline` instance.
-        is_intersection (bool): Flag indicating if this lane is intersection.
         left_boundaries (list[BoundarySegment]): List of `BoundarySegment` instances.
         right_boundaries (list[BoundarySegment]): List of `BoundarySegment` instances.
         speed_limit_mph (float | None, optional): Lane speed limit in [miles/h].
@@ -136,7 +135,6 @@ class LaneSegment:
     polyline: Polyline = field(
         converter=lambda x: Polyline.from_dict(x) if isinstance(x, dict) else x
     )
-    is_intersection: bool
     left_boundaries: list[BoundarySegment] = field(converter=_to_boundary_segment, factory=list)
     right_boundaries: list[BoundarySegment] = field(converter=_to_boundary_segment, factory=list)
     speed_limit_mph: float | None = field(default=None)

@@ -1,22 +1,11 @@
 from __future__ import annotations
 
-import sys
-
+import lanelet2
 import numpy as np
 import torch
-from scipy.interpolate import interp1d
-
-try:
-    import lanelet2
-    from autoware_lanelet2_extension_python.projection import MGRSProjector
-    from lanelet2.routing import RoutingGraph
-    from lanelet2.traffic_rules import Locations, Participants
-    from lanelet2.traffic_rules import create as create_traffic_rules
-except ImportError as e:
-    print(e)  # noqa: T201
-    sys.exit(1)
-
+from autoware_lanelet2_extension_python.projection import MGRSProjector
 from numpy.typing import NDArray
+from scipy.interpolate import interp1d
 from shapely import LineString
 
 from .constant import MAP_TYPE_MAPPING, T4_LANE, T4_ROADEDGE, T4_ROADLINE
@@ -250,21 +239,6 @@ def _get_left_and_right_linestring(
     return lanelet.leftBound, lanelet.rightBound
 
 
-def _is_intersection(lanelet: lanelet2.core.Lanelet) -> bool:
-    """Check whether specified lanelet is intersection.
-
-    Args:
-    ----
-        lanelet (lanelet2.core.Lanelet): Lanelet instance.
-
-    Returns:
-    -------
-        bool: Return `True` if the lanelet has an attribute named `turn_direction`.
-
-    """
-    return "turn_direction" in lanelet.attributes
-
-
 def _interpolate_lane(waypoints: NDArray):
     # Compute cumulative distances (arc length)
     distances = np.zeros(len(waypoints))
@@ -315,9 +289,6 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
     """
     lanelet_map = _load_osm(filename)
 
-    traffic_rules = create_traffic_rules(Locations.Germany, Participants.Vehicle)
-    routing_graph = RoutingGraph(lanelet_map, traffic_rules)
-
     lane_segments: dict[int, LaneSegment] = {}
     taken_boundary_ids: list[int] = []
     for lanelet in lanelet_map.laneletLayer:
@@ -331,7 +302,6 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
                 np.array([(line.x, line.y, line.z) for line in lanelet.centerline])
             )
             lane_polyline = Polyline(polyline_type=lane_type, waypoints=lane_waypoints)
-            is_intersection = _is_intersection(lanelet)
             speed_limit_mph = _get_speed_limit_mph(lanelet)
 
             # road line or road edge
@@ -343,7 +313,6 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
             lane_segments[lanelet.id] = LaneSegment(
                 id=lanelet.id,
                 polyline=lane_polyline,
-                is_intersection=is_intersection,
                 left_boundaries=[left_boundary],
                 right_boundaries=[right_boundary],
                 speed_limit_mph=speed_limit_mph,
