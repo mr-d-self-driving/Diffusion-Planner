@@ -1,4 +1,5 @@
 import argparse
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("save_dir", type=Path)
     parser.add_argument("--step", type=int, default=1)
     parser.add_argument("--limit", type=int, default=-1)
+    parser.add_argument("--log_dir", type=Path, default="./")
     return parser.parse_args()
 
 
@@ -111,6 +113,16 @@ if __name__ == "__main__":
     save_dir = args.save_dir
     step = args.step
     limit = args.limit
+    log_dir = args.log_dir
+
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"{rosbag_path.stem}.log"
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(message)s",
+        handlers=[logging.FileHandler(log_path, mode="w"), logging.StreamHandler()],
+    )
+    logger = logging.getLogger(__name__)
 
     vector_map = convert_lanelet(str(vector_map_path))
 
@@ -152,7 +164,7 @@ if __name__ == "__main__":
                 break
 
     for key, value in topic_name_to_data.items():
-        print(f"{key}: {len(value)} msgs")
+        logger.info(f"{key}: {len(value)} msgs")
 
     route_msgs = topic_name_to_data["/planning/mission_planning/route"]
     sequence_data_list = [SequenceData([], route_msg) for route_msg in route_msgs]
@@ -160,7 +172,7 @@ if __name__ == "__main__":
     # convert to FrameData
     # The base topic is "/perception/object_recognition/tracking/objects" (10Hz)
     n = len(topic_name_to_data["/perception/object_recognition/tracking/objects"])
-    print(f"{n=}")
+    logger.info(f"{n=}")
     progress_bar = tqdm(total=n)
     for i in range(n):
         tracking = topic_name_to_data["/perception/object_recognition/tracking/objects"][i]
@@ -175,7 +187,7 @@ if __name__ == "__main__":
         for key in latest_msgs.keys():
             curr_msg, curr_index = get_nearest_msg(topic_name_to_data[key], tracking.header.stamp)
             if curr_msg is None:
-                print(f"Cannot find {key} msg")
+                logger.info(f"Cannot find {key} msg")
                 ok = False
                 break
             topic_name_to_data[key] = topic_name_to_data[key][curr_index:]
@@ -184,7 +196,7 @@ if __name__ == "__main__":
             msg_stamp_int = parse_timestamp(msg_stamp)
             diff = abs(timestamp - msg_stamp_int)
             if diff > int(0.1 * 1e9):
-                print(f"Over 100 msec: {key} {len(topic_name_to_data[key])=}, {diff=:,}")
+                logger.info(f"Over 100 msec: {key} {len(topic_name_to_data[key])=}, {diff=:,}")
                 ok = False
 
         # check kinematic_state
@@ -193,7 +205,7 @@ if __name__ == "__main__":
         covariance_xx = covariance[0]
         covariance_yy = covariance[7]
         if covariance_xx > 1e-1 or covariance_yy > 1e-1:
-            print(f"Invalid kinematic_state {covariance_xx=:.5f}, {covariance_yy=:.5f}")
+            logger.info(f"Invalid kinematic_state {covariance_xx=:.5f}, {covariance_yy=:.5f}")
             ok = False
 
         # check route
@@ -207,7 +219,7 @@ if __name__ == "__main__":
                 max_route_timestamp = route_stamp
                 max_route_index = j
         if max_route_index == -1:
-            print("Cannot find route msg")
+            logger.info("Cannot find route msg")
             continue
 
         sequence = sequence_data_list[max_route_index]
@@ -216,11 +228,11 @@ if __name__ == "__main__":
             if len(sequence.data_list) == 0:
                 # At the beginning of recording, some msgs may be missing
                 # Skip this frame
-                print(f"Skip this frame {i=}/{n=}")
+                logger.info(f"Skip this frame {i=}/{n=}")
                 continue
             else:
                 # If the msg is missing in the middle of recording, we can use the msgs to this point
-                print(f"Finish at this frame {i=}/{n=}")
+                logger.info(f"Finish at this frame {i=}/{n=}")
                 break
 
         sequence.data_list.append(
@@ -263,18 +275,20 @@ if __name__ == "__main__":
 
     map_name = rosbag_path.stem
     sequence_num = len(sequence_data_list)
-    print(f"Total {sequence_num} sequences")
+    logger.info(f"Total {sequence_num} sequences")
 
     for seq_id, seq in enumerate(sequence_data_list):
-        print(f"Processing sequence {seq_id + 1}/{sequence_num}")
+        logger.info(f"Processing sequence {seq_id + 1}/{sequence_num}")
 
         data_list = seq.data_list
         n = len(data_list)
-        print(f"Total {n} frames")
+        logger.info(f"Total {n} frames")
 
         # if less than 1800 frames (= 3 min), skip this sequence
         if n < 1800:
-            print(f"Skip this sequence because the number of frames {n} is less than 1800 frames")
+            logger.info(
+                f"Skip this sequence because the number of frames {n} is less than 1800 frames"
+            )
             continue
 
         # list[FrameData] -> npz

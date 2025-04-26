@@ -13,3 +13,5 @@ checkpoints/
 training_log/
 *.png
 .venv
+*.log
+
