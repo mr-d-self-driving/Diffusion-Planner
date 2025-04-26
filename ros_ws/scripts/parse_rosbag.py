@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
@@ -219,7 +220,7 @@ if __name__ == "__main__":
                 max_route_timestamp = route_stamp
                 max_route_index = j
         if max_route_index == -1:
-            logger.info("Cannot find route msg")
+            logger.info(f"Cannot find route msg at {i}")
             continue
 
         sequence = sequence_data_list[max_route_index]
@@ -395,3 +396,16 @@ if __name__ == "__main__":
             output_file = f"{save_dir}/{map_name}_{token}.npz"
             np.savez(output_file, **curr_data)
             progress.update(1)
+
+            # save other info
+            pose_dict = {
+                "x": data_list[i].kinematic_state.pose.pose.position.x,
+                "y": data_list[i].kinematic_state.pose.pose.position.y,
+                "z": data_list[i].kinematic_state.pose.pose.position.z,
+                "qx": data_list[i].kinematic_state.pose.pose.orientation.x,
+                "qy": data_list[i].kinematic_state.pose.pose.orientation.y,
+                "qz": data_list[i].kinematic_state.pose.pose.orientation.z,
+                "qw": data_list[i].kinematic_state.pose.pose.orientation.w,
+            }
+            with open(f"{save_dir}/{map_name}_{token}.json", "w") as f:
+                json.dump(pose_dict, f)
