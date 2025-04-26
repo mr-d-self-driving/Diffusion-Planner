@@ -23,11 +23,8 @@ def dpm_sampler(
         **model_wrapper_params,
     )
 
-    dpm_solver = dpm.DPM_Solver(
-        model_fn, noise_schedule, algorithm_type="dpmsolver++", **dpm_solver_params
-    )  # w.o. dynamic thresholding
+    dpm_solver = dpm.DPM_Solver(model_fn, noise_schedule, **dpm_solver_params)
 
-    # Steps in [10, 20] can generate quite good samples.
     sample_dpm = dpm_solver.sample(x_T, steps=10, skip_type="logSNR")
 
     return sample_dpm

@@ -245,7 +245,6 @@ class DPM_Solver:
         self,
         model_fn,
         noise_schedule,
-        algorithm_type="dpmsolver++",
         correcting_x0_fn=None,
         correcting_xt_fn=None,
         thresholding_max_val=1.0,
@@ -253,11 +252,11 @@ class DPM_Solver:
     ):
         """Construct a DPM-Solver.
 
-        We support both DPM-Solver (`algorithm_type="dpmsolver"`) and DPM-Solver++ (`algorithm_type="dpmsolver++"`).
+        We support only DPM-Solver++.
 
         We also support the "dynamic thresholding" method in Imagen[1]. For pixel-space diffusion models, you
-        can set both `algorithm_type="dpmsolver++"` and `correcting_x0_fn="dynamic_thresholding"` to use the
-        dynamic thresholding. The "dynamic thresholding" can greatly improve the sample quality for pixel-space
+        can set `correcting_x0_fn="dynamic_thresholding"` to use the dynamic thresholding.
+        The "dynamic thresholding" can greatly improve the sample quality for pixel-space
         DPMs with large guidance scales. Note that the thresholding method is **unsuitable** for latent-space
         DPMs (such as stable-diffusion).
 
@@ -272,7 +271,6 @@ class DPM_Solver:
                 ``
                 The shape of `x` is `(batch_size, **shape)`, and the shape of `t_continuous` is `(batch_size,)`.
             noise_schedule: A noise schedule object, such as NoiseScheduleVP.
-            algorithm_type: A `str`. Either "dpmsolver" or "dpmsolver++".
             correcting_x0_fn: A `str` or a function with the following format:
                 ```
                 def correcting_x0_fn(x0, t):
@@ -309,8 +307,6 @@ class DPM_Solver:
         """
         self.model = lambda x, t: model_fn(x, t.expand((x.shape[0])))
         self.noise_schedule = noise_schedule
-        assert algorithm_type in ["dpmsolver", "dpmsolver++"]
-        self.algorithm_type = algorithm_type
         if correcting_x0_fn == "dynamic_thresholding":
             self.correcting_x0_fn = self.dynamic_thresholding_fn
         else:
@@ -356,10 +352,7 @@ class DPM_Solver:
         """
         Convert the model to the noise prediction model or the data prediction model.
         """
-        if self.algorithm_type == "dpmsolver++":
-            return self.data_prediction_fn(x, t)
-        else:
-            return self.noise_prediction_fn(x, t)
+        return self.data_prediction_fn(x, t)
 
     def get_time_steps(self, skip_type, t_T, t_0, N, device):
         """Compute the intermediate time steps for sampling.
@@ -487,31 +480,20 @@ class DPM_Solver:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
         ns = self.noise_schedule
-        dims = x.dim()
         lambda_s, lambda_t = ns.marginal_lambda(s), ns.marginal_lambda(t)
         h = lambda_t - lambda_s
-        log_alpha_s, log_alpha_t = ns.marginal_log_mean_coeff(s), ns.marginal_log_mean_coeff(t)
+        log_alpha_t = ns.marginal_log_mean_coeff(t)
         sigma_s, sigma_t = ns.marginal_std(s), ns.marginal_std(t)
         alpha_t = torch.exp(log_alpha_t)
 
-        if self.algorithm_type == "dpmsolver++":
-            phi_1 = torch.expm1(-h)
-            if model_s is None:
-                model_s = self.model_fn(x, s)
-            x_t = sigma_t / sigma_s * x - alpha_t * phi_1 * model_s
-            if return_intermediate:
-                return x_t, {"model_s": model_s}
-            else:
-                return x_t
+        phi_1 = torch.expm1(-h)
+        if model_s is None:
+            model_s = self.model_fn(x, s)
+        x_t = sigma_t / sigma_s * x - alpha_t * phi_1 * model_s
+        if return_intermediate:
+            return x_t, {"model_s": model_s}
         else:
-            phi_1 = torch.expm1(h)
-            if model_s is None:
-                model_s = self.model_fn(x, s)
-            x_t = torch.exp(log_alpha_t - log_alpha_s) * x - (sigma_t * phi_1) * model_s
-            if return_intermediate:
-                return x_t, {"model_s": model_s}
-            else:
-                return x_t
+            return x_t
 
     def multistep_dpm_solver_second_update(self, x, model_prev_list, t_prev_list, t):
         """
@@ -544,20 +526,12 @@ class DPM_Solver:
         h = lambda_t - lambda_prev_0
         r0 = h_0 / h
         D1_0 = (1.0 / r0) * (model_prev_0 - model_prev_1)
-        if self.algorithm_type == "dpmsolver++":
-            phi_1 = torch.expm1(-h)
-            x_t = (
-                (sigma_t / sigma_prev_0) * x
-                - (alpha_t * phi_1) * model_prev_0
-                - 0.5 * (alpha_t * phi_1) * D1_0
-            )
-        else:
-            phi_1 = torch.expm1(h)
-            x_t = (
-                (torch.exp(log_alpha_t - log_alpha_prev_0)) * x
-                - (sigma_t * phi_1) * model_prev_0
-                - 0.5 * (sigma_t * phi_1) * D1_0
-            )
+        phi_1 = torch.expm1(-h)
+        x_t = (
+            (sigma_t / sigma_prev_0) * x
+            - (alpha_t * phi_1) * model_prev_0
+            - 0.5 * (alpha_t * phi_1) * D1_0
+        )
         return x_t
 
     def multistep_dpm_solver_update(self, x, model_prev_list, t_prev_list, t, order):
@@ -598,19 +572,15 @@ class DPM_Solver:
 
         Some advices for choosing the algorithm:
             - For **unconditional sampling** or **guided sampling with small guidance scale** by DPMs:
-                Use singlestep DPM-Solver or DPM-Solver++ ("DPM-Solver-fast" in the paper) with `order = 3`.
-                e.g., DPM-Solver:
-                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver")
-                    >>> x_sample = dpm_solver.sample(x, steps=steps, t_start=t_start, t_end=t_end, order=3,
-                            skip_type='time_uniform', method='singlestep')
+                Use singlestep DPM-Solver++ ("DPM-Solver-fast" in the paper) with `order = 3`.
                 e.g., DPM-Solver++:
-                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
+                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule)
                     >>> x_sample = dpm_solver.sample(x, steps=steps, t_start=t_start, t_end=t_end, order=3,
                             skip_type='time_uniform', method='singlestep')
             - For **guided sampling with large guidance scale** by DPMs:
-                Use multistep DPM-Solver with `algorithm_type="dpmsolver++"` and `order = 2`.
+                Use multistep DPM-Solver with `order = 2`.
                 e.g.
-                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
+                    >>> dpm_solver = DPM_Solver(model_fn, noise_schedule)
                     >>> x_sample = dpm_solver.sample(x, steps=steps, t_start=t_start, t_end=t_end, order=2,
                             skip_type='time_uniform', method='multistep')
 
