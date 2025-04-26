@@ -19,7 +19,7 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
     with tqdm(data_loader, desc="Training", unit="batch") as data_epoch:
         for batch in data_epoch:
             """
-            data structure in batch: Tuple(Tensor) 
+            data structure in batch: Tuple(Tensor)
 
             ego_current_state,
             ego_future_gt,

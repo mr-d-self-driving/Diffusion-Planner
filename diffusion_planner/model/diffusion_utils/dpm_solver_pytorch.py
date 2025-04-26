@@ -328,17 +328,11 @@ class DPM_Solver:
         x0 = torch.clamp(x0, -s, s) / s
         return x0
 
-    def noise_prediction_fn(self, x, t):
-        """
-        Return the noise prediction model.
-        """
-        return self.model(x, t)
-
     def data_prediction_fn(self, x, t):
         """
         Return the data prediction model (with corrector).
         """
-        noise = self.noise_prediction_fn(x, t)
+        noise = self.model(x, t)
         alpha_t, sigma_t = (
             self.noise_schedule.marginal_alpha(t),
             self.noise_schedule.marginal_std(t),
@@ -459,12 +453,6 @@ class DPM_Solver:
             ]
         return timesteps_outer, orders
 
-    def denoise_to_zero_fn(self, x, s):
-        """
-        Denoise at the final step, which is equivalent to solve the ODE from lambda_s to infty by first-order discretization.
-        """
-        return self.data_prediction_fn(x, s)
-
     def dpm_solver_first_update(self, x, s, t, model_s=None, return_intermediate=False):
         """
         DPM-Solver-1 (equivalent to DDIM) from time `s` to time `t`.
@@ -575,13 +563,13 @@ class DPM_Solver:
                 Use singlestep DPM-Solver++ ("DPM-Solver-fast" in the paper) with `order = 3`.
                 e.g., DPM-Solver++:
                     >>> dpm_solver = DPM_Solver(model_fn, noise_schedule)
-                    >>> x_sample = dpm_solver.sample(x, steps=steps, t_start=t_start, t_end=t_end, order=3,
+                    >>> x_sample = dpm_solver.sample(x, steps=steps, order=3,
                             skip_type='time_uniform', method='singlestep')
             - For **guided sampling with large guidance scale** by DPMs:
                 Use multistep DPM-Solver with `order = 2`.
                 e.g.
                     >>> dpm_solver = DPM_Solver(model_fn, noise_schedule)
-                    >>> x_sample = dpm_solver.sample(x, steps=steps, t_start=t_start, t_end=t_end, order=2,
+                    >>> x_sample = dpm_solver.sample(x, steps=steps, order=2,
                             skip_type='time_uniform', method='multistep')
 
         We support three types of `skip_type`:
@@ -594,32 +582,7 @@ class DPM_Solver:
             x: A pytorch tensor. The initial value at time `t_start`
                 e.g. if `t_start` == T, then `x` is a sample from the standard normal distribution.
             steps: A `int`. The total number of function evaluations (NFE).
-            t_start: A `float`. The starting time of the sampling.
-                If `T` is None, we use self.noise_schedule.T (default is 1.0).
-            t_end: A `float`. The ending time of the sampling.
-                If `t_end` is None, we use 1. / self.noise_schedule.total_N.
-                e.g. if total_N == 1000, we have `t_end` == 1e-3.
-                - We recommend `t_end` == 1e-3 when `steps` <= 15; and `t_end` == 1e-4 when `steps` > 15.
             skip_type: A `str`. The type for the spacing of the time steps. 'time_uniform' or 'logSNR' or 'time_quadratic'.
-            method: A `str`. The method for sampling. 'singlestep' or 'multistep' or 'singlestep_fixed' or 'adaptive'.
-            denoise_to_zero: A `bool`. Whether to denoise to time 0 at the final step.
-                Default is `False`. If `denoise_to_zero` is `True`, the total NFE is (`steps` + 1).
-
-                This trick is firstly proposed by DDPM (https://arxiv.org/abs/2006.11239) and
-                score_sde (https://arxiv.org/abs/2011.13456). Such trick can improve the FID
-                for diffusion models sampling by diffusion SDEs for low-resolutional images
-                (such as CIFAR-10). However, we observed that such trick does not matter for
-                high-resolutional images. As it needs an additional NFE, we do not recommend
-                it for high-resolutional images.
-            lower_order_final: A `bool`. Whether to use lower order solvers at the final steps.
-                Only valid for `method=multistep` and `steps < 15`. We empirically find that
-                this trick is a key to stabilizing the sampling by DPM-Solver with very few steps
-                (especially for steps <= 10). So we recommend to set it to be `True`.
-            solver_type: A `str`. The taylor expansion type for the solver. `dpmsolver` or `taylor`. We recommend `dpmsolver`.
-            atol: A `float`. The absolute tolerance of the adaptive step size solver. Valid when `method` == 'adaptive'.
-            rtol: A `float`. The relative tolerance of the adaptive step size solver. Valid when `method` == 'adaptive'.
-            return_intermediate: A `bool`. Whether to save the xt at each step.
-                When set to `True`, method returns a tuple (x0, intermediates); when set to False, method returns only x0.
         Returns:
             x_end: A pytorch tensor. The approximated solution at time `t_end`.
 
@@ -680,7 +643,7 @@ class DPM_Solver:
                     model_prev_list[-1] = self.model_fn(x, t)
             if denoise_to_zero:
                 t = torch.ones((1,)).to(device) * t_0
-                x = self.denoise_to_zero_fn(x, t)
+                x = self.data_prediction_fn(x, t)
                 if self.correcting_xt_fn is not None:
                     x = self.correcting_xt_fn(x, t, step + 1)
         return x
