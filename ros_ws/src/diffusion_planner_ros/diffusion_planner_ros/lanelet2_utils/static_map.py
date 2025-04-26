@@ -48,16 +48,6 @@ class AWMLStaticMap:
         """
         return [seg for _, seg in self.lane_segments.items()]
 
-    def get_crosswalk_segments(self) -> list[CrosswalkSegment]:
-        """Return all crosswalk segments as a list.
-
-        Returns
-        -------
-            list[CrosswalkSegment]: List of `CrosswalkSegment`.
-
-        """
-        return [seg for _, seg in self.crosswalk_segments.items()]
-
     def get_boundary_segments(self) -> list[BoundarySegment]:
         """Return all the other boundary segments except of contained lanes as a list.
 
