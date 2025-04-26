@@ -120,6 +120,39 @@ def visualize_inputs(
         dx = len_x / 2 * np.cos(n_heading)
         dy = len_x / 2 * np.sin(n_heading)
 
+        ax.text(
+            n_x + 10,
+            n_y,
+            f"Agent {i}",
+            fontsize=8,
+            color=color,
+            ha="center",
+            va="center",
+        )
+
+        if "neighbor_agents_future" in inputs:
+            neighbor_future = inputs["neighbor_agents_future"][0][i]
+            for j in range(neighbor_future.shape[0]):
+                neighbor_future_x = neighbor_future[j, 0]
+                neighbor_future_y = neighbor_future[j, 1]
+                t = j / (neighbor_future.shape[0] - 1)
+                ax.scatter(
+                    neighbor_future_x,
+                    neighbor_future_y,
+                    color=[1.0 * t, 0.0, 1.0 * (1 - t)],
+                    alpha=0.5,
+                    s=10,
+                )
+            ax.text(
+                neighbor_future[0, 0] + 10,
+                neighbor_future[0, 1] + 5,
+                f"Future {i}",
+                fontsize=8,
+                color=color,
+                ha="center",
+                va="center",
+            )
+
         # Draw the velocity as an arrow
         v = np.sqrt(vel_x**2 + vel_y**2) / 10
         ax.arrow(
