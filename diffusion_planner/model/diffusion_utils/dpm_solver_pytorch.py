@@ -2,11 +2,7 @@ import torch
 
 
 class NoiseScheduleVP:
-    def __init__(
-        self,
-        continuous_beta_0=0.1,
-        continuous_beta_1=20.0,
-    ):
+    def __init__(self):
         """Create a wrapper class for the forward SDE (VP type).
 
         The forward SDE ensures that the condition distribution q_{t|0}(x_t | x_0) = N ( alpha_t * x_0, sigma_t^2 * I ).
@@ -41,21 +37,8 @@ class NoiseScheduleVP:
         """
         self.T = 1.0
         self.total_N = 1000
-        self.beta_0 = continuous_beta_0
-        self.beta_1 = continuous_beta_1
-
-    def numerical_clip_alpha(self, log_alphas, clipped_lambda=-5.1):
-        """
-        For some beta schedules such as cosine schedule, the log-SNR has numerical isssues.
-        We clip the log-SNR near t=T within -5.1 to ensure the stability.
-        Such a trick is very useful for diffusion models with the cosine schedule, such as i-DDPM, guided-diffusion and GLIDE.
-        """
-        log_sigmas = 0.5 * torch.log(1.0 - torch.exp(2.0 * log_alphas))
-        lambs = log_alphas - log_sigmas
-        idx = torch.searchsorted(torch.flip(lambs, [0]), clipped_lambda)
-        if idx > 0:
-            log_alphas = log_alphas[:-idx]
-        return log_alphas
+        self.beta_0 = 0.1
+        self.beta_1 = 20.0
 
     def marginal_log_mean_coeff(self, t):
         """
@@ -797,54 +780,6 @@ class DPM_Solver:
 #############################################################
 # other utility functions
 #############################################################
-
-
-def interpolate_fn(x, xp, yp):
-    """
-    A piecewise linear function y = f(x), using xp and yp as keypoints.
-    We implement f(x) in a differentiable way (i.e. applicable for autograd).
-    The function f(x) is well-defined for all x-axis. (For x beyond the bounds of xp, we use the outmost points of xp to define the linear function.)
-
-    Args:
-        x: PyTorch tensor with shape [N, C], where N is the batch size, C is the number of channels (we use C = 1 for DPM-Solver).
-        xp: PyTorch tensor with shape [C, K], where K is the number of keypoints.
-        yp: PyTorch tensor with shape [C, K].
-    Returns:
-        The function values f(x), with shape [N, C].
-    """
-    N, K = x.shape[0], xp.shape[1]
-    all_x = torch.cat([x.unsqueeze(2), xp.unsqueeze(0).repeat((N, 1, 1))], dim=2)
-    sorted_all_x, x_indices = torch.sort(all_x, dim=2)
-    x_idx = torch.argmin(x_indices, dim=2)
-    cand_start_idx = x_idx - 1
-    start_idx = torch.where(
-        torch.eq(x_idx, 0),
-        torch.tensor(1, device=x.device),
-        torch.where(
-            torch.eq(x_idx, K),
-            torch.tensor(K - 2, device=x.device),
-            cand_start_idx,
-        ),
-    )
-    end_idx = torch.where(torch.eq(start_idx, cand_start_idx), start_idx + 2, start_idx + 1)
-    start_x = torch.gather(sorted_all_x, dim=2, index=start_idx.unsqueeze(2)).squeeze(2)
-    end_x = torch.gather(sorted_all_x, dim=2, index=end_idx.unsqueeze(2)).squeeze(2)
-    start_idx2 = torch.where(
-        torch.eq(x_idx, 0),
-        torch.tensor(0, device=x.device),
-        torch.where(
-            torch.eq(x_idx, K),
-            torch.tensor(K - 2, device=x.device),
-            cand_start_idx,
-        ),
-    )
-    y_positions_expanded = yp.unsqueeze(0).expand(N, -1, -1)
-    start_y = torch.gather(y_positions_expanded, dim=2, index=start_idx2.unsqueeze(2)).squeeze(2)
-    end_y = torch.gather(y_positions_expanded, dim=2, index=(start_idx2 + 1).unsqueeze(2)).squeeze(
-        2
-    )
-    cand = start_y + (x - start_x) * (end_y - start_y) / (end_x - start_x)
-    return cand
 
 
 def expand_dims(v, dims):
