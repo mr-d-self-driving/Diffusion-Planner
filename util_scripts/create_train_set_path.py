@@ -18,6 +18,7 @@ if __name__ == "__main__":
     all_list = []
 
     for root_dir in root_dir_list:
+        root_dir = root_dir.resolve()
         assert root_dir.is_absolute(), f"{root_dir} is not an absolute path."
         assert root_dir.exists(), f"{root_dir} does not exist."
         assert root_dir.is_dir(), f"{root_dir} is not a directory."
