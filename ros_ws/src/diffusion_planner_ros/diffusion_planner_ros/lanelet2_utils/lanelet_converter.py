@@ -35,10 +35,7 @@ from .uuid import uuid
 def _interpolate_points(line, num_point):
     line = LineString(line)
     new_line = np.concatenate(
-        [
-            line.interpolate(d).coords._coords
-            for d in np.linspace(0, line.length, num_point)
-        ]
+        [line.interpolate(d).coords._coords for d in np.linspace(0, line.length, num_point)]
     )
     return new_line
 
@@ -212,9 +209,7 @@ def _get_boundary_segment(linestring: lanelet2.core.LineString3d) -> BoundarySeg
 
     """
     boundary_type = _get_boundary_type(linestring)
-    waypoints = _interpolate_lane(
-        np.array([(line.x, line.y, line.z) for line in linestring])
-    )
+    waypoints = _interpolate_lane(np.array([(line.x, line.y, line.z) for line in linestring]))
     polyline = Polyline(polyline_type=boundary_type, waypoints=waypoints)
     return BoundarySegment(linestring.id, polyline)
 
@@ -298,15 +293,11 @@ def _interpolate_lane(waypoints: NDArray):
     # Compute cumulative distances (arc length)
     distances = np.zeros(len(waypoints))
     for i in range(1, len(waypoints)):
-        distances[i] = distances[i - 1] + np.linalg.norm(
-            waypoints[i] - waypoints[i - 1]
-        )
+        distances[i] = distances[i - 1] + np.linalg.norm(waypoints[i] - waypoints[i - 1])
 
     # Generate new arc lengths with fixed spacing (0.5 meters)
     new_distances = np.arange(0, distances[-1], 0.5)
-    new_distances = np.append(
-        new_distances, distances[-1]
-    )  # Ensure last point is included
+    new_distances = np.append(new_distances, distances[-1])  # Ensure last point is included
 
     # Interpolate x, y, z separately
     interp_x = interp1d(distances, waypoints[:, 0], kind="linear")
@@ -397,9 +388,7 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
             waypoints = _interpolate_lane(
                 np.array([(poly.x, poly.y, poly.z) for poly in lanelet.polygon3d()])
             )
-            polygon = Polyline(
-                polyline_type=MAP_TYPE_MAPPING[lanelet_subtype], waypoints=waypoints
-            )
+            polygon = Polyline(polyline_type=MAP_TYPE_MAPPING[lanelet_subtype], waypoints=waypoints)
             crosswalk_segments[lanelet.id] = CrosswalkSegment(lanelet.id, polygon)
         else:
             # logging.warning(f"[Lanelet]: {lanelet_subtype} is unsupported and skipped.")
@@ -433,12 +422,8 @@ def _fix_point_num(map: AWMLStaticMap):
 
         # Fix the number of points to 20
         segment.polyline.waypoints = _interpolate_points(centerlines, 20)
-        segment.left_boundaries[0].polyline.waypoints = _interpolate_points(
-            left_boundaries, 20
-        )
-        segment.right_boundaries[0].polyline.waypoints = _interpolate_points(
-            right_boundaries, 20
-        )
+        segment.left_boundaries[0].polyline.waypoints = _interpolate_points(left_boundaries, 20)
+        segment.right_boundaries[0].polyline.waypoints = _interpolate_points(right_boundaries, 20)
 
         # To crop the map faster, we need to set the center of the segment
         segment.center = np.mean(centerlines[:, 0:2], axis=0)
@@ -457,27 +442,28 @@ def process_segment(
     left_boundaries = segment.left_boundaries[0].polyline.waypoints
     right_boundaries = segment.right_boundaries[0].polyline.waypoints
 
-    inside = (
-        (segment.center[0] > center_x - mask_range * 1.1)
-        & (segment.center[0] < center_x + mask_range * 1.1)
-        & (segment.center[1] > center_y - mask_range * 1.1)
-        & (segment.center[1] < center_y + mask_range * 1.1)
-    )
-    if not inside:
+    def judge_inside(x, y):
+        return (
+            (x > center_x - mask_range)
+            & (x < center_x + mask_range)
+            & (y > center_y - mask_range)
+            & (y < center_y + mask_range)
+        )
+
+    inside_center = judge_inside(segment.center[0], segment.center[1])
+    inside_first = judge_inside(centerlines[0, 0], centerlines[0, 1])
+    inside_last = judge_inside(centerlines[-1, 0], centerlines[-1, 1])
+    if (not inside_center) and (not inside_first) and (not inside_last):
         return None
 
     # Convert to base_link
     centerlines_4xN = np.vstack((centerlines.T, np.ones(centerlines.shape[0])))
     centerlines_ego = inv_transform_matrix_4x4 @ centerlines_4xN
     centerlines = centerlines_ego[:3, :].T
-    left_boundaries_4xN = np.vstack(
-        (left_boundaries.T, np.ones(left_boundaries.shape[0]))
-    )
+    left_boundaries_4xN = np.vstack((left_boundaries.T, np.ones(left_boundaries.shape[0])))
     left_boundaries_ego = inv_transform_matrix_4x4 @ left_boundaries_4xN
     left_boundaries = left_boundaries_ego[:3, :].T
-    right_boundaries_4xN = np.vstack(
-        (right_boundaries.T, np.ones(right_boundaries.shape[0]))
-    )
+    right_boundaries_4xN = np.vstack((right_boundaries.T, np.ones(right_boundaries.shape[0])))
     right_boundaries_ego = inv_transform_matrix_4x4 @ right_boundaries_4xN
     right_boundaries = right_boundaries_ego[:3, :].T
 
@@ -552,19 +538,20 @@ def create_lane_tensor(
             continue
         result_list.append(curr_data)
 
-    # sort by distance from the first point
-    result_list = sorted(result_list, key=lambda tup: np.linalg.norm(tup[0][0, :2]))
+    # sort by distance from the first and last point
+    def key_func(item):
+        line_data, speed_limit_mps = item
+        return min(
+            np.linalg.norm(line_data[0, :2]),
+            np.linalg.norm(line_data[-1, :2]),
+        )
+
+    result_list = sorted(result_list, key=key_func)
     result_list = result_list[0:num_segments]
 
-    lanes_tensor = torch.zeros(
-        (1, num_segments, 20, 12), dtype=torch.float32, device=dev
-    )
-    lanes_speed_limit = torch.zeros(
-        (1, num_segments, 1), dtype=torch.float32, device=dev
-    )
-    lanes_has_speed_limit = torch.zeros(
-        (1, num_segments, 1), dtype=torch.bool, device=dev
-    )
+    lanes_tensor = torch.zeros((1, num_segments, 20, 12), dtype=torch.float32, device=dev)
+    lanes_speed_limit = torch.zeros((1, num_segments, 1), dtype=torch.float32, device=dev)
+    lanes_has_speed_limit = torch.zeros((1, num_segments, 1), dtype=torch.bool, device=dev)
 
     for i, result_list in enumerate(result_list):
         line_data, speed_limit = result_list
