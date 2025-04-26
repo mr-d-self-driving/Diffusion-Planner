@@ -1235,7 +1235,6 @@ class DPM_Solver:
         t_start=None,
         t_end=None,
         skip_type="time_uniform",
-        method="multistep",
         lower_order_final=True,
         denoise_to_zero=False,
         solver_type="dpmsolver",
@@ -1249,29 +1248,12 @@ class DPM_Solver:
         =====================================================
 
         We support the following algorithms for both noise prediction model and data prediction model:
-            - 'singlestep':
-                Singlestep DPM-Solver (i.e. "DPM-Solver-fast" in the paper), which combines different orders of singlestep DPM-Solver.
-                We combine all the singlestep solvers with order <= `order` to use up all the function evaluations (steps).
-                The total number of function evaluations (NFE) == `steps`.
-                Given a fixed NFE == `steps`, the sampling procedure is:
-                    - Denote K = (steps // 2) + (steps % 2). We take K intermediate time steps for sampling.
-                    - If steps % 2 == 0, we use K steps of singlestep DPM-Solver-2.
-                    - If steps % 2 == 1, we use (K - 1) steps of singlestep DPM-Solver-2 and 1 step of DPM-Solver-1.
             - 'multistep':
                 Multistep DPM-Solver with the order of `order`. The total number of function evaluations (NFE) == `steps`.
                 We initialize the first `order` values by lower order multistep solvers.
                 Given a fixed NFE == `steps`, the sampling procedure is:
                     Denote K = steps.
                     - We firstly use 1 step of DPM-Solver-1, then use (K - 1) step of multistep DPM-Solver-2.
-            - 'singlestep_fixed':
-                Fixed order singlestep DPM-Solver (i.e. DPM-Solver-1 or singlestep DPM-Solver-2 or singlestep DPM-Solver-3).
-                We use singlestep DPM-Solver-`order` for `order`=1 or 2 or 3, with total [`steps` // `order`] * `order` NFE.
-            - 'adaptive':
-                Adaptive step size DPM-Solver (i.e. "DPM-Solver-12" and "DPM-Solver-23" in the paper).
-                We ignore `steps` and use adaptive step size DPM-Solver with a higher order of `order`.
-                You can adjust the absolute tolerance `atol` and the relative tolerance `rtol` to balance the computatation costs
-                (NFE) and the sample quality.
-                    - we use DPM-Solver-12 which combines DPM-Solver-1 and singlestep DPM-Solver-2.
 
         =====================================================
 
@@ -1337,6 +1319,7 @@ class DPM_Solver:
 
         """
         order = 2
+        method = "multistep"
         t_0 = 1.0 / self.noise_schedule.total_N if t_end is None else t_end
         t_T = self.noise_schedule.T if t_start is None else t_start
         assert t_0 > 0 and t_T > 0, (
@@ -1353,95 +1336,54 @@ class DPM_Solver:
         device = x.device
         intermediates = []
         with torch.no_grad():
-            if method == "adaptive":
-                x = self.dpm_solver_adaptive(
-                    x, order=order, t_T=t_T, t_0=t_0, atol=atol, rtol=rtol, solver_type=solver_type
-                )
-            elif method == "multistep":
-                assert steps >= order
-                timesteps = self.get_time_steps(
-                    skip_type=skip_type, t_T=t_T, t_0=t_0, N=steps, device=device
-                )
-                assert timesteps.shape[0] - 1 == steps
-                # Init the initial values.
-                step = 0
+            assert steps >= order
+            timesteps = self.get_time_steps(
+                skip_type=skip_type, t_T=t_T, t_0=t_0, N=steps, device=device
+            )
+            assert timesteps.shape[0] - 1 == steps
+            # Init the initial values.
+            step = 0
+            t = timesteps[step]
+            t_prev_list = [t]
+            model_prev_list = [self.model_fn(x, t)]
+            if self.correcting_xt_fn is not None:
+                x = self.correcting_xt_fn(x, t, step)
+            if return_intermediate:
+                intermediates.append(x)
+            # Init the first `order` values by lower order multistep DPM-Solver.
+            for step in range(1, order):
                 t = timesteps[step]
-                t_prev_list = [t]
-                model_prev_list = [self.model_fn(x, t)]
+                x = self.multistep_dpm_solver_update(
+                    x, model_prev_list, t_prev_list, t, step, solver_type=solver_type
+                )
                 if self.correcting_xt_fn is not None:
                     x = self.correcting_xt_fn(x, t, step)
                 if return_intermediate:
                     intermediates.append(x)
-                # Init the first `order` values by lower order multistep DPM-Solver.
-                for step in range(1, order):
-                    t = timesteps[step]
-                    x = self.multistep_dpm_solver_update(
-                        x, model_prev_list, t_prev_list, t, step, solver_type=solver_type
-                    )
-                    if self.correcting_xt_fn is not None:
-                        x = self.correcting_xt_fn(x, t, step)
-                    if return_intermediate:
-                        intermediates.append(x)
-                    t_prev_list.append(t)
-                    model_prev_list.append(self.model_fn(x, t))
-                # Compute the remaining values by `order`-th order multistep DPM-Solver.
-                for step in range(order, steps + 1):
-                    t = timesteps[step]
-                    # We only use lower order for steps < 10
-                    if lower_order_final and steps < 10:
-                        step_order = min(order, steps + 1 - step)
-                    else:
-                        step_order = order
-                    x = self.multistep_dpm_solver_update(
-                        x, model_prev_list, t_prev_list, t, step_order, solver_type=solver_type
-                    )
-                    if self.correcting_xt_fn is not None:
-                        x = self.correcting_xt_fn(x, t, step)
-                    if return_intermediate:
-                        intermediates.append(x)
-                    for i in range(order - 1):
-                        t_prev_list[i] = t_prev_list[i + 1]
-                        model_prev_list[i] = model_prev_list[i + 1]
-                    t_prev_list[-1] = t
-                    # We do not need to evaluate the final model value.
-                    if step < steps:
-                        model_prev_list[-1] = self.model_fn(x, t)
-            elif method in ["singlestep", "singlestep_fixed"]:
-                if method == "singlestep":
-                    timesteps_outer, orders = self.get_orders_and_timesteps_for_singlestep_solver(
-                        steps=steps,
-                        order=order,
-                        skip_type=skip_type,
-                        t_T=t_T,
-                        t_0=t_0,
-                        device=device,
-                    )
-                elif method == "singlestep_fixed":
-                    K = steps // order
-                    orders = [
-                        order,
-                    ] * K
-                    timesteps_outer = self.get_time_steps(
-                        skip_type=skip_type, t_T=t_T, t_0=t_0, N=K, device=device
-                    )
-                for step, order in enumerate(orders):
-                    s, t = timesteps_outer[step], timesteps_outer[step + 1]
-                    timesteps_inner = self.get_time_steps(
-                        skip_type=skip_type, t_T=s.item(), t_0=t.item(), N=order, device=device
-                    )
-                    lambda_inner = self.noise_schedule.marginal_lambda(timesteps_inner)
-                    h = lambda_inner[-1] - lambda_inner[0]
-                    r1 = None if order <= 1 else (lambda_inner[1] - lambda_inner[0]) / h
-                    r2 = None if order <= 2 else (lambda_inner[2] - lambda_inner[0]) / h
-                    x = self.singlestep_dpm_solver_update(
-                        x, s, t, order, solver_type=solver_type, r1=r1, r2=r2
-                    )
-                    if self.correcting_xt_fn is not None:
-                        x = self.correcting_xt_fn(x, t, step)
-                    if return_intermediate:
-                        intermediates.append(x)
-            else:
-                raise ValueError("Got wrong method {}".format(method))
+                t_prev_list.append(t)
+                model_prev_list.append(self.model_fn(x, t))
+            # Compute the remaining values by `order`-th order multistep DPM-Solver.
+            for step in range(order, steps + 1):
+                t = timesteps[step]
+                # We only use lower order for steps < 10
+                if lower_order_final and steps < 10:
+                    step_order = min(order, steps + 1 - step)
+                else:
+                    step_order = order
+                x = self.multistep_dpm_solver_update(
+                    x, model_prev_list, t_prev_list, t, step_order, solver_type=solver_type
+                )
+                if self.correcting_xt_fn is not None:
+                    x = self.correcting_xt_fn(x, t, step)
+                if return_intermediate:
+                    intermediates.append(x)
+                for i in range(order - 1):
+                    t_prev_list[i] = t_prev_list[i + 1]
+                    model_prev_list[i] = model_prev_list[i + 1]
+                t_prev_list[-1] = t
+                # We do not need to evaluate the final model value.
+                if step < steps:
+                    model_prev_list[-1] = self.model_fn(x, t)
             if denoise_to_zero:
                 t = torch.ones((1,)).to(device) * t_0
                 x = self.denoise_to_zero_fn(x, t)

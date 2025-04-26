@@ -32,7 +32,6 @@ def dpm_sampler(
         x_T,
         steps=10,
         skip_type="logSNR",
-        method="multistep",
         denoise_to_zero=True,
     )
 
