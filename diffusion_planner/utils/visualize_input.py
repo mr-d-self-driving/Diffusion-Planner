@@ -119,15 +119,6 @@ def visualize_inputs(
         # Draw the current position as an arrow
         dx = len_x / 2 * np.cos(n_heading)
         dy = len_x / 2 * np.sin(n_heading)
-        ax.text(
-            n_x + 10,
-            n_y,
-            f"Agent {i}",
-            fontsize=8,
-            color=color,
-            ha="center",
-            va="center",
-        )
 
         # Draw the velocity as an arrow
         v = np.sqrt(vel_x**2 + vel_y**2) / 10
@@ -283,9 +274,11 @@ def visualize_inputs(
     ax.grid(True, alpha=0.3)
 
     # print status
+    view_range = 55
+
     ax.text(
-        99,
-        99,
+        view_range - 1,
+        view_range - 1,
         f"VelocityX: {ego_vel_x:.2f} m/s\n"
         f"VelocityY: {ego_vel_y:.2f} m/s\n"
         f"AccelerationX: {ego_acc_x:.2f} m/s²\n"
@@ -298,7 +291,6 @@ def visualize_inputs(
         va="top",
     )
 
-    view_range = 55
     ax.set_xlim(ego_x - view_range, ego_x + view_range)
     ax.set_ylim(ego_y - view_range, ego_y + view_range)
 
