@@ -265,29 +265,6 @@ def _is_intersection(lanelet: lanelet2.core.Lanelet) -> bool:
     return "turn_direction" in lanelet.attributes
 
 
-def _get_left_and_right_neighbor_ids(
-    lanelet: lanelet2.core.Lanelet,
-    routing_graph: RoutingGraph,
-) -> tuple[list[int], list[int]]:
-    """Return whether the lanelet has left and right neighbors.
-
-    Args:
-    ----
-        lanelet (lanelet2.core.Lanelet): Lanelet instance.
-        routing_graph (RoutingGraph): RoutingGraph instance.
-
-    Returns:
-    -------
-        tuple[list[int], list[int]]: Whether the lanelet has (left, right) neighbors.
-
-    """
-    left_lanelet = routing_graph.left(lanelet)
-    right_lanelet = routing_graph.right(lanelet)
-    left_neighbor_id = [left_lanelet.id] if left_lanelet is not None else []
-    right_neighbor_id = [right_lanelet.id] if right_lanelet is not None else []
-    return left_neighbor_id, right_neighbor_id
-
-
 def _interpolate_lane(waypoints: NDArray):
     # Compute cumulative distances (arc length)
     distances = np.zeros(len(waypoints))
@@ -355,9 +332,6 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
             )
             lane_polyline = Polyline(polyline_type=lane_type, waypoints=lane_waypoints)
             is_intersection = _is_intersection(lanelet)
-            left_neighbor_ids, right_neighbor_ids = _get_left_and_right_neighbor_ids(
-                lanelet, routing_graph
-            )
             speed_limit_mph = _get_speed_limit_mph(lanelet)
 
             # road line or road edge
@@ -372,8 +346,6 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
                 is_intersection=is_intersection,
                 left_boundaries=[left_boundary],
                 right_boundaries=[right_boundary],
-                left_neighbor_ids=left_neighbor_ids,
-                right_neighbor_ids=right_neighbor_ids,
                 speed_limit_mph=speed_limit_mph,
                 traffic_lights=lanelet.trafficLights(),
             )

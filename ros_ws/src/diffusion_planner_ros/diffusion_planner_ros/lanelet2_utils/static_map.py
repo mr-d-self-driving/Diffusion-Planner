@@ -128,8 +128,6 @@ class LaneSegment:
         is_intersection (bool): Flag indicating if this lane is intersection.
         left_boundaries (list[BoundarySegment]): List of `BoundarySegment` instances.
         right_boundaries (list[BoundarySegment]): List of `BoundarySegment` instances.
-        left_neighbor_ids (list[int]): List of left neighbor ids on left side.
-        right_neighbor_ids (list[int]): List of neighbor ids on right side.
         speed_limit_mph (float | None, optional): Lane speed limit in [miles/h].
 
     """
@@ -141,8 +139,6 @@ class LaneSegment:
     is_intersection: bool
     left_boundaries: list[BoundarySegment] = field(converter=_to_boundary_segment, factory=list)
     right_boundaries: list[BoundarySegment] = field(converter=_to_boundary_segment, factory=list)
-    left_neighbor_ids: list[int] = field(factory=list)
-    right_neighbor_ids: list[int] = field(factory=list)
     speed_limit_mph: float | None = field(default=None)
     center: NDArrayF32 = field(init=False)
     traffic_lights: list = field(default=None)
@@ -212,74 +208,6 @@ class LaneSegment:
         _append_boundaries(self.right_boundaries)
 
         return np.concatenate(all_polyline, axis=0, dtype=np.float32)
-
-    def is_left_crossable(self) -> bool:
-        """Whether all left boundaries of lane are allowed to cross.
-
-        Returns
-        -------
-            bool: Return True if all boundaries are allowed to cross.
-
-        """
-        if len(self.left_boundaries) == 0:
-            return False
-        return all(bound.is_crossable() for bound in self.left_boundaries)
-
-    def is_right_crossable(self) -> bool:
-        """Whether all right boundaries of this lane are allowed to cross.
-
-        Returns
-        -------
-            bool: Return True if all boundaries are allowed to cross.
-
-        """
-        if len(self.right_boundaries) == 0:
-            return False
-        return all(bound.is_crossable() for bound in self.right_boundaries)
-
-    def is_left_virtual(self) -> bool:
-        """Whether all left boundaries of this lane are virtual (=unknown).
-
-        Returns
-        -------
-            bool: Return True if all boundaries are virtual.
-
-        """
-        if len(self.left_boundaries) == 0:
-            return False
-        return all(bound.is_virtual() for bound in self.left_boundaries)
-
-    def is_right_virtual(self) -> bool:
-        """Whether all right boundaries of this lane are virtual (=unknown).
-
-        Returns
-        -------
-            bool: Return True if all boundaries are virtual.
-
-        """
-        if len(self.right_boundaries) == 0:
-            return False
-        return all(bound.is_virtual() for bound in self.right_boundaries)
-
-    def has_left_neighbor(self) -> bool:
-        """Whether the lane segment has the neighbor lane on its left side.
-
-        Returns
-        -------
-            bool: Return True if it has at least one `left_neighbor_ids`.
-
-        """
-        return len(self.left_neighbor_ids) > 0
-
-    def has_right_neighbor(self) -> bool:
-        """Whether the lane segment has the neighbor lane on its right side.
-
-        Returns
-        -------
-            bool: Return True if it has at least one `right_neighbor_ids`.
-
-        """
-        return len(self.right_neighbor_ids) > 0
 
 
 @dataclass
