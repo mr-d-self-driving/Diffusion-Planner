@@ -31,7 +31,6 @@ def dpm_sampler(
     sample_dpm = dpm_solver.sample(
         x_T,
         steps=10,
-        order=2,
         skip_type="logSNR",
         method="multistep",
         denoise_to_zero=True,

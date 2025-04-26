@@ -1234,7 +1234,6 @@ class DPM_Solver:
         steps=20,
         t_start=None,
         t_end=None,
-        order=2,
         skip_type="time_uniform",
         method="multistep",
         lower_order_final=True,
@@ -1255,28 +1254,15 @@ class DPM_Solver:
                 We combine all the singlestep solvers with order <= `order` to use up all the function evaluations (steps).
                 The total number of function evaluations (NFE) == `steps`.
                 Given a fixed NFE == `steps`, the sampling procedure is:
-                    - If `order` == 1:
-                        - Denote K = steps. We use K steps of DPM-Solver-1 (i.e. DDIM).
-                    - If `order` == 2:
-                        - Denote K = (steps // 2) + (steps % 2). We take K intermediate time steps for sampling.
-                        - If steps % 2 == 0, we use K steps of singlestep DPM-Solver-2.
-                        - If steps % 2 == 1, we use (K - 1) steps of singlestep DPM-Solver-2 and 1 step of DPM-Solver-1.
-                    - If `order` == 3:
-                        - Denote K = (steps // 3 + 1). We take K intermediate time steps for sampling.
-                        - If steps % 3 == 0, we use (K - 2) steps of singlestep DPM-Solver-3, and 1 step of singlestep DPM-Solver-2 and 1 step of DPM-Solver-1.
-                        - If steps % 3 == 1, we use (K - 1) steps of singlestep DPM-Solver-3 and 1 step of DPM-Solver-1.
-                        - If steps % 3 == 2, we use (K - 1) steps of singlestep DPM-Solver-3 and 1 step of singlestep DPM-Solver-2.
+                    - Denote K = (steps // 2) + (steps % 2). We take K intermediate time steps for sampling.
+                    - If steps % 2 == 0, we use K steps of singlestep DPM-Solver-2.
+                    - If steps % 2 == 1, we use (K - 1) steps of singlestep DPM-Solver-2 and 1 step of DPM-Solver-1.
             - 'multistep':
                 Multistep DPM-Solver with the order of `order`. The total number of function evaluations (NFE) == `steps`.
                 We initialize the first `order` values by lower order multistep solvers.
                 Given a fixed NFE == `steps`, the sampling procedure is:
                     Denote K = steps.
-                    - If `order` == 1:
-                        - We use K steps of DPM-Solver-1 (i.e. DDIM).
-                    - If `order` == 2:
-                        - We firstly use 1 step of DPM-Solver-1, then use (K - 1) step of multistep DPM-Solver-2.
-                    - If `order` == 3:
-                        - We firstly use 1 step of DPM-Solver-1, then 1 step of multistep DPM-Solver-2, then (K - 2) step of multistep DPM-Solver-3.
+                    - We firstly use 1 step of DPM-Solver-1, then use (K - 1) step of multistep DPM-Solver-2.
             - 'singlestep_fixed':
                 Fixed order singlestep DPM-Solver (i.e. DPM-Solver-1 or singlestep DPM-Solver-2 or singlestep DPM-Solver-3).
                 We use singlestep DPM-Solver-`order` for `order`=1 or 2 or 3, with total [`steps` // `order`] * `order` NFE.
@@ -1285,8 +1271,7 @@ class DPM_Solver:
                 We ignore `steps` and use adaptive step size DPM-Solver with a higher order of `order`.
                 You can adjust the absolute tolerance `atol` and the relative tolerance `rtol` to balance the computatation costs
                 (NFE) and the sample quality.
-                    - If `order` == 2, we use DPM-Solver-12 which combines DPM-Solver-1 and singlestep DPM-Solver-2.
-                    - If `order` == 3, we use DPM-Solver-23 which combines singlestep DPM-Solver-2 and singlestep DPM-Solver-3.
+                    - we use DPM-Solver-12 which combines DPM-Solver-1 and singlestep DPM-Solver-2.
 
         =====================================================
 
@@ -1327,7 +1312,6 @@ class DPM_Solver:
                     - We recommend `t_end` == 1. / self.noise_schedule.total_N.
                 For continuous-time DPMs:
                     - We recommend `t_end` == 1e-3 when `steps` <= 15; and `t_end` == 1e-4 when `steps` > 15.
-            order: A `int`. The order of DPM-Solver.
             skip_type: A `str`. The type for the spacing of the time steps. 'time_uniform' or 'logSNR' or 'time_quadratic'.
             method: A `str`. The method for sampling. 'singlestep' or 'multistep' or 'singlestep_fixed' or 'adaptive'.
             denoise_to_zero: A `bool`. Whether to denoise to time 0 at the final step.
@@ -1352,6 +1336,7 @@ class DPM_Solver:
             x_end: A pytorch tensor. The approximated solution at time `t_end`.
 
         """
+        order = 2
         t_0 = 1.0 / self.noise_schedule.total_N if t_end is None else t_end
         t_T = self.noise_schedule.T if t_start is None else t_start
         assert t_0 > 0 and t_T > 0, (
