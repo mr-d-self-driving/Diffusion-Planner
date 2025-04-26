@@ -13,7 +13,7 @@ from .polyline import Polyline
 if TYPE_CHECKING:
     from .typing import NDArrayF32
 
-__all__ = ("AWMLStaticMap", "LaneSegment", "BoundarySegment", "CrosswalkSegment")
+__all__ = ("AWMLStaticMap", "LaneSegment", "BoundarySegment")
 
 
 @dataclass(frozen=True)
@@ -32,49 +32,11 @@ class AWMLStaticMap:
 
     id: str
     lane_segments: dict[int, LaneSegment]
-    crosswalk_segments: dict[int, CrosswalkSegment]
-    boundary_segments: dict[int, BoundarySegment] = field(factory=dict)
 
     def __post_init__(self) -> None:
         assert all(isinstance(item, LaneSegment) for _, item in self.lane_segments.items()), (
             "Expected all items are LaneSegments."
         )
-        assert all(
-            isinstance(item, CrosswalkSegment) for _, item in self.crosswalk_segments.items()
-        ), "Expected all items are CrosswalkSegments."
-        assert all(
-            isinstance(item, BoundarySegment) for _, item in self.boundary_segments.items()
-        ), "Expected all items are BoundarySegments."
-
-    @classmethod
-    def from_dict(cls, data: dict) -> Self:
-        """Construct instance from dict data.
-
-        Args:
-        ----
-            data (dict): Dict data for `AWMLStaticMap`.
-
-        Returns:
-        -------
-            AWMLStaticMap: Constructed instance.
-
-        """
-        map_id: int = data["id"]
-
-        lane_segments: dict[int, LaneSegment] = {
-            seg_id: LaneSegment.from_dict(seg) for seg_id, seg in data["lane_segments"].items()
-        }
-
-        crosswalk_segments: dict[int, CrosswalkSegment] = {
-            seg_id: CrosswalkSegment.from_dict(seg)
-            for seg_id, seg in data["crosswalk_segments"].items()
-        }
-
-        boundary_segments: dict[int, BoundarySegment] = {
-            seg_id: BoundarySegment.from_dict(seg)
-            for seg_id, seg in data.get("boundary_segments", {}).items()
-        }
-        return cls(map_id, lane_segments, crosswalk_segments, boundary_segments)
 
     def get_lane_segments(self) -> list[LaneSegment]:
         """Return all lane segments as a list.
@@ -193,7 +155,7 @@ class LaneSegment:
     right_neighbor_ids: list[int] = field(factory=list)
     speed_limit_mph: float | None = field(default=None)
     center: NDArrayF32 = field(init=False)
-    traffic_lights: list = field(init=False)
+    traffic_lights: list = field(default=None)
 
     @property
     def lane_type(self) -> MapType:
@@ -411,65 +373,3 @@ class BoundarySegment:
 
         """
         return self.polyline.as_array(full=full, as_3d=as_3d)
-
-
-@dataclass
-class CrosswalkSegment:
-    """Represents a crosswalk segment.
-
-    Attributes
-    ----------
-        id (int): Unique ID associated with this crosswalk.
-        polygon (Polyline): `Polyline` instance represents crosswalk polygon.
-
-    """
-
-    id: int
-    polygon: Polyline
-
-    def __post_init__(self) -> None:
-        assert isinstance(self.polygon, Polyline), "Expected Polyline."
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> CrosswalkSegment:
-        """Construct a instance from a dict data.
-
-        Args:
-        ----
-            data (dict[str, Any]): Dict data of `CrosswalkSegment`.
-
-        Returns:
-        -------
-            CrosswalkSegment: Constructed instance.
-
-        """
-        crosswalk_id = data["id"]
-        polygon = Polyline.from_dict(data["polygon"])
-        return cls(crosswalk_id, polygon)
-
-    def as_dict(self) -> dict:
-        """Convert the instance to a dict.
-
-        Returns
-        -------
-            dict: Converted data.
-
-        """
-        return asdict(self)
-
-    def as_array(self, *, full: bool = False, as_3d: bool = True) -> NDArrayF32:
-        """Return the polyline as `NDArray`.
-
-        Args:
-        ----
-            full (bool, optional): Indicates whether to return `(x, y, z, dx, dy, dz, type_id)`.
-                If `False`, returns `(x, y, z)`. Defaults to False.
-            as_3d (bool, optional): If `True` returns array containing 3D coordinates.
-                Otherwise, 2D coordinates. Defaults to True.
-
-        Returns:
-        -------
-            NDArrayF32: Polyline array.
-
-        """
-        return self.polygon.as_array(full=full, as_3d=as_3d)
