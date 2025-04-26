@@ -179,15 +179,11 @@ def model_wrapper(
         A noise prediction model that accepts the noised data and the continuous time as the inputs.
     """
 
-    def get_model_input_time(t_continuous):
-        return t_continuous
-
     def noise_pred_fn(x, t_continuous, cond=None):
-        t_input = get_model_input_time(t_continuous)
         if cond is None:
-            output = model(x, t_input, **model_kwargs)
+            output = model(x, t_continuous, **model_kwargs)
         else:
-            output = model(x, t_input, cond, **model_kwargs)
+            output = model(x, t_continuous, cond, **model_kwargs)
         if model_type == "noise":
             return output
         elif model_type == "x_start":
@@ -223,8 +219,7 @@ def model_wrapper(
             return noise_pred_fn(x, t_continuous)
         elif guidance_type == "classifier":
             assert classifier_fn is not None
-            t_input = get_model_input_time(t_continuous)
-            cond_grad = cond_grad_fn(x, t_input)
+            cond_grad = cond_grad_fn(x, t_continuous)
             sigma_t = noise_schedule.marginal_std(t_continuous)
             noise = noise_pred_fn(x, t_continuous)
             return noise - guidance_scale * expand_dims(sigma_t, x.dim()) * cond_grad
