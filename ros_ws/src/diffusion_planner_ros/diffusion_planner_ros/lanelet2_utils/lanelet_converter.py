@@ -25,7 +25,6 @@ from .polylines_base import BoundaryType
 from .static_map import (
     AWMLStaticMap,
     BoundarySegment,
-    CrosswalkSegment,
     LaneSegment,
     Polyline,
 )
@@ -343,13 +342,7 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
     routing_graph = RoutingGraph(lanelet_map, traffic_rules)
 
     lane_segments: dict[int, LaneSegment] = {}
-    crosswalk_segments: dict[int, CrosswalkSegment] = {}
     taken_boundary_ids: list[int] = []
-    traffic_lights = []
-    for regulatory_element in lanelet_map.regulatoryElementLayer:
-        subtype = regulatory_element.attributes["subtype"]
-        if subtype == "traffic_light":
-            traffic_lights.append(regulatory_element)
     for lanelet in lanelet_map.laneletLayer:
         lanelet_subtype = _get_lanelet_subtype(lanelet)
 
@@ -382,17 +375,8 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
                 left_neighbor_ids=left_neighbor_ids,
                 right_neighbor_ids=right_neighbor_ids,
                 speed_limit_mph=speed_limit_mph,
+                traffic_lights=lanelet.trafficLights(),
             )
-            lane_segments[lanelet.id].traffic_lights = lanelet.trafficLights()
-        elif lanelet_subtype == "crosswalk":
-            waypoints = _interpolate_lane(
-                np.array([(poly.x, poly.y, poly.z) for poly in lanelet.polygon3d()])
-            )
-            polygon = Polyline(polyline_type=MAP_TYPE_MAPPING[lanelet_subtype], waypoints=waypoints)
-            crosswalk_segments[lanelet.id] = CrosswalkSegment(lanelet.id, polygon)
-        else:
-            # logging.warning(f"[Lanelet]: {lanelet_subtype} is unsupported and skipped.")
-            continue
 
     boundary_segments: dict[int, BoundarySegment] = {}
     for linestring in lanelet_map.lineStringLayer:
@@ -404,12 +388,7 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
 
     # generate uuid from map filepath
     map_id = uuid(filename, digit=16)
-    map = AWMLStaticMap(
-        map_id,
-        lane_segments=lane_segments,
-        crosswalk_segments=crosswalk_segments,
-        boundary_segments=boundary_segments,
-    )
+    map = AWMLStaticMap(map_id, lane_segments=lane_segments)
     map = _fix_point_num(map)
     return map
 
