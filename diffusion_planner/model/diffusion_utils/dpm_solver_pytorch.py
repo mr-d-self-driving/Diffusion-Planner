@@ -513,9 +513,7 @@ class DPM_Solver:
             else:
                 return x_t
 
-    def multistep_dpm_solver_second_update(
-        self, x, model_prev_list, t_prev_list, t, solver_type="dpmsolver"
-    ):
+    def multistep_dpm_solver_second_update(self, x, model_prev_list, t_prev_list, t):
         """
         Multistep solver DPM-Solver-2 from time `t_prev_list[-1]` to time `t`.
 
@@ -524,15 +522,9 @@ class DPM_Solver:
             model_prev_list: A list of pytorch tensor. The previous computed model values.
             t_prev_list: A list of pytorch tensor. The previous times, each time has the shape (1,)
             t: A pytorch tensor. The ending time, with the shape (1,).
-            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
         Returns:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
-        if solver_type not in ["dpmsolver", "taylor"]:
-            raise ValueError(
-                "'solver_type' must be either 'dpmsolver' or 'taylor', got {}".format(solver_type)
-            )
         ns = self.noise_schedule
         model_prev_1, model_prev_0 = model_prev_list[-2], model_prev_list[-1]
         t_prev_1, t_prev_0 = t_prev_list[-2], t_prev_list[-1]
@@ -554,37 +546,21 @@ class DPM_Solver:
         D1_0 = (1.0 / r0) * (model_prev_0 - model_prev_1)
         if self.algorithm_type == "dpmsolver++":
             phi_1 = torch.expm1(-h)
-            if solver_type == "dpmsolver":
-                x_t = (
-                    (sigma_t / sigma_prev_0) * x
-                    - (alpha_t * phi_1) * model_prev_0
-                    - 0.5 * (alpha_t * phi_1) * D1_0
-                )
-            elif solver_type == "taylor":
-                x_t = (
-                    (sigma_t / sigma_prev_0) * x
-                    - (alpha_t * phi_1) * model_prev_0
-                    + (alpha_t * (phi_1 / h + 1.0)) * D1_0
-                )
+            x_t = (
+                (sigma_t / sigma_prev_0) * x
+                - (alpha_t * phi_1) * model_prev_0
+                - 0.5 * (alpha_t * phi_1) * D1_0
+            )
         else:
             phi_1 = torch.expm1(h)
-            if solver_type == "dpmsolver":
-                x_t = (
-                    (torch.exp(log_alpha_t - log_alpha_prev_0)) * x
-                    - (sigma_t * phi_1) * model_prev_0
-                    - 0.5 * (sigma_t * phi_1) * D1_0
-                )
-            elif solver_type == "taylor":
-                x_t = (
-                    (torch.exp(log_alpha_t - log_alpha_prev_0)) * x
-                    - (sigma_t * phi_1) * model_prev_0
-                    - (sigma_t * (phi_1 / h - 1.0)) * D1_0
-                )
+            x_t = (
+                (torch.exp(log_alpha_t - log_alpha_prev_0)) * x
+                - (sigma_t * phi_1) * model_prev_0
+                - 0.5 * (sigma_t * phi_1) * D1_0
+            )
         return x_t
 
-    def multistep_dpm_solver_update(
-        self, x, model_prev_list, t_prev_list, t, order, solver_type="dpmsolver"
-    ):
+    def multistep_dpm_solver_update(self, x, model_prev_list, t_prev_list, t, order):
         """
         Multistep DPM-Solver with the order `order` from time `t_prev_list[-1]` to time `t`.
 
@@ -594,27 +570,17 @@ class DPM_Solver:
             t_prev_list: A list of pytorch tensor. The previous times, each time has the shape (1,)
             t: A pytorch tensor. The ending time, with the shape (1,).
             order: A `int`. The order of DPM-Solver. We only support order == 1 or 2 or 3.
-            solver_type: either 'dpmsolver' or 'taylor'. The type for the high-order solvers.
-                The type slightly impacts the performance. We recommend to use 'dpmsolver' type.
         Returns:
             x_t: A pytorch tensor. The approximated solution at time `t`.
         """
         if order == 1:
             return self.dpm_solver_first_update(x, t_prev_list[-1], t, model_s=model_prev_list[-1])
         elif order == 2:
-            return self.multistep_dpm_solver_second_update(
-                x, model_prev_list, t_prev_list, t, solver_type=solver_type
-            )
+            return self.multistep_dpm_solver_second_update(x, model_prev_list, t_prev_list, t)
         else:
             raise ValueError("Solver order must be 1 or 2, got {}".format(order))
 
-    def sample(
-        self,
-        x,
-        steps,
-        skip_type="time_uniform",
-        solver_type="dpmsolver",
-    ):
+    def sample(self, x, steps, skip_type="time_uniform"):
         """
         Compute the sample at time `t_end` by DPM-Solver, given the initial `x` at time `t_start`.
 
@@ -719,9 +685,7 @@ class DPM_Solver:
             # Init the first `order` values by lower order multistep DPM-Solver.
             for step in range(1, order):
                 t = timesteps[step]
-                x = self.multistep_dpm_solver_update(
-                    x, model_prev_list, t_prev_list, t, step, solver_type=solver_type
-                )
+                x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, t, step)
                 if self.correcting_xt_fn is not None:
                     x = self.correcting_xt_fn(x, t, step)
                 t_prev_list.append(t)
@@ -734,9 +698,7 @@ class DPM_Solver:
                     step_order = min(order, steps + 1 - step)
                 else:
                     step_order = order
-                x = self.multistep_dpm_solver_update(
-                    x, model_prev_list, t_prev_list, t, step_order, solver_type=solver_type
-                )
+                x = self.multistep_dpm_solver_update(x, model_prev_list, t_prev_list, t, step_order)
                 if self.correcting_xt_fn is not None:
                     x = self.correcting_xt_fn(x, t, step)
                 for i in range(order - 1):
