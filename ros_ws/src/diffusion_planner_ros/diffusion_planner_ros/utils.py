@@ -14,6 +14,7 @@ class TrackingObject:
     kinematics_list: list
     shape_list: list
     class_label: int
+    lost_time: int
 
 
 def parse_timestamp(stamp) -> int:
@@ -126,7 +127,9 @@ def create_current_ego_state(kinematic_state_msg, acceleration_msg, wheel_base):
 
 
 def tracking_one_step(msg: TrackedObjects, tracked_objs: dict) -> dict:
-    updated_tracked_objs = {}
+    updated_tracked_objs = tracked_objs.copy()
+    for key in updated_tracked_objs:
+        updated_tracked_objs[key].lost_time += 1
     label_map = {
         0: 0,  # unknown -> vehicle
         1: 0,  # car -> vehicle
@@ -152,12 +155,23 @@ def tracking_one_step(msg: TrackedObjects, tracked_objs: dict) -> dict:
             tracked_obj = tracked_objs[object_id_bytes]
             tracked_obj.shape_list.append(shape)
             tracked_obj.kinematics_list.append(kinematics)
+            tracked_obj.lost_time = 0
             updated_tracked_objs[object_id_bytes] = tracked_obj
         else:
             updated_tracked_objs[object_id_bytes] = TrackingObject(
                 kinematics_list=[kinematics],
                 shape_list=[shape],
                 class_label=label_in_model,
+                lost_time=0,
+            )
+
+    for key in list(updated_tracked_objs.keys()):
+        if updated_tracked_objs[key].lost_time > 10:
+            del updated_tracked_objs[key]
+        elif updated_tracked_objs[key].lost_time > 0:
+            updated_tracked_objs[key].shape_list.append(updated_tracked_objs[key].shape_list[-1])
+            updated_tracked_objs[key].kinematics_list.append(
+                updated_tracked_objs[key].kinematics_list[-1]
             )
 
     return updated_tracked_objs

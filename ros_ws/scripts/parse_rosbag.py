@@ -370,6 +370,7 @@ if __name__ == "__main__":
                 pose_in_map = pose_to_mat4x4(last_kinematics.pose_with_covariance.pose)
                 pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
                 return np.linalg.norm(pose_in_bl[0:2, 3])
+
             tracking_past = dict(sorted(tracking_past.items(), key=sort_key))
 
             # filter tracking_future by indices in tracking_past
@@ -379,7 +380,7 @@ if __name__ == "__main__":
                     filtered_tracking_future[key] = tracking_future[key]
                 else:
                     filtered_tracking_future[key] = TrackingObject(
-                        kinematics_list=[], shape_list=[], class_label=-1
+                        kinematics_list=[], shape_list=[], class_label=-1, lost_time=0
                     )
 
             traffic_light_recognition = parse_traffic_light_recognition(
