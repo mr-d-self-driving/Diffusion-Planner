@@ -162,8 +162,8 @@ def create_neighbor_marker(neighbor_tensor: torch.Tensor, stamp) -> MarkerArray:
         cos_h = neighbor_data[i, 2].item()
         sin_h = neighbor_data[i, 3].item()
         heading = np.arctan2(sin_h, cos_h)
-        length = neighbor_data[i, 6].item()
-        width = neighbor_data[i, 7].item()
+        width = neighbor_data[i, 6].item()
+        length = neighbor_data[i, 7].item()
         obj_type_idx = torch.argmax(neighbor_data[i, 8:11]).item()
 
         colors = [
