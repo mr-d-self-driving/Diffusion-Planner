@@ -30,7 +30,7 @@ for bag_dir in $bag_dir_list; do
     fi
 
     echo $out_dir
-    python3 ./parse_rosbag.py $bag_dir $map_path $out_dir --step 1
+    python3 ./parse_rosbag.py $bag_dir $map_path $out_dir --step 1 --log_dir $save_root
 done
 
 zip -r $save_root.zip $save_root
