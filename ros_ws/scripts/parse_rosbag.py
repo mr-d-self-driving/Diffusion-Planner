@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import rosbag2_py
+import torch
 from autoware_perception_msgs.msg import (
     TrackedObjects,
     TrafficLightGroupArray,
@@ -17,12 +18,15 @@ from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     create_lane_tensor,
 )
 from diffusion_planner_ros.utils import (
+    TrackingObject,
     convert_tracked_objects_to_tensor,
     create_current_ego_state,
     get_nearest_msg,
     get_transform_matrix,
     parse_timestamp,
     parse_traffic_light_recognition,
+    pose_to_mat4x4,
+    rot3x3_to_heading_cos_sin,
     tracking_one_step,
 )
 from geometry_msgs.msg import AccelWithCovarianceStamped
@@ -105,6 +109,55 @@ def create_ego_future(data_list, i, future_time_steps, map2bl_matrix_4x4):
         axis=1,
     )
     return ego_future_np
+
+
+def create_neighbor_future(
+    tracked_objs: dict,
+    map2bl_matrix_4x4: np.ndarray,
+    max_num_objects: int,
+    max_timesteps: int,
+) -> torch.Tensor:
+    """
+    This function is similar to utils.convert_tracked_objects_to_tensor, but there are some discrepancies.
+    """
+    neighbor = torch.zeros((1, max_num_objects, max_timesteps, 11))
+
+    # [Discrepancy1] for future tensor, sort is not needed
+
+    for i, (object_id_bytes, tracked_obj) in enumerate(tracked_objs.items()):
+        if i >= max_num_objects:
+            break
+        label_in_model = tracked_obj.class_label
+        # [Discrepancy2] for future tensor, write values between 0 to len(tracked_obj.kinematics_list) - 1
+        for j in range(min(max_timesteps, len(tracked_obj.kinematics_list))):
+            # [Discrepancy3] for future tensor, the order is forward
+            kinematics = tracked_obj.kinematics_list[j]
+            shape = tracked_obj.shape_list[j]
+            pose_in_map_4x4 = pose_to_mat4x4(kinematics.pose_with_covariance.pose)
+            pose_in_bl_4x4 = map2bl_matrix_4x4 @ pose_in_map_4x4
+            cos, sin = rot3x3_to_heading_cos_sin(pose_in_bl_4x4[0:3, 0:3])
+            twist_in_local = np.array(
+                [
+                    kinematics.twist_with_covariance.twist.linear.x,
+                    kinematics.twist_with_covariance.twist.linear.y,
+                    kinematics.twist_with_covariance.twist.linear.z,
+                ]
+            )
+            twist_in_map = pose_in_map_4x4[0:3, 0:3] @ twist_in_local
+            twist_in_bl = map2bl_matrix_4x4[0:3, 0:3] @ twist_in_map
+            neighbor[0, i, j, 0] = pose_in_bl_4x4[0, 3]  # x
+            neighbor[0, i, j, 1] = pose_in_bl_4x4[1, 3]  # y
+            neighbor[0, i, j, 2] = cos  # heading cos
+            neighbor[0, i, j, 3] = sin  # heading sin
+            neighbor[0, i, j, 4] = twist_in_bl[0]  # velocity x
+            neighbor[0, i, j, 5] = twist_in_bl[1]  # velocity y
+            # I don't know why but sometimes the length and width from autoware are 0
+            neighbor[0, i, j, 6] = max(shape.dimensions.y, 1.0)  # width
+            neighbor[0, i, j, 7] = max(shape.dimensions.x, 1.0)  # lendth
+            neighbor[0, i, j, 8] = label_in_model == 0  # vehicle
+            neighbor[0, i, j, 9] = label_in_model == 1  # pedestrian
+            neighbor[0, i, j, 10] = label_in_model == 2  # bicycle
+    return neighbor
 
 
 if __name__ == "__main__":
@@ -306,16 +359,28 @@ if __name__ == "__main__":
                 [frame_data.tracked_objects for frame_data in data_list[i : i + FUTURE_TIME_STEPS]]
             )
 
-            # filter tracking_future by indices in tracking_past
-            tracking_past_keys = set(tracking_past.keys())
-            filtered_tracking_future = {}
-            for key in tracking_future.keys():
-                if key in tracking_past_keys:
-                    filtered_tracking_future[key] = tracking_future[key]
-
             bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
                 data_list[i].kinematic_state
             )
+
+            # sort tracking_past by distance to the ego
+            def sort_key(item):
+                _, tracked_obj = item
+                last_kinematics = tracked_obj.kinematics_list[-1]
+                pose_in_map = pose_to_mat4x4(last_kinematics.pose_with_covariance.pose)
+                pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
+                return np.linalg.norm(pose_in_bl[0:2, 3])
+            tracking_past = dict(sorted(tracking_past.items(), key=sort_key))
+
+            # filter tracking_future by indices in tracking_past
+            filtered_tracking_future = {}
+            for key in tracking_past.keys():
+                if key in tracking_future:
+                    filtered_tracking_future[key] = tracking_future[key]
+                else:
+                    filtered_tracking_future[key] = TrackingObject(
+                        kinematics_list=[], shape_list=[], class_label=-1
+                    )
 
             traffic_light_recognition = parse_traffic_light_recognition(
                 data_list[i].traffic_signals
@@ -334,7 +399,7 @@ if __name__ == "__main__":
                 max_timesteps=PAST_TIME_STEPS,
             ).squeeze(0)
 
-            neighbor_future_tensor = convert_tracked_objects_to_tensor(
+            neighbor_future_tensor = create_neighbor_future(
                 tracked_objs=filtered_tracking_future,
                 map2bl_matrix_4x4=map2bl_matrix_4x4,
                 max_num_objects=NEIGHBOR_NUM,
