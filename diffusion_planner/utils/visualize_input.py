@@ -137,6 +137,8 @@ def visualize_inputs(
             for j in range(neighbor_future.shape[0]):
                 neighbor_future_x = neighbor_future[j, 0]
                 neighbor_future_y = neighbor_future[j, 1]
+                if neighbor_future_x == 0 and neighbor_future_y == 0:
+                    break
                 t = j / (neighbor_future.shape[0] - 1)
                 ax.scatter(
                     neighbor_future_x,
@@ -145,8 +147,11 @@ def visualize_inputs(
                     alpha=0.5,
                     s=10,
                 )
+            neighbor_future_x = neighbor_future[0, 0]
+            neighbor_future_y = neighbor_future[0, 1]
             if (
-                -view_range <= neighbor_future_x <= view_range
+                (neighbor_future_x != 0 or neighbor_future_y != 0)
+                and -view_range <= neighbor_future_x <= view_range
                 and -view_range <= neighbor_future_y <= view_range
             ):
                 ax.text(
