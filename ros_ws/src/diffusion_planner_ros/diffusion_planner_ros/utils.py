@@ -228,7 +228,7 @@ def convert_tracked_objects_to_tensor(
             neighbor[0, i, 20 - j, 5] = twist_in_bl[1]  # velocity y
             # I don't know why but sometimes the length and width from autoware are 0
             neighbor[0, i, 20 - j, 6] = max(shape.dimensions.y, 1.0)  # width
-            neighbor[0, i, 20 - j, 7] = max(shape.dimensions.x, 1.0)  # lendth
+            neighbor[0, i, 20 - j, 7] = max(shape.dimensions.x, 1.0)  # length
             neighbor[0, i, 20 - j, 8] = label_in_model == 0  # vehicle
             neighbor[0, i, 20 - j, 9] = label_in_model == 1  # pedestrian
             neighbor[0, i, 20 - j, 10] = label_in_model == 2  # bicycle
