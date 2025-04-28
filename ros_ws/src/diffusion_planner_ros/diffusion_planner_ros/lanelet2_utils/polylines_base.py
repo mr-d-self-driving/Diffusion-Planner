@@ -3,47 +3,7 @@ from abc import abstractmethod
 from .base import LabelBaseType
 from .context import ContextType
 
-__all__ = ("LaneType", "BoundaryType", "SignalType")
-
-
-class LaneType(LabelBaseType):
-    """A base enum of Lane."""
-
-    def is_dynamic(self) -> bool:
-        """Whether the item is dynamic.
-
-        Returns
-        -------
-            bool: Return always False.
-
-        """
-        return False
-
-    @abstractmethod
-    def is_drivable(self) -> bool:
-        """Indicate whether the lane is drivable.
-
-        Returns
-        -------
-            bool: Return `True` if drivable.
-
-        """
-
-    @staticmethod
-    def to_context(*, as_str: bool = False) -> ContextType | str:
-        """Convert the enum member to `ContextType`.
-
-        Args:
-        ----
-            as_str (bool, optional): Whether to return as str. Defaults to False.
-
-        Returns:
-        -------
-            ContextType | str: Return always `ContextType.LANE`, or its value as str.
-
-        """
-        ctx = ContextType.LANE
-        return ctx.value if as_str else ctx
+__all__ = ("BoundaryType", "SignalType")
 
 
 class BoundaryType(LabelBaseType):
