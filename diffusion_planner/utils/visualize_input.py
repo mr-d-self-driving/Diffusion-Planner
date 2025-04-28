@@ -8,7 +8,7 @@ from diffusion_planner.utils.normalizer import ObservationNormalizer
 
 
 def visualize_inputs(
-    inputs: dict, obs_normalizer: ObservationNormalizer, save_path: Path | None = None
+    inputs: dict, obs_normalizer: ObservationNormalizer, save_path: Path | None = None, ax: None = None
 ):
     """
     draw the input data of the diffusion_planner model on the xy plane
@@ -40,7 +40,8 @@ def visualize_inputs(
     """
 
     # initialize the figure
-    fig, ax = plt.subplots(figsize=(10, 8))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 8))
 
     # ==== Ego ====
     ego_state = inputs["ego_current_state"][0]  # Use the first sample in the batch
@@ -338,7 +339,7 @@ def visualize_inputs(
     ax.set_ylim(ego_y - view_range, ego_y + view_range)
 
     if save_path is None:
-        return fig, ax
+        return ax
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=100, bbox_inches="tight")
