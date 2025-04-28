@@ -313,9 +313,9 @@ def model_training(args):
             train_loader, diffusion_planner, optimizer, args, model_ema, aug
         )
 
-        valid_loss_ego, valid_loss_neighbor, _ = validate_model(
-            diffusion_planner, valid_loader, args
-        )
+        valid_dict = validate_model(diffusion_planner, valid_loader, args)
+        valid_loss_ego = valid_dict["avg_loss_ego"]
+        valid_loss_neighbor = valid_dict["avg_loss_neighbor"]
         print(f"{valid_loss_ego=:.3f}, {valid_loss_neighbor=:.3f}")
 
         if global_rank == 0:

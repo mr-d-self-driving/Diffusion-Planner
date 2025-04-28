@@ -27,6 +27,7 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
     total_samples = 0
 
     predictions = []
+    loss_ego_list = []
 
     for batch in val_loader:
         # データの準備
@@ -102,17 +103,24 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
         all_gt = all_gt[:, :, 1:, :]  # (B, Pn + 1, T, 4)
         loss_tensor = (prediction - all_gt) ** 2
         loss_ego = loss_tensor[:, 0, :]
+        loss_ego_list.append(loss_ego)
         loss_nei = loss_tensor[:, 1:, :]
         loss_nei = loss_nei[neighbors_future_valid]
         total_loss_ego += loss_ego.mean().item() * B
         total_loss_neighbor += loss_nei.mean().item() * B
         total_samples += B
 
+    loss_ego = torch.cat(loss_ego_list, dim=0)
     avg_loss_ego = total_loss_ego / total_samples
     avg_loss_neighbor = total_loss_neighbor / total_samples
     if return_pred:
         predictions = torch.cat(predictions, dim=0)
-    return avg_loss_ego, avg_loss_neighbor, predictions
+    return {
+        "loss_ego": loss_ego,
+        "avg_loss_ego": avg_loss_ego,
+        "avg_loss_neighbor": avg_loss_neighbor,
+        "predictions": predictions,
+    }
 
 
 def boolean(v):
@@ -275,9 +283,11 @@ if __name__ == "__main__":
     if args.ddp:
         torch.distributed.barrier()
 
-    avg_loss_ego, ave_loss_neighbor, predictions = validate_model(
-        diffusion_planner, valid_loader, config_obj, return_pred=True
-    )
+    valid_dict = validate_model(diffusion_planner, valid_loader, config_obj, return_pred=True)
+    loss_ego = valid_dict["loss_ego"]
+    avg_loss_ego = valid_dict["avg_loss_ego"]
+    ave_loss_neighbor = valid_dict["avg_loss_neighbor"]
+    predictions = valid_dict["predictions"]
     print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
     print(f"{predictions.shape=}")
 
@@ -292,3 +302,11 @@ if __name__ == "__main__":
             save_predictions_dir / f"prediction{i:08d}.npz",
             prediction=prediction,
         )
+        loss_dict = {
+            "loss_ego_total": loss_ego[i].mean().item(),
+            "loss_ego_3sec": torch.sqrt(loss_ego[i, 30 - 1, :2].sum()).item(),
+            "loss_ego_5sec": torch.sqrt(loss_ego[i, 50 - 1, :2].sum()).item(),
+            "loss_ego_8sec": torch.sqrt(loss_ego[i, 80 - 1, :2].sum()).item(),
+        }
+        with open(save_predictions_dir / f"loss{i:08d}.json", "w") as f:
+            json.dump(loss_dict, f, indent=4)
