@@ -11,7 +11,7 @@ set -eux
 
 # planning_simulator
 ros2 launch autoware_launch planning_simulator.launch.xml \
-  map_path:=$HOME/data/driving_data/map/ \
+  map_path:=$HOME/data/nas_copy/tieriv_dataset/driving_dataset/map/2025-04-16/ \
   vehicle_model:=taxi sensor_model:=aip_xx1 &
 
 # 立ち上がるまで待つ
@@ -40,31 +40,28 @@ sleep 10
 #   }
 # }'
 ros2 topic pub -1 /initialpose geometry_msgs/msg/PoseWithCovarianceStamped '{
-  header: { frame_id: "map" },
-  pose: {
+header: { frame_id: "map" },
+pose: {
     pose: {
-      position: { x: 86119.53125, y: 42994.8984375, z: 0.0 },
-      orientation: { x: 0.0, y: 0.0, z: -0.4738380103640769, w: 0.8806120257719701 }
+    position: { x: 89423.95818648902, y: 43242.31510616808, z: 5.887557728617264 },
+    orientation: { x: -0.0017407279235030458, y: -0.005716426991434616, z: -0.482224866284304, w: 0.8760270947098802 }
     },
     covariance: [0.25, 0.0,  0.0, 0.0, 0.0, 0.0,
-                 0.0,  0.25, 0.0, 0.0, 0.0, 0.0,
-                 0.0,  0.0,  0.0, 0.0, 0.0, 0.0,
-                 0.0,  0.0,  0.0, 0.0, 0.0, 0.0,
-                 0.0,  0.0,  0.0, 0.0, 0.0, 0.0,
-                 0.0,  0.0,  0.0, 0.0, 0.0, 0.06853891909122467]
-  }
+                0.0,  0.25, 0.0, 0.0, 0.0, 0.0,
+                0.0,  0.0,  0.0, 0.0, 0.0, 0.0,
+                0.0,  0.0,  0.0, 0.0, 0.0, 0.0,
+                0.0,  0.0,  0.0, 0.0, 0.0, 0.0,
+                0.0,  0.0,  0.0, 0.0, 0.0, 0.06853891909122467]
+}
 }'
 sleep 1
 
 # goal
-ros2 topic pub -1 /planning/mission_planning/goal geometry_msgs/msg/PoseStamped '{
-  header: {
-    stamp: {sec: 181, nanosec: 289995947},
-    frame_id: 'map'},
-  pose: {
-    position: { x: 89410.0238, y: 43213.9237, z: 5.738 },
-    orientation: { x: 0.0, y: 0.0, z: 0.867423225594017, w: 0.49757104789172696 }
-  }
+ros2 topic pub -1 /planning/mission_planning/goal geometry_msgs/msg/PoseStamped '{header: {stamp: {sec: 181, nanosec: 289995947},
+frame_id: 'map'},
+pose: {position: {x: 89153.3642, y: 42417.9992, z: 7.0153 },
+    orientation: {x: 0.0, y: 0.0, z: 0.9289624344790391, w: -0.3701740068221657 }
+}
 }'
 sleep 1
 
