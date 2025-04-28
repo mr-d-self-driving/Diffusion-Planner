@@ -70,6 +70,7 @@ if __name__ == "__main__":
         fig, ax = visualize_inputs(valid_data_dict, config_obj.observation_normalizer)
 
         # plot prediction
+        # Ego
         ax.plot(
             prediction[0, :, 0],
             prediction[0, :, 1],
@@ -82,9 +83,17 @@ if __name__ == "__main__":
         for timestep in [30, 50, 80]:
             index = timestep - 1
             diff_m = np.sqrt(loss_ego[index, 0] ** 2 + loss_ego[index, 1] ** 2)
-            ax.text(prediction[0, index, 0], prediction[0, index, 1], f"{diff_m:.2f}[m]")
             ax.plot(prediction[0, index, 0], prediction[0, index, 1], color="black", marker="x")
             title += f", loss{timestep // 10}sec={diff_m:.2f}[m]"
+
+        # Neighbors
+        for i in range(prediction.shape[0] - 1):
+            ax.plot(
+                prediction[i + 1, :, 0],
+                prediction[i + 1, :, 1],
+                color="teal",
+                alpha=0.5,
+            )
 
         ax.set_title(title)
 
