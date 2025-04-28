@@ -1,9 +1,8 @@
 from abc import abstractmethod
 
 from .base import LabelBaseType
-from .context import ContextType
 
-__all__ = ("BoundaryType", "SignalType")
+__all__ = ("BoundaryType")
 
 
 class BoundaryType(LabelBaseType):
@@ -38,33 +37,3 @@ class BoundaryType(LabelBaseType):
             bool: Return `True` if the boundary is allowed to cross.
 
         """
-
-
-class SignalType(LabelBaseType):
-    """A base enum of Signal."""
-
-    def is_dynamic(self) -> bool:
-        """Indicate whether the lane is drivable.
-
-        Returns
-        -------
-            bool: Return always True.
-
-        """
-        return True
-
-    @staticmethod
-    def to_context(*, as_str: bool = False) -> ContextType | str:
-        """Convert the enum member to `ContextType`.
-
-        Args:
-        ----
-            as_str (bool, optional): Whether to return as str. Defaults to False.
-
-        Returns:
-        -------
-            ContextType | str: Return always `ContextType.SIGNAL`, or its value as str.
-
-        """
-        ctx = ContextType.SIGNAL
-        return ctx.value if as_str else ctx
