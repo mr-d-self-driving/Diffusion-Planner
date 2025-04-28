@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from .agents_base import AgentType
 from .map import MapType
 from .uuid import uuid
 
