@@ -106,7 +106,7 @@ if __name__ == "__main__":
         loss_nei = np.sqrt(loss_nei)
         loss_ego_mean = np.mean(loss_ego)
 
-        fig, ax = plt.subplots(1, 2, figsize=(8, 5), gridspec_kw={"width_ratios": [3, 1]})
+        fig, ax = plt.subplots(1, 2, figsize=(8, 5), gridspec_kw={"width_ratios": [2, 1]})
         visualize_inputs(valid_data_dict, config_obj.observation_normalizer, save_path=None, ax=ax[0])
 
         # plot prediction
@@ -149,16 +149,18 @@ if __name__ == "__main__":
             ego_x,
             ego_y,
             color="red",
-            marker="x",
+            marker="+",
             s=50,
         )
         ax[1].set_xlabel("x[m]")
         ax[1].set_ylabel("y[m]")
+        ax[1].set_xticks([])
+        ax[1].set_yticks([])
         ax[1].grid(True)
-        ax[1].set_title("3sec loss")
+        ax[1].set_title("loss3sec")
         ax[1].set_aspect("equal")
 
-        plt.colorbar(ax[1].collections[0], ax=ax[1], label="3sec loss")
+        plt.colorbar(ax[1].collections[0], ax=ax[1])
 
         plt.savefig(save_dir / f"{valid_data_path.stem}.png")
         plt.close()
