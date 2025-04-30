@@ -122,16 +122,16 @@ def visualize_inputs(
         dx = len_x / 2 * np.cos(n_heading)
         dy = len_x / 2 * np.sin(n_heading)
 
-        if -view_range <= n_x <= view_range and -view_range <= n_y <= view_range:
-            ax.text(
-                n_x + 2.5,
-                n_y + 5,
-                f"Agent {i}",
-                fontsize=8,
-                color=color,
-                ha="center",
-                va="center",
-            )
+        # if -view_range <= n_x <= view_range and -view_range <= n_y <= view_range:
+        #     ax.text(
+        #         n_x + 2.5,
+        #         n_y + 5,
+        #         f"Agent {i}",
+        #         fontsize=8,
+        #         color=color,
+        #         ha="center",
+        #         va="center",
+        #     )
 
         if "neighbor_agents_future" in inputs:
             neighbor_future = inputs["neighbor_agents_future"][0][i]
@@ -150,20 +150,20 @@ def visualize_inputs(
                 )
             neighbor_future_x = neighbor_future[0, 0]
             neighbor_future_y = neighbor_future[0, 1]
-            if (
-                (neighbor_future_x != 0 or neighbor_future_y != 0)
-                and -view_range <= neighbor_future_x <= view_range
-                and -view_range <= neighbor_future_y <= view_range
-            ):
-                ax.text(
-                    neighbor_future_x + 5,
-                    neighbor_future_y + 2.5,
-                    f"Future {i}",
-                    fontsize=8,
-                    color=color,
-                    ha="center",
-                    va="center",
-                )
+            # if (
+            #     (neighbor_future_x != 0 or neighbor_future_y != 0)
+            #     and -view_range <= neighbor_future_x <= view_range
+            #     and -view_range <= neighbor_future_y <= view_range
+            # ):
+            #     ax.text(
+            #         neighbor_future_x + 5,
+            #         neighbor_future_y + 2.5,
+            #         f"Future {i}",
+            #         fontsize=8,
+            #         color=color,
+            #         ha="center",
+            #         va="center",
+            #     )
 
         # Draw the velocity as an arrow
         v = np.sqrt(vel_x**2 + vel_y**2) / 10
