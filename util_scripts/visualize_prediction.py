@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument("--predictions_dir", type=Path, required=True)
     parser.add_argument("--args_json", type=Path, required=True)
     parser.add_argument("--valid_data_list", type=Path, required=True)
-    parser.add_argument("--save_dir", type=Path, required=True)
+    parser.add_argument("--save_dir", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -29,6 +29,9 @@ if __name__ == "__main__":
     args_json = args.args_json
     valid_data_list = args.valid_data_list
     save_dir = args.save_dir
+
+    if save_dir is None:
+        save_dir = predictions_dir.parent / f"visualization"
 
     config_obj = Config(args_json)
 
