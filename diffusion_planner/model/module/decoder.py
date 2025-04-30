@@ -135,9 +135,9 @@ class Decoder(nn.Module):
                     route_lanes=route_lanes,
                     neighbor_current_mask=neighbor_current_mask,
                 )
-                # x = euler_integration(func, x, NUM_STEP)
+                x = euler_integration(func, x, NUM_STEP)
                 # x = heun_integration(func, x, NUM_STEP)
-                x = rk4_integration(func, x, NUM_STEP)
+                # x = rk4_integration(func, x, NUM_STEP)
                 x = self._state_normalizer.inverse(x.reshape(B, P, -1, 4))[:, :, 1:]
                 return {"prediction": x}
 
