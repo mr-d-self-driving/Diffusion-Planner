@@ -270,6 +270,56 @@ def _interpolate_lane(waypoints: NDArray):
     return new_waypoints
 
 
+def _identify_current_light_status(turn_direction: int, traffic_light_elements: list) -> int:
+    """
+    Identify the current traffic light status based on turn direction and traffic light elements.
+    ref: https://github.com/tier4/lanelet2_python_api_for_autoware/blob/rosless_lanelet2/interaction_with_cache_json.ipynb
+
+    Args:
+        turn_direction: Integer representing the turn direction (0=straight, 1=left, 2=right)
+        traffic_light_elements: List of dictionaries containing traffic light information
+                               (color, shape, status, confidence)
+
+    Returns:
+        int: The color of the relevant traffic light (0=UNKNOWN, 1=RED, 2=AMBER, 3=GREEN, 4=WHITE)
+    """
+    # Filter out ineffective elements (color == 0)
+    effective_elements = [element for element in traffic_light_elements if element.color != 0]
+
+    # If no effective elements, return UNKNOWN (0)
+    if not effective_elements:
+        return 0
+
+    # If only one effective element, return its color
+    if len(effective_elements) == 1:
+        return effective_elements[0].color
+
+    # For multiple elements, find the one that matches the turn direction
+    # Map turn direction to corresponding arrow shape
+    direction_to_shape_map = {
+        0: 4,  # straight -> UP_ARROW
+        1: 2,  # left -> LEFT_ARROW
+        2: 3,  # right -> RIGHT_ARROW
+    }
+
+    target_shape = direction_to_shape_map.get(turn_direction, 0)
+
+    # First priority: Find elements with exactly matching direction
+    matching_elements = [element for element in effective_elements if element.shape == target_shape]
+    if matching_elements:
+        # If multiple matching elements, take the one with highest confidence
+        return max(matching_elements, key=lambda x: x.confidence).color
+
+    # Second priority: Find circle elements
+    circle_elements = [element for element in effective_elements if element.shape == 1]  # CIRCLE
+    if circle_elements:
+        # If multiple circle elements, take the one with highest confidence
+        return max(circle_elements, key=lambda x: x.confidence).color
+
+    # If no matching direction or circle, return the element with highest confidence
+    return max(effective_elements, key=lambda x: x.confidence).color
+
+
 def convert_lanelet(filename: str) -> AWMLStaticMap:
     """Convert lanelet (.osm) to map info.
 
@@ -310,6 +360,18 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
             right_boundary = _get_boundary_segment(right_linestring)
             taken_boundary_ids.extend((left_linestring.id, right_linestring.id))
 
+            turn_direction_str = (
+                lanelet.attributes["turn_direction"]
+                if "turn_direction" in lanelet.attributes
+                else "unknown"
+            )
+            turn_direction_int = {
+                "unknown": -1,
+                "straight": 0,
+                "left": 1,
+                "right": 2,
+            }[turn_direction_str]
+
             lane_segments[lanelet.id] = LaneSegment(
                 id=lanelet.id,
                 polyline=lane_polyline,
@@ -317,6 +379,7 @@ def convert_lanelet(filename: str) -> AWMLStaticMap:
                 right_boundaries=[right_boundary],
                 speed_limit_mph=speed_limit_mph,
                 traffic_lights=lanelet.trafficLights(),
+                turn_direction=turn_direction_int,
             )
 
     boundary_segments: dict[int, BoundarySegment] = {}
@@ -403,7 +466,8 @@ def process_segment(
             )
         traffic_light_id = segment.traffic_lights[0].id
         if traffic_light_id in traffic_light_recognition:
-            traffic_light_color = traffic_light_recognition[traffic_light_id]
+            elements = traffic_light_recognition[traffic_light_id]
+            traffic_light_color = _identify_current_light_status(segment.turn_direction, elements)
             # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_perception_msgs/msg/TrafficLightElement.msg
             if traffic_light_color == 1:  # RED
                 traffic_light[2] = 1

@@ -53,6 +53,7 @@ class LaneSegment:
     """
 
     id: int
+    turn_direction: int
     polyline: Polyline = field(
         converter=lambda x: Polyline.from_dict(x) if isinstance(x, dict) else x
     )

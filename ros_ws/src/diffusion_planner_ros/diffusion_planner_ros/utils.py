@@ -295,16 +295,5 @@ def parse_traffic_light_recognition(msg: TrafficLightGroupArray):
     for traffic_light_group in msg.traffic_light_groups:
         traffic_light_group_id = traffic_light_group.traffic_light_group_id
         elements = traffic_light_group.elements
-        if len(elements) == 1:
-            traffic_light_recognition[traffic_light_group_id] = elements[0].color
-        else:
-            print("Traffic light group has more than one element.")
-            # Ex.) RED(color=1) for CIRCLE(shape=1), but GREEN(color=3) for RIGHT_ARROW(shape=3)
-            # In this case, we take the minimum value of the color
-            traffic_light_recognition[traffic_light_group_id] = 4  # (WHITE)
-            for element in elements:
-                print(f"{element=}")
-                traffic_light_recognition[traffic_light_group_id] = min(
-                    traffic_light_recognition[traffic_light_group_id], element.color
-                )
+        traffic_light_recognition[traffic_light_group_id] = elements
     return traffic_light_recognition
