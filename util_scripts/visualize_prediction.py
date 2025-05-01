@@ -1,5 +1,6 @@
 import argparse
 import json
+from collections import defaultdict
 from multiprocessing import Pool
 from pathlib import Path
 from shutil import rmtree
@@ -45,32 +46,19 @@ if __name__ == "__main__":
         Path(valid_data_path).parent / f"{Path(valid_data_path).stem}.json"
         for valid_data_path in valid_data_path_list
     ]
-    min_x = float("inf")
-    max_x = -float("inf")
-    min_y = float("inf")
-    max_y = -float("inf")
-    trajectory_x = []
-    trajectory_y = []
-    loss_3sec = []
+    trajectory_dict_x = defaultdict(list)
+    trajectory_dict_y = defaultdict(list)
+    loss_3sec_dict = defaultdict(list)
     for info_path, loss_path in zip(info_path_list, loss_path_list):
         assert info_path.is_file()
+        time_str = info_path.stem.split("_")[0]
+
         pose_data = json.load(open(info_path, "r"))
-        x = pose_data["x"]
-        trajectory_x.append(x)
-        min_x = min(min_x, np.min(x))
-        max_x = max(max_x, np.max(x))
-        y = pose_data["y"]
-        trajectory_y.append(y)
-        min_y = min(min_y, np.min(y))
-        max_y = max(max_y, np.max(y))
+        trajectory_dict_x[time_str].append(pose_data["x"])
+        trajectory_dict_y[time_str].append(pose_data["y"])
 
         loss_data = json.load(open(loss_path, "r"))
-        loss_3sec.append(loss_data["loss_ego_3sec"])
-    lx = max_x - min_x
-    ly = max_y - min_y
-    cx = (min_x + max_x) / 2
-    cy = (min_y + max_y) / 2
-    l_max = max(lx, ly) * 1.2
+        loss_3sec_dict[time_str].append(loss_data["loss_ego_3sec"])
 
     assert len(prediction_path_list) == len(valid_data_path_list)
 
@@ -89,6 +77,8 @@ if __name__ == "__main__":
         info_data = json.load(open(info_data_path, "r"))
         ego_x = info_data["x"]
         ego_y = info_data["y"]
+
+        time_str = valid_data_path.stem.split("_")[0]
 
         valid_data_dict = {}
         for key, value in valid_data.items():
@@ -139,9 +129,9 @@ if __name__ == "__main__":
         ax[0].set_title(title)
 
         ax[1].scatter(
-            trajectory_x,
-            trajectory_y,
-            c=loss_3sec,
+            trajectory_dict_x[time_str],
+            trajectory_dict_y[time_str],
+            c=loss_3sec_dict[time_str],
             marker="o",
             s=10,
         )
@@ -162,17 +152,10 @@ if __name__ == "__main__":
 
         plt.colorbar(ax[1].collections[0], ax=ax[1])
 
-        plt.savefig(save_dir / f"{valid_data_path.stem}.png")
+        curr_save_dir = save_dir / time_str
+        curr_save_dir.mkdir(parents=True, exist_ok=True)
+        plt.savefig(curr_save_dir / f"{valid_data_path.stem}.png")
         plt.close()
-
-        loss_dict = {
-            "loss_ego_mean": loss_ego_mean,
-        }
-        json.dump(
-            loss_dict,
-            open(save_dir / f"{valid_data_path.stem}.json", "w"),
-            indent=4,
-        )
 
     pool = Pool(16)
     with tqdm(total=len(valid_data_path_list)) as pbar:
