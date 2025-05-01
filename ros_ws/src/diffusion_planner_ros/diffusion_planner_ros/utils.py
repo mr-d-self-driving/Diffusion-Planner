@@ -235,14 +235,6 @@ def convert_tracked_objects_to_tensor(
     return neighbor
 
 
-def tracking(tracked_list: list[TrackedObjects]):
-    tracked_objs = {}
-    for i in range(len(tracked_list)):
-        msg = tracked_list[i]
-        updated_tracked_objs = tracking_one_step(msg, tracked_objs)
-    return updated_tracked_objs
-
-
 def convert_prediction_to_msg(pred: torch.Tensor, bl2map_matrix_4x4: np.array, stamp) -> Trajectory:
     # Convert to Trajectory message
     trajectory_msg = Trajectory()
