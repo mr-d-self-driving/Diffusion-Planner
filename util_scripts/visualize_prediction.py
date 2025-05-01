@@ -109,13 +109,13 @@ if __name__ == "__main__":
             linewidth=2,
         )
         # 3sec, 5sec, 8sec
-        title = f""
+        title = f"{valid_data_path.stem.replace('_', ' ')}"
         for timestep in [30, 50, 80]:
             index = timestep - 1
             diff_m = np.sqrt(loss_ego[index, 0] ** 2 + loss_ego[index, 1] ** 2)
             ax[0].plot(prediction[0, index, 0], prediction[0, index, 1], color="black", marker="x")
             if timestep == 30:
-                title += f"loss{timestep // 10}sec={diff_m:.2f}[m]\n"
+                title += f"\nloss{timestep // 10}sec={diff_m:.2f}[m]\n"
 
         # Neighbors
         for i in range(prediction.shape[0] - 1):
