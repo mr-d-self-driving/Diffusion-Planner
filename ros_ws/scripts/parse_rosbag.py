@@ -65,6 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--step", type=int, default=1)
     parser.add_argument("--limit", type=int, default=-1)
     parser.add_argument("--log_dir", type=Path, default="./")
+    parser.add_argument("--min_frames", type=int, default=1800)
     return parser.parse_args()
 
 
@@ -168,6 +169,7 @@ if __name__ == "__main__":
     step = args.step
     limit = args.limit
     log_dir = args.log_dir
+    min_frames = args.min_frames
 
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{rosbag_path.stem}.log"
@@ -338,10 +340,10 @@ if __name__ == "__main__":
         n = len(data_list)
         logger.info(f"Total {n} frames")
 
-        # if less than 1800 frames (= 3 min), skip this sequence
-        if n < 1800:
+        # if less than min_frames (default 3 min), skip this sequence
+        if n < min_frames:
             logger.info(
-                f"Skip this sequence because the number of frames {n} is less than 1800 frames"
+                f"Skip this sequence because the number of frames {n} is less than {min_frames} frames"
             )
             continue
 
