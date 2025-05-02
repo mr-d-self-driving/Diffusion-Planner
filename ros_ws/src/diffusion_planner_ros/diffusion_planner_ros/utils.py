@@ -1,8 +1,13 @@
+from copy import deepcopy
 from dataclasses import dataclass
 
 import numpy as np
 import torch
-from autoware_perception_msgs.msg import TrackedObjects, TrafficLightGroupArray
+from autoware_perception_msgs.msg import (
+    TrackedObjectKinematics,
+    TrackedObjects,
+    TrafficLightGroupArray,
+)
 from autoware_planning_msgs.msg import Trajectory, TrajectoryPoint
 from builtin_interfaces.msg import Duration
 from nav_msgs.msg import Odometry
@@ -97,6 +102,33 @@ def rot3x3_to_heading_cos_sin(rot3x3):
     return cos_heading, sin_heading
 
 
+def _forward_kinematics(kinematics: TrackedObjectKinematics, sec: float):
+    """
+    Forward kinematics for a tracked object
+    """
+    pose = kinematics.pose_with_covariance.pose
+    twist = kinematics.twist_with_covariance.twist
+    new_kinematics = deepcopy(kinematics)
+    pose_in_map_4x4 = pose_to_mat4x4(pose)
+    twist_linear_in_local = np.array([twist.linear.x, twist.linear.y, twist.linear.z])
+    twist_angular = Rotation.from_euler("xyz", [twist.angular.x, twist.angular.y, twist.angular.z])
+    twist_in_map = pose_in_map_4x4[0:3, 0:3] @ twist_linear_in_local
+
+    # Update position
+    new_pose = pose_in_map_4x4.copy()
+    new_pose[0:3, 3] += twist_in_map * sec
+    new_pose[0:3, 0:3] = (twist_angular.as_matrix() * sec) @ pose_in_map_4x4[0:3, 0:3]
+    new_kinematics.pose_with_covariance.pose.position.x = new_pose[0, 3]
+    new_kinematics.pose_with_covariance.pose.position.y = new_pose[1, 3]
+    new_kinematics.pose_with_covariance.pose.position.z = new_pose[2, 3]
+    quat = Rotation.from_matrix(new_pose[0:3, 0:3]).as_quat()
+    new_kinematics.pose_with_covariance.pose.orientation.x = quat[0]
+    new_kinematics.pose_with_covariance.pose.orientation.y = quat[1]
+    new_kinematics.pose_with_covariance.pose.orientation.z = quat[2]
+    new_kinematics.pose_with_covariance.pose.orientation.w = quat[3]
+    return new_kinematics
+
+
 def create_current_ego_state(kinematic_state_msg, acceleration_msg, wheel_base):
     ego_twist_linear = kinematic_state_msg.twist.twist.linear
     ego_twist_angular = kinematic_state_msg.twist.twist.angular
@@ -171,7 +203,7 @@ def tracking_one_step(msg: TrackedObjects, tracked_objs: dict, lost_time_limit: 
         elif updated_tracked_objs[key].lost_time > 0:
             updated_tracked_objs[key].shape_list.append(updated_tracked_objs[key].shape_list[-1])
             updated_tracked_objs[key].kinematics_list.append(
-                updated_tracked_objs[key].kinematics_list[-1]
+                _forward_kinematics(updated_tracked_objs[key].kinematics_list[-1], sec=0.1)
             )
 
     return updated_tracked_objs
