@@ -129,6 +129,21 @@ if __name__ == "__main__":
                 color="teal",
                 alpha=0.5,
             )
+            # # Prediction text
+            # ax[0].text(
+            #     prediction[i + 1, 0, 0] + i,
+            #     prediction[i + 1, 0, 1] + i,
+            #     f"Prediction{i}",
+            #     fontsize=8,
+            #     color="teal",
+            # )
+            # ax[0].text(
+            #     prediction[i + 1, -1, 0] + i,
+            #     prediction[i + 1, -1, 1] + i,
+            #     f"Prediction{i}",
+            #     fontsize=8,
+            #     color="teal",
+            # )
 
         ax[0].set_title(title)
 
