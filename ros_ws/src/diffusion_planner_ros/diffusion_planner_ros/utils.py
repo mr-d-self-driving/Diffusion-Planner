@@ -126,7 +126,7 @@ def create_current_ego_state(kinematic_state_msg, acceleration_msg, wheel_base):
     return ego_current_state
 
 
-def tracking_one_step(msg: TrackedObjects, tracked_objs: dict) -> dict:
+def tracking_one_step(msg: TrackedObjects, tracked_objs: dict, lost_time_limit: int = 10) -> dict:
     updated_tracked_objs = tracked_objs.copy()
     for key in updated_tracked_objs:
         updated_tracked_objs[key].lost_time += 1
@@ -166,7 +166,7 @@ def tracking_one_step(msg: TrackedObjects, tracked_objs: dict) -> dict:
             )
 
     for key in list(updated_tracked_objs.keys()):
-        if updated_tracked_objs[key].lost_time > 10:
+        if updated_tracked_objs[key].lost_time > lost_time_limit:
             del updated_tracked_objs[key]
         elif updated_tracked_objs[key].lost_time > 0:
             updated_tracked_objs[key].shape_list.append(updated_tracked_objs[key].shape_list[-1])

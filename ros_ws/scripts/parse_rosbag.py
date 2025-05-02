@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 from collections import defaultdict
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -67,13 +68,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log_dir", type=Path, default="./")
     parser.add_argument("--min_frames", type=int, default=1800)
     return parser.parse_args()
-
-
-def tracking_list(tracking_object_msg_list: list):
-    tracking_obj = {}
-    for tracking_object_msg in tracking_object_msg_list:
-        tracking_obj = tracking_one_step(tracking_object_msg, tracking_obj)
-    return tracking_obj
 
 
 def create_ego_future(data_list, i, future_time_steps, map2bl_matrix_4x4):
@@ -352,18 +346,14 @@ if __name__ == "__main__":
         for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, step):
             token = f"{seq_id:08d}{i:08d}"
 
-            # 2 sec tracking (for input)
-            tracking_past = tracking_list(
-                [frame_data.tracked_objects for frame_data in data_list[i - PAST_TIME_STEPS : i]]
-            )
-            # 8 sec tracking (for ground truth)
-            tracking_future = tracking_list(
-                [frame_data.tracked_objects for frame_data in data_list[i : i + FUTURE_TIME_STEPS]]
-            )
-
             bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
                 data_list[i].kinematic_state
             )
+
+            # 2 sec tracking (for input)
+            tracking_past = {}
+            for frame_data in data_list[i - PAST_TIME_STEPS : i]:
+                tracking_past = tracking_one_step(frame_data.tracked_objects, tracking_past)
 
             # sort tracking_past by distance to the ego
             def sort_key(item):
@@ -375,15 +365,34 @@ if __name__ == "__main__":
 
             tracking_past = dict(sorted(tracking_past.items(), key=sort_key))
 
-            # filter tracking_future by indices in tracking_past
-            filtered_tracking_future = {}
-            for key in tracking_past.keys():
-                if key in tracking_future:
-                    filtered_tracking_future[key] = tracking_future[key]
-                else:
-                    filtered_tracking_future[key] = TrackingObject(
-                        kinematics_list=[], shape_list=[], class_label=-1, lost_time=0
-                    )
+            # 8 sec tracking (for ground truth)
+            tracking_future = deepcopy(tracking_past)
+            # reset lost_time and list
+            for key in tracking_future.keys():
+                tracking_future[key].lost_time = 1
+                tracking_future[key].shape_list = tracking_future[key].shape_list[0:1]
+                tracking_future[key].kinematics_list = tracking_future[key].kinematics_list[0:1]
+            # tracking
+            for frame_data in data_list[i : i + FUTURE_TIME_STEPS]:
+                tracking_future = tracking_one_step(
+                    frame_data.tracked_objects,
+                    tracking_future,
+                    lost_time_limit=100000,  # to avoid lost
+                )
+                # filter tracking_future by tracking_past
+                # (remove the objects that are not in tracking_past)
+                tracking_future = {
+                    key: value for key, value in tracking_future.items() if key in tracking_past
+                }
+            # erase losting from tracking_future
+            for key, val in tracking_future.items():
+                total = len(val.kinematics_list)
+                lost_time = val.lost_time
+                valid_t = total - lost_time
+                val.shape_list = val.shape_list[0:valid_t]
+                val.kinematics_list = val.kinematics_list[0:valid_t]
+
+            assert len(tracking_past.keys()) == len(tracking_future.keys())
 
             traffic_light_recognition = parse_traffic_light_recognition(
                 data_list[i].traffic_signals
@@ -403,7 +412,7 @@ if __name__ == "__main__":
             ).squeeze(0)
 
             neighbor_future_tensor = create_neighbor_future(
-                tracked_objs=filtered_tracking_future,
+                tracked_objs=tracking_future,
                 map2bl_matrix_4x4=map2bl_matrix_4x4,
                 max_num_objects=NEIGHBOR_NUM,
                 max_timesteps=FUTURE_TIME_STEPS,
