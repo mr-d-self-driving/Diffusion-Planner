@@ -118,7 +118,11 @@ if __name__ == "__main__":
                 title += f"\nloss{timestep // 10}sec={diff_m:.2f}[m]\n"
 
         # Neighbors
+        neighbors = valid_data_dict["neighbor_agents_past"][0]
         for i in range(prediction.shape[0] - 1):
+            neighbor = neighbors[i, -1]
+            if torch.sum(torch.abs(neighbor[:4])).item() < 1e-6:
+                continue
             ax[0].plot(
                 prediction[i + 1, :, 0],
                 prediction[i + 1, :, 1],
