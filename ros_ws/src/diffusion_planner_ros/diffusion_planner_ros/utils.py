@@ -111,13 +111,15 @@ def _forward_kinematics(kinematics: TrackedObjectKinematics, sec: float):
     new_kinematics = deepcopy(kinematics)
     pose_in_map_4x4 = pose_to_mat4x4(pose)
     twist_linear_in_local = np.array([twist.linear.x, twist.linear.y, twist.linear.z])
-    twist_angular = Rotation.from_euler("xyz", [twist.angular.x, twist.angular.y, twist.angular.z])
+    twist_angular = Rotation.from_euler(
+        "xyz", [twist.angular.x * sec, twist.angular.y * sec, twist.angular.z * sec], degrees=False
+    )
     twist_in_map = pose_in_map_4x4[0:3, 0:3] @ twist_linear_in_local
 
     # Update position
     new_pose = pose_in_map_4x4.copy()
     new_pose[0:3, 3] += twist_in_map * sec
-    new_pose[0:3, 0:3] = (twist_angular.as_matrix() * sec) @ pose_in_map_4x4[0:3, 0:3]
+    new_pose[0:3, 0:3] = (twist_angular.as_matrix()) @ pose_in_map_4x4[0:3, 0:3]
     new_kinematics.pose_with_covariance.pose.position.x = new_pose[0, 3]
     new_kinematics.pose_with_covariance.pose.position.y = new_pose[1, 3]
     new_kinematics.pose_with_covariance.pose.position.z = new_pose[2, 3]
