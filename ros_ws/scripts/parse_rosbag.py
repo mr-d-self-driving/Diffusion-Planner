@@ -19,7 +19,6 @@ from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
     create_lane_tensor,
 )
 from diffusion_planner_ros.utils import (
-    TrackingObject,
     convert_tracked_objects_to_tensor,
     create_current_ego_state,
     get_nearest_msg,
