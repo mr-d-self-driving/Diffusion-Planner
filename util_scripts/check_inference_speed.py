@@ -52,8 +52,6 @@ if __name__ == "__main__":
             (batch_size, 25, 1), dtype=torch.bool, device=dev
         ),
         "static_objects": torch.zeros((batch_size, 5, 10), device=dev),
-        "sampled_trajectories": torch.zeros((batch_size, 11, 81, 4), device=dev),
-        "diffusion_time": torch.zeros((batch_size, 11, 81, 4), device=dev),
     }
 
     NUM = 100
