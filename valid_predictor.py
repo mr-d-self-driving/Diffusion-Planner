@@ -168,7 +168,7 @@ def get_args():
         "--predicted_neighbor_num",
         type=int,
         help="number of neighbor agents to predict",
-        default=10,
+        default=32,
     )
     parser.add_argument("--resume_model_path", type=str, help="path to resume model", required=True)
     parser.add_argument("--args_json_path", type=str, help="path to resume model", required=True)
