@@ -27,6 +27,7 @@ if __name__ == "__main__":
     pos_y = []
     prev_time = -1
     prev_route_id = -1
+    prev_path = None
 
     for i, path in tqdm(enumerate(path_list)):
         print(path)
@@ -39,12 +40,13 @@ if __name__ == "__main__":
         time = path.parent.name
 
         if (route_id != prev_route_id or time != prev_time) and (i > 0):
-            plt.title(f"{date}/{path.stem}")
+            prev_date = prev_path.parent.parent.name
+            plt.title(f"{prev_date}/{prev_path.stem}")
             plt.scatter(pos_x, pos_y)
             s = plt.text(pos_x[0], pos_y[0], "S", fontsize=12)
             g = plt.text(pos_x[-1], pos_y[-1], "G", fontsize=12)
             plt.axis("equal")
-            plt.savefig(save_dir / f"{date}_{path.stem}.png")
+            plt.savefig(save_dir / f"{prev_date}_{prev_path.stem}.png")
             pos_x = []
             pos_y = []
             s.remove()
@@ -56,3 +58,4 @@ if __name__ == "__main__":
         pos_y.append(pose["y"])
         prev_route_id = route_id
         prev_time = time
+        prev_path = path
