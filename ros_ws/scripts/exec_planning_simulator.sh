@@ -25,7 +25,12 @@ done
 # 安定性のためにさらに少し待つ
 sleep 10
 
-python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_11-01-45_initialpose_and_goal.yaml
+python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_10-47-50_initialpose_and_goal.yaml
+# python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_11-01-45_initialpose_and_goal.yaml
+# python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_11-12-37_initialpose_and_goal.yaml
+# python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_11-37-42_initialpose_and_goal.yaml
+# python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_11-58-18_initialpose_and_goal.yaml
+# python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_12-16-03_initialpose_and_goal.yaml
 
 # engage
 ros2 topic pub /autoware/engage autoware_vehicle_msgs/msg/Engage "engage: true" -1
