@@ -218,7 +218,6 @@ class DiffusionPlannerNode(Node):
             return
         dev = self.diffusion_planner.parameters().__next__().device
         stamp = msg.header.stamp
-        # stamp = self.get_clock().now().to_msg()
 
         curr_kinematic_state, idx = get_nearest_msg(self.kinematic_state_list, stamp)
         self.kinematic_state_list = self.kinematic_state_list[idx:]
