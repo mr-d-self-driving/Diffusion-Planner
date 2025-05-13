@@ -28,6 +28,7 @@ if __name__ == "__main__":
     node.get_logger().info(f'Node "{node.get_name()}" has been started.')
     pub_initialpose = node.create_publisher(PoseWithCovarianceStamped, "/initialpose", 10)
     pub_goal = node.create_publisher(PoseStamped, "/planning/mission_planning/goal", 10)
+    pub_checkpoint = node.create_publisher(PoseStamped, "/planning/mission_planning/checkpoint", 10)
     node.get_logger().info("Publishers created.")
 
     initialpose = PoseWithCovarianceStamped()
@@ -58,3 +59,18 @@ if __name__ == "__main__":
     goal_pose.pose.orientation.w = data["goal"]["pose"]["pose"]["orientation"]["w"]
     pub_goal.publish(goal_pose)
     node.get_logger().info(f"Published goal pose: {goal_pose}")
+
+    if "checkpoint" in data:
+        time.sleep(1)
+        checkpoint = PoseStamped()
+        checkpoint.header.frame_id = "map"
+        checkpoint.header.stamp = node.get_clock().now().to_msg()
+        checkpoint.pose.position.x = data["checkpoint"]["pose"]["position"]["x"]
+        checkpoint.pose.position.y = data["checkpoint"]["pose"]["position"]["y"]
+        checkpoint.pose.position.z = data["checkpoint"]["pose"]["position"]["z"]
+        checkpoint.pose.orientation.x = data["checkpoint"]["pose"]["orientation"]["x"]
+        checkpoint.pose.orientation.y = data["checkpoint"]["pose"]["orientation"]["y"]
+        checkpoint.pose.orientation.z = data["checkpoint"]["pose"]["orientation"]["z"]
+        checkpoint.pose.orientation.w = data["checkpoint"]["pose"]["orientation"]["w"]
+        pub_goal.publish(checkpoint)
+        node.get_logger().info(f"Published checkpoint pose: {checkpoint}")
