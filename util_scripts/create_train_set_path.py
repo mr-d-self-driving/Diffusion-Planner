@@ -8,12 +8,14 @@ from pathlib import Path
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("root_dir_list", type=Path, nargs="+")
+    parser.add_argument("--save_path", type=Path, default=None)
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     root_dir_list = args.root_dir_list
+    save_path = args.save_path
 
     all_list = []
 
@@ -31,9 +33,10 @@ if __name__ == "__main__":
     print(f"Found {len(all_list)} npz files in total.")
 
     root_dir = root_dir_list[0]
-    train_set_path = root_dir.parent / "train_set_path.json"
+    if save_path is None:
+        save_path = root_dir.parent / "train_set_path.json"
 
-    with open(train_set_path, "w") as f:
+    with open(save_path, "w") as f:
         json.dump([str(npz_file) for npz_file in all_list], f, indent=4)
 
-    print(f"Saved train set path to {train_set_path}")
+    print(f"Saved set path to {save_path}")
