@@ -32,6 +32,11 @@ python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-P
 # python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_11-58-18_initialpose_and_goal.yaml
 # python3 $script_dir/publish_initial_and_goal_from_yaml.py $HOME/work/Diffusion-Planner/ros_ws/local/2025-04-16_12-16-03_initialpose_and_goal.yaml
 
+ros2 service call /debug/capture tier4_screen_capture_rviz_plugin/srv/Capture "{action: 3}"
+
 # engage
 ros2 topic pub /autoware/engage autoware_vehicle_msgs/msg/Engage "engage: true" -1
-wait
+
+sleep 60
+
+ros2 service call /debug/capture tier4_screen_capture_rviz_plugin/srv/Capture "{action: 4}"
