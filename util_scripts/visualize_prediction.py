@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument("--args_json", type=Path, required=True)
     parser.add_argument("--valid_data_list", type=Path, required=True)
     parser.add_argument("--save_dir", type=Path, default=None)
+    parser.add_argument("--only_top_p", type=float, default=1.0)
     return parser.parse_args()
 
 
@@ -30,6 +31,7 @@ if __name__ == "__main__":
     args_json = args.args_json
     valid_data_list = args.valid_data_list
     save_dir = args.save_dir
+    only_top_p = args.only_top_p
 
     if save_dir is None:
         save_dir = predictions_dir.parent / f"visualization"
@@ -42,6 +44,16 @@ if __name__ == "__main__":
     prediction_path_list = sorted(predictions_dir.glob("**/*.npz"))
     loss_path_list = sorted(predictions_dir.glob("**/*.json"))
 
+    # prediction_path_list, loss_path_listとの対応付けを保ったままvalid_data_path_listをソート
+    list_of_tuple = [
+        (valid_data_path, prediction_path, loss_path)
+        for valid_data_path, prediction_path, loss_path in zip(
+            valid_data_path_list, prediction_path_list, loss_path_list
+        )
+    ]
+    list_of_tuple.sort(key=lambda x: x[0])
+    valid_data_path_list, prediction_path_list, loss_path_list = zip(*list_of_tuple)
+
     info_path_list = [
         Path(valid_data_path).parent / f"{Path(valid_data_path).stem}.json"
         for valid_data_path in valid_data_path_list
@@ -49,6 +61,7 @@ if __name__ == "__main__":
     trajectory_dict_x = defaultdict(list)
     trajectory_dict_y = defaultdict(list)
     loss_3sec_dict = defaultdict(list)
+    loss_list = []
     for info_path, loss_path in zip(info_path_list, loss_path_list):
         assert info_path.is_file()
         time_str = info_path.stem.split("_")[0]
@@ -59,8 +72,20 @@ if __name__ == "__main__":
 
         loss_data = json.load(open(loss_path, "r"))
         loss_3sec_dict[time_str].append(loss_data["loss_ego_3sec"])
+        loss_list.append(loss_data["loss_ego_3sec"])
 
     assert len(prediction_path_list) == len(valid_data_path_list)
+
+    top_k_num = int(len(loss_list) * only_top_p)
+    max_indices = np.argpartition(-np.array(loss_list), top_k_num)[:top_k_num]
+
+    # top_p_loss以上のもの、またその前後を保存する
+    width = 20
+    use_set = set()
+    for i in max_indices:
+        for j in range(max(0, i - width), min(len(loss_list), i + width + 1)):
+            use_set.add(valid_data_path_list[j])
+    print(f"use {len(use_set):,}/{len(valid_data_path_list):,}")
 
     save_dir.mkdir(parents=True, exist_ok=True)
     assert save_dir.is_dir()
@@ -69,6 +94,8 @@ if __name__ == "__main__":
 
     def process_one_pair(pair):
         valid_data_path, prediction_path = pair
+        if valid_data_path not in use_set:
+            return
         valid_data_path = Path(valid_data_path)
         prediction_path = Path(prediction_path)
         info_data_path = valid_data_path.parent / f"{valid_data_path.stem}.json"
@@ -97,7 +124,9 @@ if __name__ == "__main__":
         loss_ego_mean = np.mean(loss_ego)
 
         fig, ax = plt.subplots(1, 2, figsize=(8, 5), gridspec_kw={"width_ratios": [2, 1]})
-        visualize_inputs(valid_data_dict, config_obj.observation_normalizer, save_path=None, ax=ax[0])
+        visualize_inputs(
+            valid_data_dict, config_obj.observation_normalizer, save_path=None, ax=ax[0]
+        )
 
         # plot prediction
         # Ego
