@@ -213,7 +213,7 @@ def model_wrapper(
 
     def model_fn(x, t_continuous):
         """
-        The noise predicition model function that is used for DPM-Solver.
+        The noise prediction model function that is used for DPM-Solver.
         """
         if guidance_type == "uncond":
             return noise_pred_fn(x, t_continuous)
