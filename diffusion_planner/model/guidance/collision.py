@@ -173,4 +173,4 @@ def collision_guidance_fn(x, t, cond, inputs, *args, **kwargs) -> torch.Tensor:
 
     reward = torch.sum(x_aux.detach() * x[:, 0, :, :2], dim=(1, 2))
 
-    return 3.0 * reward
+    return 300.0 * reward
