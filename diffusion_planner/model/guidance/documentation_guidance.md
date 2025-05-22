@@ -1,4 +1,4 @@
-# Classifer Guidance Tutorial
+# Classifier Guidance Tutorial
 
 ## Create your own guidance function
 
