@@ -77,7 +77,10 @@ if __name__ == "__main__":
     assert len(prediction_path_list) == len(valid_data_path_list)
 
     top_k_num = int(len(loss_list) * only_top_p)
-    max_indices = np.argpartition(-np.array(loss_list), top_k_num)[:top_k_num]
+    print(f"{top_k_num=}, {len(loss_list)=}, {only_top_p=}")
+    max_indices = np.argpartition(-np.array(loss_list), min(top_k_num, len(loss_list) - 1))[
+        :top_k_num
+    ]
 
     # top_p_loss以上のもの、またその前後を保存する
     width = 20
