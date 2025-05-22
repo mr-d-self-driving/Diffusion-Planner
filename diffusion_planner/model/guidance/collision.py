@@ -1,8 +1,7 @@
 import torch
 import torch.nn.functional as F
-from nuplan.common.actor_state.vehicle_parameters import get_pacifica_parameters
 
-ego_size = [get_pacifica_parameters().length, get_pacifica_parameters().width]
+ego_size = [5.0, 3.0]  # [length, width]
 
 COG_TO_REAR = 1.67
 CLIP_DISTANCE = 1.0
@@ -77,7 +76,8 @@ def collision_guidance_fn(x, t, cond, inputs, *args, **kwargs) -> torch.Tensor:
     neighbor_current_mask = inputs["neighbor_current_mask"]  # [B, Pn]
 
     x: torch.Tensor = x.reshape(B, P, -1, 4)
-    mask_diffusion_time = t < 0.1 and t > 0.005
+    mask_diffusion_time = (t < 0.1) * (t > 0.005)
+    mask_diffusion_time = mask_diffusion_time.view(B, 1, 1, 1)
     x = torch.where(mask_diffusion_time, x, x.detach())
 
     x = torch.cat(
