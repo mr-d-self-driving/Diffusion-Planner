@@ -241,7 +241,7 @@ if __name__ == "__main__":
     diffusion_planner = diffusion_planner.to(rank if args.device == "cuda" else args.device)
 
     if args.ddp:
-        diffusion_planner = DDP(diffusion_planner, device_ids=[rank], find_unused_parameters=False)
+        diffusion_planner = DDP(diffusion_planner, device_ids=[rank], find_unused_parameters=True)
 
     if global_rank == 0:
         print(
