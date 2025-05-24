@@ -366,30 +366,27 @@ if __name__ == "__main__":
 
             # 8 sec tracking (for ground truth)
             tracking_future = deepcopy(tracking_past)
-            # reset lost_time and list
+            # reset list
             for key in tracking_future.keys():
-                tracking_future[key].lost_time = 1
                 tracking_future[key].shape_list = tracking_future[key].shape_list[0:1]
                 tracking_future[key].kinematics_list = tracking_future[key].kinematics_list[0:1]
             # tracking
             for frame_data in data_list[i : i + FUTURE_TIME_STEPS]:
-                tracking_future = tracking_one_step(
+                tracking_future_next = tracking_one_step(
                     frame_data.tracked_objects,
                     tracking_future,
-                    lost_time_limit=100000,  # to avoid lost
                 )
+                # restore lost objects
+                for key in tracking_future.keys():
+                    if key not in tracking_future_next:
+                        tracking_future_next[key] = tracking_future[key]
+                tracking_future = tracking_future_next
+
                 # filter tracking_future by tracking_past
                 # (remove the objects that are not in tracking_past)
                 tracking_future = {
                     key: value for key, value in tracking_future.items() if key in tracking_past
                 }
-            # erase losting from tracking_future
-            for key, val in tracking_future.items():
-                total = len(val.kinematics_list)
-                lost_time = val.lost_time
-                valid_t = total - lost_time
-                val.shape_list = val.shape_list[0:valid_t]
-                val.kinematics_list = val.kinematics_list[0:valid_t]
 
             assert len(tracking_past.keys()) == len(tracking_future.keys())
 
