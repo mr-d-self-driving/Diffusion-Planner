@@ -395,7 +395,7 @@ if __name__ == "__main__":
             )
 
             ego_tensor = create_current_ego_state(
-                data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=5.0
+                data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=2.79
             ).squeeze(0)
 
             ego_future_np = create_ego_future(data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4)

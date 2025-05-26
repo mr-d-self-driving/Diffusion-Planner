@@ -94,7 +94,7 @@ class DiffusionPlannerNode(Node):
             exit()
 
         # param(4) wheel_base
-        self.wheel_base = self.declare_parameter("wheel_base", value=5.0).value
+        self.wheel_base = self.declare_parameter("wheel_base", value=2.79).value
         self.get_logger().info(f"Wheel base: {self.wheel_base}")
 
         # param(5) batch_size
