@@ -25,7 +25,7 @@ if __name__ == "__main__":
         assert root_dir.exists(), f"{root_dir} does not exist."
         assert root_dir.is_dir(), f"{root_dir} is not a directory."
 
-        npz_files = list(root_dir.rglob("*.npz"))
+        npz_files = sorted(root_dir.rglob("*.npz"))
         print(f"Found {len(npz_files)} npz files in {root_dir}.")
 
         all_list.extend(npz_files)
