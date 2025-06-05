@@ -507,6 +507,7 @@ def create_lane_tensor(
     traffic_light_recognition: dict,
     num_segments: int,
     dev: torch.device,
+    do_sort: bool,
 ) -> list[np.ndarray]:
     result_list = []
     for segment in lane_segments:
@@ -530,7 +531,9 @@ def create_lane_tensor(
             np.linalg.norm(line_data[-1, :2]),
         )
 
-    result_list = sorted(result_list, key=key_func)
+    if do_sort:
+        result_list = sorted(result_list, key=key_func)
+
     result_list = result_list[0:num_segments]
 
     lanes_tensor = torch.zeros((1, num_segments, 20, 12), dtype=torch.float32, device=dev)
