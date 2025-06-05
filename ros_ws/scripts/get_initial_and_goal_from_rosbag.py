@@ -23,7 +23,9 @@ if __name__ == "__main__":
 
     # parse rosbag
     serialization_format = "cdr"
-    storage_options = rosbag2_py.StorageOptions(uri=str(rosbag_path), storage_id="sqlite3")
+    ext = rosbag_path.suffix
+    storage_id = "sqlite3" if ext == ".db3" else "mcap"
+    storage_options = rosbag2_py.StorageOptions(uri=str(rosbag_path), storage_id=storage_id)
     converter_options = rosbag2_py.ConverterOptions(
         input_serialization_format=serialization_format,
         output_serialization_format=serialization_format,
