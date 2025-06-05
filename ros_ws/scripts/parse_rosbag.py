@@ -373,8 +373,8 @@ if __name__ == "__main__":
             # reset lost_time and list
             for key in tracking_future.keys():
                 tracking_future[key].lost_time = 1
-                tracking_future[key].shape_list = tracking_future[key].shape_list[-2:-1]
-                tracking_future[key].kinematics_list = tracking_future[key].kinematics_list[-2:-1]
+                tracking_future[key].shape_list = tracking_future[key].shape_list[-1:]
+                tracking_future[key].kinematics_list = tracking_future[key].kinematics_list[-1:]
             # tracking
             for frame_data in data_list[i : i + FUTURE_TIME_STEPS]:
                 tracking_future = tracking_one_step(

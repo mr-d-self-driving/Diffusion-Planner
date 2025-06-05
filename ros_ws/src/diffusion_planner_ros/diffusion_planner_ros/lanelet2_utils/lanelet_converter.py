@@ -469,7 +469,9 @@ def process_segment(
             elements = traffic_light_recognition[traffic_light_id]
             traffic_light_color = _identify_current_light_status(segment.turn_direction, elements)
             # https://github.com/autowarefoundation/autoware_msgs/blob/main/autoware_perception_msgs/msg/TrafficLightElement.msg
-            if traffic_light_color == 1:  # RED
+            if traffic_light_color == 0:  # UNKNOWN
+                traffic_light[3] = 1
+            elif traffic_light_color == 1:  # RED
                 traffic_light[2] = 1
             elif traffic_light_color == 2:  # AMBER
                 traffic_light[1] = 1
@@ -477,6 +479,8 @@ def process_segment(
                 traffic_light[0] = 1
             elif traffic_light_color == 4:  # WHITE
                 traffic_light[3] = 1
+            else:
+                assert False, f"Unexpected traffic light color: {traffic_light_color}"
         else:
             traffic_light[3] = 1
     traffic_light = np.tile(traffic_light, (centerlines.shape[0], 1))

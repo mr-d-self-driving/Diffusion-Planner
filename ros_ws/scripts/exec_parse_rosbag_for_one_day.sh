@@ -7,7 +7,7 @@ cd $(dirname $0)
 bag_dir_list=$(find $target_dir -mindepth 1 -maxdepth 1 -type d | sort)
 
 date=$(basename $target_dir)
-save_root=$target_dir/../../../../private_workspace/diffusion_planner/preprocessed_for_diffusion_planner11/$date
+save_root=$target_dir/../../../../private_workspace/diffusion_planner/preprocessed_for_diffusion_planner12/$date
 mkdir -p $save_root
 save_root=$(readlink -f $save_root)
 echo $save_root
