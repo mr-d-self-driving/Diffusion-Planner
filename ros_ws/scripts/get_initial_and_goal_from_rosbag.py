@@ -2,13 +2,10 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 
-import numpy as np
 import rosbag2_py
-from autoware_planning_msgs.msg import LaneletRoute
+import yaml
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
-from scipy.spatial.transform import Rotation
-from tqdm import tqdm
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,8 +20,9 @@ if __name__ == "__main__":
 
     # parse rosbag
     serialization_format = "cdr"
-    ext = rosbag_path.suffix
-    storage_id = "sqlite3" if ext == ".db3" else "mcap"
+    metadata_yaml_path = rosbag_path / "metadata.yaml"
+    metadata_yaml = yaml.safe_load(metadata_yaml_path.read_text(encoding="utf-8"))
+    storage_id = metadata_yaml["rosbag2_bagfile_information"]["storage_identifier"]
     storage_options = rosbag2_py.StorageOptions(uri=str(rosbag_path), storage_id=storage_id)
     converter_options = rosbag2_py.ConverterOptions(
         input_serialization_format=serialization_format,

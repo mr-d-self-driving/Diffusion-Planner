@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import rosbag2_py
+import yaml
 from diffusion_planner_ros.utils import parse_timestamp
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
@@ -51,8 +52,9 @@ if __name__ == "__main__":
         data_dict[time_Str] = {}
         # parse rosbag
         serialization_format = "cdr"
-        ext = rosbag_path.suffix
-        storage_id = "sqlite3" if ext == ".db3" else "mcap"
+        metadata_yaml_path = rosbag_path / "metadata.yaml"
+        metadata_yaml = yaml.safe_load(metadata_yaml_path.read_text(encoding="utf-8"))
+        storage_id = metadata_yaml["rosbag2_bagfile_information"]["storage_identifier"]
         storage_options = rosbag2_py.StorageOptions(uri=str(rosbag_path), storage_id=storage_id)
         converter_options = rosbag2_py.ConverterOptions(
             input_serialization_format=serialization_format,
