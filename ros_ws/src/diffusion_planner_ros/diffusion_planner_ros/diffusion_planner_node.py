@@ -275,6 +275,7 @@ class DiffusionPlannerNode(Node):
             traffic_light_recognition=traffic_light_recognition,
             num_segments=70,
             dev=dev,
+            do_sort=True,
         )
         end = time.time()
         elapsed_msec = (end - start) * 1000
@@ -286,6 +287,18 @@ class DiffusionPlannerNode(Node):
             self.static_map.lane_segments[segment.preferred_primitive.id]
             for segment in self.route.segments
         ]
+        closest_distance = float("inf")
+        closest_index = -1
+        for j, segment in enumerate(target_segments):
+            centerlines = segment.polyline.waypoints
+            diff_x = centerlines[:, 0] - curr_kinematic_state.pose.pose.position.x
+            diff_y = centerlines[:, 1] - curr_kinematic_state.pose.pose.position.y
+            diff = np.sqrt(diff_x**2 + diff_y**2)
+            distance = np.min(diff)
+            if distance < closest_distance:
+                closest_distance = distance
+                closest_index = j
+        target_segments = target_segments[closest_index:]
         route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
             target_segments,
             map2bl_mat4x4=map2bl_matrix_4x4,
@@ -295,6 +308,7 @@ class DiffusionPlannerNode(Node):
             traffic_light_recognition=traffic_light_recognition,
             num_segments=25,
             dev=dev,
+            do_sort=False,
         )
         marker_array = create_route_marker(route_tensor, stamp)
         self.pub_route_marker.publish(marker_array)
