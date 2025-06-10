@@ -66,7 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--step", type=int, default=1)
     parser.add_argument("--limit", type=int, default=-1)
     parser.add_argument("--log_dir", type=Path, default="./")
-    parser.add_argument("--min_frames", type=int, default=1800)
+    parser.add_argument("--min_frames", type=int, default=1700)
     return parser.parse_args()
 
 
