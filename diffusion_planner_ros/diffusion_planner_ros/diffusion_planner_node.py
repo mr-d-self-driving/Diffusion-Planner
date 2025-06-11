@@ -3,13 +3,16 @@
 
 import json
 import time
+import uuid
 
 import numpy as np
 import onnxruntime as ort
 import rclpy
 import torch
+from autoware_new_planning_msgs.msg import Trajectories, Trajectory, TrajectoryGeneratorInfo
 from autoware_perception_msgs.msg import TrackedObjects, TrafficLightGroupArray
-from autoware_planning_msgs.msg import LaneletRoute, Trajectory
+from autoware_planning_msgs.msg import LaneletRoute
+from autoware_planning_msgs.msg import Trajectory as PlanningTrajectory
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from rclpy.executors import SingleThreadedExecutor
@@ -161,11 +164,16 @@ class DiffusionPlannerNode(Node):
             reliability=QoSReliabilityPolicy.RELIABLE,
             durability=QoSDurabilityPolicy.VOLATILE,
         )
-        # pub(1)[main] trajectory
+        # pub(1a)[main] trajectory
         self.pub_trajectory = self.create_publisher(
-            Trajectory,
+            PlanningTrajectory,
             "/planning/scenario_planning/lane_driving/trajectory",
-            # "/diffusion_planner/trajectory",
+            pub_qos,
+        )
+        # pub(1b)[new_planning_framework] trajectories
+        self.pub_trajectories = self.create_publisher(
+            Trajectories,
+            "/diffusion_planner/trajectories",
             pub_qos,
         )
 
@@ -361,21 +369,47 @@ class DiffusionPlannerNode(Node):
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
         # ([bs, 11, T, 4])
-        # Publish
+        # Publish new format Trajectories message
+        trajectories_msg = Trajectories()
+
+        # Create generator info
+        generator_info = TrajectoryGeneratorInfo()
+        uuid_obj = uuid.uuid4()
+        generator_info.generator_id.uuid = list(uuid_obj.bytes)
+        generator_info.generator_name.data = "diffusion_planner"
+        trajectories_msg.generator_info = [generator_info]
+
+        # Publish individual trajectories for visualization and backward compatibility
         for b in range(0, self.batch_size):
             curr_pred = pred[b, 0]
             curr_heading = np.arctan2(curr_pred[:, 3], curr_pred[:, 2])[..., None]
             curr_pred = np.concatenate([curr_pred[..., :2], curr_heading], axis=-1)
             trajectory_msg = convert_prediction_to_msg(curr_pred, bl2map_matrix_4x4, stamp)
+
+            # Create new format trajectory by copying from existing trajectory_msg
+            new_trajectory = Trajectory()
+            new_trajectory.header = trajectory_msg.header
+            new_trajectory.points = trajectory_msg.points
+            new_trajectory.generator_id = generator_info.generator_id
+            new_trajectory.score = 1.0 / (b + 1)
+            trajectories_msg.trajectories.append(new_trajectory)
+
             curr_marker_array = create_trajectory_marker(trajectory_msg)
             for i in range(len(curr_marker_array.markers)):
                 curr_marker_array.markers[i].id += b
 
             if b == 0:
                 marker_array = curr_marker_array
-                self.pub_trajectory.publish(trajectory_msg)
+                # Publish main trajectory using old format for backward compatibility
+                # Convert existing trajectory_msg to PlanningTrajectory format
+                planning_trajectory = PlanningTrajectory()
+                planning_trajectory.header = trajectory_msg.header
+                planning_trajectory.points = trajectory_msg.points
+                self.pub_trajectory.publish(planning_trajectory)
             else:
                 marker_array.markers.extend(curr_marker_array.markers)
+
+        self.pub_trajectories.publish(trajectories_msg)
         self.pub_trajectory_marker.publish(marker_array)
 
 
