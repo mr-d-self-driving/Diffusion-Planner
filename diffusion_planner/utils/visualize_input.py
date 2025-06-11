@@ -8,7 +8,10 @@ from diffusion_planner.utils.normalizer import ObservationNormalizer
 
 
 def visualize_inputs(
-    inputs: dict, obs_normalizer: ObservationNormalizer, save_path: Path | None = None, ax: None = None
+    inputs: dict,
+    obs_normalizer: ObservationNormalizer,
+    save_path: Path | None = None,
+    ax: None = None,
 ):
     """
     draw the input data of the diffusion_planner model on the xy plane
@@ -234,6 +237,17 @@ def visualize_inputs(
         )
         ax.add_patch(rect)
 
+    def get_traffic_light_color(traffic_light):
+        if traffic_light[0] == 1:
+            return "green"
+        elif traffic_light[1] == 1:
+            return "yellow"
+        elif traffic_light[2] == 1:
+            return "red"
+        elif traffic_light[3] == 1:
+            return "gray"
+        assert False, f"Unknown traffic light state: {traffic_light}"
+
     # ==== Lanes ====
     lanes = inputs["lanes"][0]  # Use the first sample in the batch
     lanes_speed_limit = inputs["lanes_speed_limit"][0]
@@ -241,15 +255,7 @@ def visualize_inputs(
 
     for i in range(lanes.shape[0]):
         traffic_light = lanes[i, 0, 8:12]
-        color = None
-        if traffic_light[0] == 1:
-            color = "green"
-        elif traffic_light[1] == 1:
-            color = "yellow"
-        elif traffic_light[2] == 1:
-            color = "red"
-        elif traffic_light[3] == 1:
-            color = "gray"
+        color = get_traffic_light_color(traffic_light)
 
         # center line
         ax.plot(lanes[i, :, 0], lanes[i, :, 1], alpha=0.1, linewidth=1, color=color)
@@ -278,15 +284,7 @@ def visualize_inputs(
 
     for i in range(route_lanes.shape[0]):
         traffic_light = route_lanes[i, 0, 8:12]
-        color = None
-        if traffic_light[0] == 1:
-            color = "green"
-        elif traffic_light[1] == 1:
-            color = "yellow"
-        elif traffic_light[2] == 1:
-            color = "red"
-        elif traffic_light[3] == 1:
-            color = "gray"
+        color = get_traffic_light_color(traffic_light)
 
         # center line
         ax.plot(
