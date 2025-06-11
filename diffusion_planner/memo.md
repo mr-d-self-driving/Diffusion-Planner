@@ -12,7 +12,7 @@ git clone https://github.com/motional/nuplan-devkit.git && cd nuplan-devkit
 pip install -e .
 
 # Diffusion-Planner
-cd ~/work/Diffusion-Planner/
+cd ~/work/Diffusion-Planner/diffusion_planner
 python -m pip install pip==24.1
 
 pip install -r requirements_nuplan-devkit_fixed.txt
