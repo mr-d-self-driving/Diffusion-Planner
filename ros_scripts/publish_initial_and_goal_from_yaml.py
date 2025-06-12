@@ -72,5 +72,5 @@ if __name__ == "__main__":
         checkpoint.pose.orientation.y = data["checkpoint"]["pose"]["orientation"]["y"]
         checkpoint.pose.orientation.z = data["checkpoint"]["pose"]["orientation"]["z"]
         checkpoint.pose.orientation.w = data["checkpoint"]["pose"]["orientation"]["w"]
-        pub_goal.publish(checkpoint)
+        pub_checkpoint.publish(checkpoint)
         node.get_logger().info(f"Published checkpoint pose: {checkpoint}")
