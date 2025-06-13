@@ -246,7 +246,7 @@ def visualize_inputs(
             return "red"
         elif traffic_light[3] == 1:
             return "gray"
-        assert False, f"Unknown traffic light state: {traffic_light}"
+        return "gray"
 
     # ==== Lanes ====
     lanes = inputs["lanes"][0]  # Use the first sample in the batch
