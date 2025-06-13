@@ -1,21 +1,11 @@
 {
     "python.autoComplete.extraPaths": [
-        "/home/shintarosakoda/autoware/install/**/dist-packages",
-        "/home/shintarosakoda/autoware/install/**/site-packages",
-        "/home/shintarosakoda/autoware/install/diffusion_planner_ros/lib/python3.10/site-packages",
         "${workspaceFolder}",
         "${workspaceFolder}/diffusion_planner_ros",
         "/opt/ros/humble/lib/python3.10/site-packages",
         "/opt/ros/humble/local/lib/python3.10/dist-packages"
     ],
     "python.analysis.extraPaths": [
-        "/home/shintarosakoda/agnocast_sample_interfaces/local/lib/python3.10/dist-packages",
-        "/home/shintarosakoda/autoware/install/**/dist-packages",
-        "/home/shintarosakoda/autoware/install/**/site-packages",
-        "/home/shintarosakoda/autoware/install/diffusion_planner_ros/lib/python3.10/site-packages",
-        "/home/ubuntu/sakoda/autoware/install/**/dist-packages",
-        "/home/ubuntu/sakoda/autoware/install/**/site-packages",
-        "/home/ubuntu/sakoda/autoware/install/diffusion_planner_ros/lib/python3.10/site-packages",
         "${workspaceFolder}",
         "${workspaceFolder}/diffusion_planner_ros",
         "/opt/ros/humble/lib/python3.10/site-packages",
