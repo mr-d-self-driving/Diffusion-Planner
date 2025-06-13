@@ -1,12 +1,16 @@
 #!/bin/bash
 set -eux
 
-cd $(dirname $0)/../../
+script_dir=$(readlink -f $(dirname $0))
+diffusion_planner_root=$(readlink -f $script_dir/..)
+cd $diffusion_planner_root/../
+rm -rf autoware
 mkdir -p autoware/src
 cd autoware/src
 git clone https://github.com/autowarefoundation/autoware_cmake
 git clone https://github.com/autowarefoundation/autoware_msgs
 git clone https://github.com/autowarefoundation/autoware_lanelet2_extension
+ln -s $diffusion_planner_root ./
 cd ../
 
 rosdep update
