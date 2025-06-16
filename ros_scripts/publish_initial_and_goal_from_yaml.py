@@ -7,6 +7,8 @@ import rclpy
 import yaml
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from rclpy.node import Node
+from tier4_simulation_msgs.msg import DummyObject
+from unique_identifier_msgs.msg import UUID
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,6 +31,9 @@ if __name__ == "__main__":
     pub_initialpose = node.create_publisher(PoseWithCovarianceStamped, "/initialpose", 10)
     pub_goal = node.create_publisher(PoseStamped, "/planning/mission_planning/goal", 10)
     pub_checkpoint = node.create_publisher(PoseStamped, "/planning/mission_planning/checkpoint", 10)
+    pub_pedestrian = node.create_publisher(
+        DummyObject, "/simulation/dummy_perception_publisher/object_info", 10
+    )
     node.get_logger().info("Publishers created.")
 
     initialpose = PoseWithCovarianceStamped()
@@ -74,3 +79,37 @@ if __name__ == "__main__":
         checkpoint.pose.orientation.w = data["checkpoint"]["pose"]["orientation"]["w"]
         pub_checkpoint.publish(checkpoint)
         node.get_logger().info(f"Published checkpoint pose: {checkpoint}")
+
+    if "pedestrian" in data:
+        time.sleep(1)
+        pedestrian = DummyObject()
+        pedestrian.header.frame_id = "map"
+        pedestrian.header.stamp = node.get_clock().now().to_msg()
+        pedestrian.id = UUID()
+        for i in range(16):
+            pedestrian.id.uuid[i] = i
+        pose = pedestrian.initial_state.pose_covariance.pose
+        pose.position.x = data["pedestrian"]["pose"]["position"]["x"]
+        pose.position.y = data["pedestrian"]["pose"]["position"]["y"]
+        pose.position.z = data["pedestrian"]["pose"]["position"]["z"]
+        pose.orientation.x = data["pedestrian"]["pose"]["orientation"]["x"]
+        pose.orientation.y = data["pedestrian"]["pose"]["orientation"]["y"]
+        pose.orientation.z = data["pedestrian"]["pose"]["orientation"]["z"]
+        pose.orientation.w = data["pedestrian"]["pose"]["orientation"]["w"]
+        cov = pedestrian.initial_state.pose_covariance.covariance
+        cov[0] = 0.0008999999845400453
+        cov[7] = 0.0008999999845400453
+        cov[14] = 0.0008999999845400453
+        cov[35] = 0.007615434937179089
+        pedestrian.classification.label = 7
+        pedestrian.classification.probability = 1.0
+        pedestrian.shape.type = 1  # BOX
+        pedestrian.shape.footprint.points = []
+        pedestrian.shape.dimensions.x = 0.6
+        pedestrian.shape.dimensions.y = 0.6
+        pedestrian.shape.dimensions.z = 2.0
+        pedestrian.max_velocity = +33.29999923706055
+        pedestrian.min_velocity = -33.29999923706055
+        pedestrian.action = 0
+        pub_pedestrian.publish(pedestrian)
+        node.get_logger().info(f"Published pedestrian pose: {pedestrian}")
