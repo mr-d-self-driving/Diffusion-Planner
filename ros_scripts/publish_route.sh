@@ -1,4 +1,7 @@
 #!/bin/bash
+
+source ./install/setup.bash
+
 set -eux
 script_dir=$(readlink -f $(dirname $0))
 # python3 $script_dir/publish_initial_and_goal_from_yaml.py $script_dir/route/route01_teleport_to_miraikan.yaml
