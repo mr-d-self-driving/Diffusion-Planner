@@ -68,6 +68,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=-1)
     parser.add_argument("--log_dir", type=Path, default="./")
     parser.add_argument("--min_frames", type=int, default=1700)
+    parser.add_argument("--search_nearest_route", type=int, default=1)
     return parser.parse_args()
 
 
@@ -165,6 +166,7 @@ if __name__ == "__main__":
     limit = args.limit
     log_dir = args.log_dir
     min_frames = args.min_frames
+    search_nearest_route = args.search_nearest_route
 
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{rosbag_path.stem}.log"
@@ -263,7 +265,7 @@ if __name__ == "__main__":
             ok = False
 
         # check route
-        if True:
+        if search_nearest_route:
             # find the latest route msg
             max_route_index = -1
             max_route_timestamp = 0
