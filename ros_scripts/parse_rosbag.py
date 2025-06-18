@@ -156,16 +156,15 @@ def create_neighbor_future(
     return neighbor
 
 
-if __name__ == "__main__":
-    args = parse_args()
-    rosbag_path = args.rosbag_path
-    vector_map_path = args.vector_map_path
-    save_dir = args.save_dir
-    step = args.step
-    limit = args.limit
-    min_frames = args.min_frames
-    search_nearest_route = args.search_nearest_route
-
+def main(
+    rosbag_path: Path,
+    vector_map_path: Path,
+    save_dir: Path,
+    step: int,
+    limit: int,
+    min_frames: int,
+    search_nearest_route: bool,
+):
     log_dir = save_dir.parent
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{rosbag_path.stem}.log"
@@ -484,9 +483,7 @@ if __name__ == "__main__":
             is_red_light = route_tensor[:, 1, 0, -2].item()  # next segment
             sum_mileage = 0.0
             for j in range(FUTURE_TIME_STEPS - 1):
-                sum_mileage += np.linalg.norm(
-                    ego_future_np[j, :2] - ego_future_np[j + 1, :2]
-                )
+                sum_mileage += np.linalg.norm(ego_future_np[j, :2] - ego_future_np[j + 1, :2])
             is_future_forward = sum_mileage > 0.1
             if is_stop and is_red_light and is_future_forward:
                 continue
@@ -524,3 +521,8 @@ if __name__ == "__main__":
             }
             with open(f"{save_dir}/{map_name}_{token}.json", "w") as f:
                 json.dump(pose_dict, f)
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(**vars(args))

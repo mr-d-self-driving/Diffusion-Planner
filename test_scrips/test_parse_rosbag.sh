@@ -13,7 +13,6 @@ python3 ./ros_scripts/parse_rosbag.py \
     /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/map/2025-04-16/lanelet2_map.osm \
     ${result_dir}/tmp \
     --limit 30000000 \
-    --log_dir ${result_dir} \
     --min_frames 0 2>&1 | tee $result_dir/result_$(date +%Y%m%d_%H%M%S).txt
 
 python3 ./diffusion_planner/util_scripts/create_train_set_path.py ${result_dir}/tmp
