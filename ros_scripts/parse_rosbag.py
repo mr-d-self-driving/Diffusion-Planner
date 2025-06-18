@@ -263,18 +263,22 @@ if __name__ == "__main__":
             ok = False
 
         # check route
-        # find the latest route msg
-        max_route_index = -1
-        max_route_timestamp = 0
-        for j in range(len(route_msgs)):
-            route_msg = route_msgs[j]
-            route_stamp = parse_timestamp(route_msg.header.stamp)
-            if route_stamp <= timestamp and route_stamp > max_route_timestamp:
-                max_route_timestamp = route_stamp
-                max_route_index = j
-        if max_route_index == -1:
-            logger.info(f"Cannot find route msg at {i}")
-            continue
+        if True:
+            # find the latest route msg
+            max_route_index = -1
+            max_route_timestamp = 0
+            for j in range(len(route_msgs)):
+                route_msg = route_msgs[j]
+                route_stamp = parse_timestamp(route_msg.header.stamp)
+                if route_stamp <= timestamp and route_stamp > max_route_timestamp:
+                    max_route_timestamp = route_stamp
+                    max_route_index = j
+            if max_route_index == -1:
+                logger.info(f"Cannot find route msg at {i}")
+                continue
+        else:
+            # use the first route msg
+            max_route_index = 0
 
         sequence = sequence_data_list[max_route_index]
 
