@@ -1,19 +1,31 @@
 #!/bin/bash
 set -eux
 
-cd $(dirname $0)/../
+cd $(dirname $0)
+
 set +eux
-source ./install/setup.bash
+source ~/pilot-auto.xx1/install/setup.bash
 set -eux
 
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2024-07-18 &
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2024-12-11 &
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2025-01-24 &
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2025-02-04 &
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2025-03-25 &
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2025-04-16 &
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2025-04-30 &
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2025-05-07 &
-./scripts/exec_parse_rosbag_for_one_day.sh /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2025-05-15 &
+# tieriv_dataset
+python3 ./parse_rosbag_for_directory.py \
+    /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
+    /mnt/nvme1/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
+    /mnt/nvme2/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
+    /mnt/nvme3/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
+    --save_root /mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver13_realdata \
+    --step 1 \
+    --limit -1 \
+    --min_frames 1800 \
+    --search_nearest_route 1
+
+python3 ./parse_rosbag_for_directory.py \
+    /mnt/nvme0/sakoda/nas_copy/psim_dataset/kashiwanoha/bag/ \
+    /mnt/nvme0/sakoda/nas_copy/psim_dataset/odaiba/bag/ \
+    --save_root /mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver13_sim_data \
+    --step 1 \
+    --limit -1 \
+    --min_frames 0 \
+    --search_nearest_route 0
 
 wait
