@@ -1,0 +1,25 @@
+#!/bin/bash
+set -eux
+
+cd $(dirname $0)/..
+
+result_dir=/mnt/nvme0/sakoda/$(date +%Y%m%d_%H%M%S)_test_parse_rosbag
+
+rm -rf ${result_dir}
+mkdir -p ${result_dir}/tmp
+
+python3 ./ros_scripts/parse_rosbag.py \
+    /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag_mcap/2025-04-16/10-47-50 \
+    /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/map/2025-04-16/lanelet2_map.osm \
+    ${result_dir}/tmp \
+    --limit 30000000 \
+    --log_dir ${result_dir} \
+    --min_frames 0 2>&1 | tee $result_dir/result_$(date +%Y%m%d_%H%M%S).txt
+
+python3 ./diffusion_planner/util_scripts/create_train_set_path.py ${result_dir}/tmp
+
+python3 ./diffusion_planner/util_scripts/visualize_input.py ${result_dir}/train_set_path.json \
+    /home/ubuntu/sakoda/Diffusion-Planner_npf/diffusion_planner/training_log/diffusion-planner-training/20250611-145217_with_psim_20250610/args.json \
+    --save_path ${result_dir}/visualize_result
+
+~/misc/ffmpeg_lib/make_mp4_from_unsequential_png.sh ${result_dir}/visualize_result
