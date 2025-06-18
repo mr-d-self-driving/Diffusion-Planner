@@ -475,6 +475,21 @@ if __name__ == "__main__":
                 do_sort=False,
             )
 
+            # (1)自車が止まっている
+            # (2)目の前のlanelet segmentが赤信号である
+            # (3)GTのTrajectoryが進むように出ている
+            # このようなデータはスキップする
+            is_stop = data_list[i].kinematic_state.twist.twist.linear.x < 0.1
+            is_red_light = route_tensor[:, 1, 0, -2].item()  # next segment
+            sum_mileage = 0.0
+            for j in range(FUTURE_TIME_STEPS - 1):
+                sum_mileage += np.linalg.norm(
+                    ego_future_np[j, :2] - ego_future_np[j + 1, :2]
+                )
+            is_future_forward = sum_mileage > 0.1
+            if is_stop and is_red_light and is_future_forward:
+                continue
+
             curr_data = {
                 "map_name": map_name,
                 "token": token,
