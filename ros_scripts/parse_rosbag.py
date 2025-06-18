@@ -39,6 +39,19 @@ from diffusion_planner_ros.utils import (
 )
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("rosbag_path", type=Path)
+    parser.add_argument("vector_map_path", type=Path)
+    parser.add_argument("save_dir", type=Path)
+    parser.add_argument("--step", type=int, default=1)
+    parser.add_argument("--limit", type=int, default=-1)
+    parser.add_argument("--log_dir", type=Path, default="./")
+    parser.add_argument("--min_frames", type=int, default=1700)
+    parser.add_argument("--search_nearest_route", type=int, default=1)
+    return parser.parse_args()
+
+
 @dataclass
 class FrameData:
     timestamp: int
@@ -57,19 +70,6 @@ class SequenceData:
 
     data_list: list[FrameData]
     route: LaneletRoute
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("rosbag_path", type=Path)
-    parser.add_argument("vector_map_path", type=Path)
-    parser.add_argument("save_dir", type=Path)
-    parser.add_argument("--step", type=int, default=1)
-    parser.add_argument("--limit", type=int, default=-1)
-    parser.add_argument("--log_dir", type=Path, default="./")
-    parser.add_argument("--min_frames", type=int, default=1700)
-    parser.add_argument("--search_nearest_route", type=int, default=1)
-    return parser.parse_args()
 
 
 def create_ego_future(data_list, i, future_time_steps, map2bl_matrix_4x4):
