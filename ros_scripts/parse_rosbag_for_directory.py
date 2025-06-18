@@ -81,6 +81,8 @@ if __name__ == "__main__":
     bag_dir_list = [
         metadata_path.parent for metadata_path in metadata_list if metadata_path.is_file()
     ]
+    bag_dir_list = list(set(bag_dir_list))  # Remove duplicates
+    bag_dir_list.sort()
 
     logging.info(f"Found {len(bag_dir_list)} bag directories to process")
     logging.info(f"Using {num_workers} parallel workers")
