@@ -5,25 +5,26 @@ from parse_rosbag import main as parse_rosbag_main
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("target_dir", type=Path)
+    parser.add_argument("target_dir_list", type=Path, nargs="+")
     parser.add_argument("--save_root", type=Path, required=True)
     parser.add_argument("--step", type=int, default=1)
     parser.add_argument("--limit", type=int, default=-1)
     parser.add_argument("--min_frames", type=int, default=1700)
     parser.add_argument("--search_nearest_route", type=int, default=1)
     args = parser.parse_args()
-    target_dir = args.target_dir
+    target_dir_list = args.target_dir_list
     save_root = args.save_root
     step = args.step
     limit = args.limit
     min_frames = args.min_frames
     search_nearest_route = args.search_nearest_route
 
-    target_dir = target_dir.resolve()
     save_root = save_root.resolve()
 
     # search "metadata.yaml"
-    metadata_list = list(target_dir.glob("**/metadata.yaml"))
+    metadata_list = []
+    for target_dir in target_dir_list:
+        metadata_list.extend(list(target_dir.glob("**/metadata.yaml")))
     bag_dir_list = [
         metadata_path.parent for metadata_path in metadata_list if metadata_path.is_file()
     ]
