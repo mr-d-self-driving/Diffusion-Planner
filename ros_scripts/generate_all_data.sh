@@ -7,7 +7,7 @@ set +eux
 source ~/pilot-auto.xx1/install/setup.bash
 set -eux
 
-# tieriv_dataset
+# real data
 python3 ./parse_rosbag_for_directory.py \
     /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
     /mnt/nvme1/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
@@ -19,6 +19,7 @@ python3 ./parse_rosbag_for_directory.py \
     --min_frames 1800 \
     --search_nearest_route 1
 
+# simulation data
 python3 ./parse_rosbag_for_directory.py \
     /mnt/nvme0/sakoda/nas_copy/psim_dataset/kashiwanoha/bag/ \
     /mnt/nvme0/sakoda/nas_copy/psim_dataset/odaiba/bag/ \
@@ -27,5 +28,3 @@ python3 ./parse_rosbag_for_directory.py \
     --limit -1 \
     --min_frames 0 \
     --search_nearest_route 0
-
-wait
