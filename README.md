@@ -17,7 +17,7 @@ git clone https://github.com/motional/nuplan-devkit.git && cd nuplan-devkit
 pip install -e .
 
 # Diffusion-Planner
-cd ~/work/Diffusion-Planner/diffusion_planner
+cd diffusion_planner
 python -m pip install pip==24.1
 
 pip install -r requirements_nuplan-devkit_fixed.txt
@@ -28,7 +28,7 @@ pip install -e .
 python3 -c "import torch; print(torch.cuda.is_available())"
 
 # install ros-humble
-./ros_scripts/download_ros-hubmle.sh
+./ros_scripts/download_ros-humble.sh
 ```
 
 # 2. Create dataset
@@ -74,7 +74,7 @@ driving_dataset$ tree . -L 2
 or use `parse_rosbag_for_directory.py` directly.
 
 ```bash
-python3 ./parse_rosbag_for_directory.py <rosbag_path> <vectormap_path> <etc>
+python3 ./ros_scripts/parse_rosbag_for_directory.py <target_dir_list> --save_root <save_root> [--step <step>] [--limit <limit>]
 ```
 
 # 3. Train
