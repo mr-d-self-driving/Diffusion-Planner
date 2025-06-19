@@ -8,7 +8,7 @@
 
 ### 1. Clone and Build
 ```bash
-git clone https://github.com/ZhengYinan-AIR/Diffusion-Planner.git
+git clone https://github.com/tier4/Diffusion-Planner.git
 cd Diffusion-Planner
 docker build -t diffusion-planner .
 ```
