@@ -34,9 +34,9 @@ if __name__ == "__main__":
 
     root_dir = root_dir_list[0]
     if save_path is None:
-        save_path = root_dir.parent / "train_set_path.json"
+        save_path = root_dir.parent / "path_list.json"
 
     with open(save_path, "w") as f:
         json.dump([str(npz_file) for npz_file in all_list], f, indent=4)
 
-    print(f"Saved set path to {save_path}")
+    print(f"Saved path list to {save_path}")
