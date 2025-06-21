@@ -14,7 +14,7 @@ def parse_args():
     parser.add_argument("--limit", type=int, default=-1)
     parser.add_argument("--min_frames", type=int, default=1700)
     parser.add_argument("--search_nearest_route", type=int, default=1)
-    parser.add_argument("--num_workers", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=32)
     return parser.parse_args()
 
 
