@@ -13,7 +13,7 @@ python3 ./parse_rosbag_for_directory.py \
     /mnt/nvme1/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
     /mnt/nvme2/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
     /mnt/nvme3/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
-    --save_root /mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver13_realdata \
+    --save_root /mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver14_realdata \
     --step 1 \
     --limit -1 \
     --min_frames 1800 \
@@ -23,7 +23,7 @@ python3 ./parse_rosbag_for_directory.py \
 python3 ./parse_rosbag_for_directory.py \
     /mnt/nvme0/sakoda/nas_copy/psim_dataset/kashiwanoha/bag/ \
     /mnt/nvme0/sakoda/nas_copy/psim_dataset/odaiba/bag/ \
-    --save_root /mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver13_sim_data \
+    --save_root /mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver14_sim_data \
     --step 1 \
     --limit -1 \
     --min_frames 0 \

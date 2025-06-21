@@ -165,7 +165,7 @@ def tracking_one_step(msg: TrackedObjects, tracked_objs: dict, lost_time_limit: 
     for key in updated_tracked_objs:
         updated_tracked_objs[key].lost_time += 1
     label_map = {
-        0: 0,  # unknown -> vehicle
+        0: -1,  # unknown -> skip
         1: 0,  # car -> vehicle
         2: 0,  # truck -> vehicle
         3: 0,  # bus -> vehicle
@@ -183,6 +183,8 @@ def tracking_one_step(msg: TrackedObjects, tracked_objs: dict, lost_time_limit: 
         max_index = np.argmax(probability_list)
         label = label_list[max_index]
         label_in_model = label_map[label]
+        if label_in_model == -1:
+            continue
         kinematics = obj.kinematics
         shape = obj.shape
         if object_id_bytes in tracked_objs:
