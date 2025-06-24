@@ -50,8 +50,6 @@ class StatePerturbation:
 
     def __init__(
         self,
-        low: List[float] = [-0.0, -0.75, -0.35, -1, -0.5, -0.2, -0.1, 0.0, -0.0],
-        high: List[float] = [0.0, 0.75, 0.35, 1, 0.5, 0.2, 0.1, 0.0, 0.0],
         augment_prob: float = 0.5,
         normalize=True,
         device: Optional[torch.device] = "cpu",
@@ -65,8 +63,10 @@ class StatePerturbation:
         self._augment_prob = augment_prob
         self._normalize = normalize
         self._device = torch.device(device)
-        self._low = torch.tensor(low).to(self._device)
-        self._high = torch.tensor(high).to(self._device)
+        lo: List[float] = ([0.0, -0.75, -0.35, -1, -0.5, -0.2, -0.1, 0.0, 0.0],)
+        hi: List[float] = ([0.0, +0.75, +0.35, +1, +0.5, +0.2, +0.1, 0.0, 0.0],)
+        self._low = torch.tensor(lo).to(self._device) * 0.5
+        self._high = torch.tensor(hi).to(self._device) * 0.5
         self._wheel_base = get_pacifica_parameters().wheel_base
 
         self.refine_horizon = REFINE_HORIZON
