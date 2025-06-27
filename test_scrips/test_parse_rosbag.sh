@@ -17,7 +17,7 @@ python3 ./ros_scripts/parse_rosbag.py \
 
 python3 ./diffusion_planner/util_scripts/create_train_set_path.py ${result_dir}/tmp
 
-python3 ./diffusion_planner/util_scripts/visualize_input.py ${result_dir}/train_set_path.json \
+python3 ./diffusion_planner/util_scripts/visualize_input.py ${result_dir}/path_list.json \
     /home/ubuntu/sakoda/Diffusion-Planner_npf/diffusion_planner/training_log/diffusion-planner-training/20250611-145217_with_psim_20250610/args.json \
     --save_path ${result_dir}/visualize_result
 
