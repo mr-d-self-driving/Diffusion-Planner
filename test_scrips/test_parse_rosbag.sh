@@ -9,8 +9,8 @@ rm -rf ${result_dir}
 mkdir -p ${result_dir}/tmp
 
 python3 ./ros_scripts/parse_rosbag.py \
-    /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag_mcap/2025-04-16/10-47-50 \
-    /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/map/2025-04-16/lanelet2_map.osm \
+    /mnt/nvme3/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/2025-06-12/10-19-35 \
+    /mnt/nvme3/sakoda/nas_copy/tieriv_dataset/driving_dataset/map/2025-06-12/10-19-35/lanelet2_map.osm \
     ${result_dir}/tmp \
     --limit 30000000 \
     --min_frames 0 2>&1 | tee $result_dir/result_$(date +%Y%m%d_%H%M%S).txt
