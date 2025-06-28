@@ -32,6 +32,7 @@ def visualize_inputs(
     for key in inputs:
         print(f"{key}={inputs[key].shape}")
 
+    ego_past=(1, 20, 3)
     ego_current_state=(1, 10)
     ego_agent_future=(1, 80, 3)
     neighbor_agents_past=(1, 32, 21, 11)
@@ -79,6 +80,18 @@ def visualize_inputs(
         fc="r",
         ec="r",
         alpha=0.7,
+    )
+
+    ego_past = inputs["ego_agent_past"][0]  # Use the first sample in the batch
+    ego_past_x = ego_past[:, 0]
+    ego_past_y = ego_past[:, 1]
+    ax.plot(
+        ego_past_x,
+        ego_past_y,
+        color="orange",
+        alpha=0.5,
+        linestyle="--",
+        label="Ego Past Trajectory",
     )
 
     if "ego_agent_future" in inputs:

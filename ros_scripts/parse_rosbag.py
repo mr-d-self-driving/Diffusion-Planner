@@ -62,6 +62,7 @@ class FrameData:
     traffic_signals: TrafficLightGroupArray
     turn_rpt: SystemRptInt
 
+
 """
 https://github.com/astuff/pacmod3_msgs/blob/main/msg/SystemCmdInt.msg
 # Turn Command Constants
@@ -70,6 +71,7 @@ uint16 TURN_NONE = 1
 uint16 TURN_LEFT = 2
 uint16 TURN_HAZARDS = 3
 """
+
 
 @dataclass
 class SequenceData:
@@ -352,6 +354,7 @@ def main(
     作りたいnpz
     map_name                    <U26    ()
     token                       <U16    ()
+    ego_agent_past              float32 (20, 3)
     ego_current_state           float32 (10,)
     ego_agent_future            float32 (80, 3)
     neighbor_agents_past        float32 (32, 21, 11)
@@ -363,6 +366,7 @@ def main(
     route_lanes                 float32 (25, 20, 12)
     route_lanes_speed_limit     float32 (25, 1)
     route_lanes_has_speed_limit bool    (25, 1)
+    turn_rpt                    int32   (1)
     """
     PAST_TIME_STEPS = 21
     FUTURE_TIME_STEPS = 80
@@ -446,6 +450,10 @@ def main(
 
             traffic_light_recognition = parse_traffic_light_recognition(
                 data_list[i].traffic_signals
+            )
+
+            ego_past_np = create_ego_future(
+                data_list, i - PAST_TIME_STEPS, PAST_TIME_STEPS, map2bl_matrix_4x4
             )
 
             ego_tensor = create_current_ego_state(
@@ -533,6 +541,7 @@ def main(
             curr_data = {
                 "map_name": map_name,
                 "token": token,
+                "ego_agent_past": ego_past_np,
                 "ego_current_state": ego_tensor.numpy(),
                 "ego_agent_future": ego_future_np,
                 "neighbor_agents_past": neighbor_past_tensor.numpy(),
