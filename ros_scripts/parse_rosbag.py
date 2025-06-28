@@ -55,6 +55,7 @@ def parse_args() -> argparse.Namespace:
 @dataclass
 class FrameData:
     timestamp: int
+    route: LaneletRoute
     tracked_objects: TrackedObjects
     kinematic_state: Odometry
     acceleration: AccelWithCovarianceStamped
@@ -308,6 +309,7 @@ def main(
         sequence.data_list.append(
             FrameData(
                 timestamp=timestamp,
+                route=sequence.route,
                 tracked_objects=tracking,
                 kinematic_state=latest_msgs["/localization/kinematic_state"],
                 acceleration=latest_msgs["/localization/acceleration"],
@@ -318,6 +320,33 @@ def main(
             )
         )
         progress_bar.update(1)
+
+    # おそらくFreeSpacePlannerの影響で、最後の方でgoal_poseだけ微妙に変わることがある
+    # それに伴ってprimitivesの細かい順番も変わるが、idをソートして比較すると一致している
+    # そういうものは結合する
+    for i in range(len(sequence_data_list) - 2, -1, -1):
+        route_msg_l = sequence_data_list[i].route
+        route_msg_r = sequence_data_list[i + 1].route
+        if route_msg_l.start_pose != route_msg_r.start_pose:
+            continue
+        segments_l = route_msg_l.segments
+        segments_r = route_msg_r.segments
+        if len(segments_l) != len(segments_r):
+            continue
+        same = True
+        for sl, sr in zip(segments_l, segments_r):
+            primitives_l = sorted([i.id for i in sl.primitives])
+            primitives_r = sorted([i.id for i in sr.primitives])
+            if primitives_l != primitives_r:
+                same = False
+                break
+        if not same:
+            continue
+        logger.info(f"Concatenate sequence {i} and {i + 1}")
+        logger.info(f"Before {len(sequence_data_list[i].data_list)=} frames")
+        sequence_data_list[i].data_list.extend(sequence_data_list[i + 1].data_list)
+        logger.info(f"After {len(sequence_data_list[i].data_list)=} frames")
+        sequence_data_list.pop(i + 1)
 
     """
     作りたいnpz
@@ -462,7 +491,7 @@ def main(
 
             target_segments = [
                 vector_map.lane_segments[segment.preferred_primitive.id]
-                for segment in seq.route.segments
+                for segment in data_list[i].route.segments
             ]
             closest_distance = float("inf")
             closest_index = -1
