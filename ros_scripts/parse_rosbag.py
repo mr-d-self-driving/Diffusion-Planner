@@ -17,6 +17,7 @@ from autoware_perception_msgs.msg import (
 from autoware_planning_msgs.msg import LaneletRoute
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from nav_msgs.msg import Odometry
+from pacmod3_msgs.msg import SystemRptInt
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from scipy.spatial.transform import Rotation
@@ -58,7 +59,16 @@ class FrameData:
     kinematic_state: Odometry
     acceleration: AccelWithCovarianceStamped
     traffic_signals: TrafficLightGroupArray
+    turn_rpt: SystemRptInt
 
+"""
+https://github.com/astuff/pacmod3_msgs/blob/main/msg/SystemCmdInt.msg
+# Turn Command Constants
+uint16 TURN_RIGHT = 0
+uint16 TURN_NONE = 1
+uint16 TURN_LEFT = 2
+uint16 TURN_HAZARDS = 3
+"""
 
 @dataclass
 class SequenceData:
@@ -200,6 +210,7 @@ def main(
         "/perception/object_recognition/tracking/objects",
         "/perception/traffic_light_recognition/traffic_signals",
         "/planning/mission_planning/route",
+        "/pacmod/turn_rpt",
     ]
 
     storage_filter = rosbag2_py.StorageFilter(topics=target_topic_list)
@@ -235,6 +246,7 @@ def main(
             "/localization/kinematic_state": None,
             "/localization/acceleration": None,
             "/perception/traffic_light_recognition/traffic_signals": None,
+            "/pacmod/turn_rpt": None,
         }
 
         ok = True
@@ -302,6 +314,7 @@ def main(
                 traffic_signals=latest_msgs[
                     "/perception/traffic_light_recognition/traffic_signals"
                 ],
+                turn_rpt=latest_msgs["/pacmod/turn_rpt"],
             )
         )
         progress_bar.update(1)
@@ -502,6 +515,7 @@ def main(
                 "route_lanes": route_tensor.squeeze(0).numpy(),
                 "route_lanes_speed_limit": route_speed_limit.squeeze(0).numpy(),
                 "route_lanes_has_speed_limit": route_has_speed_limit.squeeze(0).numpy(),
+                "turn_rpt": data_list[i].turn_rpt.manual_input,
             }
             # save the data
             save_dir.mkdir(parents=True, exist_ok=True)

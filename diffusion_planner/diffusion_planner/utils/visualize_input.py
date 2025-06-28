@@ -29,17 +29,21 @@ def visualize_inputs(
         inputs[key] = to_numpy(inputs[key])
 
     """
-    key='ego_current_state', inputs[key].shape=(1, 10)
-    key='neighbor_agents_past', inputs[key].shape=(1, 32, 21, 11)
-    key='lanes', inputs[key].shape=(1, 70, 20, 12)
-    key='lanes_speed_limit', inputs[key].shape=(1, 70, 1)
-    key='lanes_has_speed_limit', inputs[key].shape=(1, 70, 1)
-    key='route_lanes', inputs[key].shape=(1, 25, 20, 12)
-    key='route_lanes_speed_limit', inputs[key].shape=(1, 25, 1)
-    key='route_lanes_has_speed_limit', inputs[key].shape=(1, 25, 1)
-    key='static_objects', inputs[key].shape=(1, 5, 10)
-    key='sampled_trajectories', inputs[key].shape=(1, 11, 81, 4)
-    key='diffusion_time', inputs[key].shape=(1,)
+    for key in inputs:
+        print(f"{key}={inputs[key].shape}")
+
+    ego_current_state=(1, 10)
+    ego_agent_future=(1, 80, 3)
+    neighbor_agents_past=(1, 32, 21, 11)
+    neighbor_agents_future=(1, 32, 80, 3)
+    static_objects=(1, 5, 10)
+    lanes=(1, 70, 20, 12)
+    lanes_speed_limit=(1, 70, 1)
+    lanes_has_speed_limit=(1, 70, 1)
+    route_lanes=(1, 25, 20, 12)
+    route_lanes_speed_limit=(1, 25, 1)
+    route_lanes_has_speed_limit=(1, 25, 1)
+    turn_rpt=(1,)
     """
 
     # initialize the figure
@@ -317,6 +321,17 @@ def visualize_inputs(
     ax.grid(True, alpha=0.3)
 
     # print status
+    turn_rpt = inputs["turn_rpt"][0]
+    if turn_rpt == 0:
+        turn_rpt_text = "->"
+    elif turn_rpt == 1:
+        turn_rpt_text = "None"
+    elif turn_rpt == 2:
+        turn_rpt_text = "<-"
+    elif turn_rpt == 3:
+        turn_rpt_text = "Hazards"
+    else:
+        assert False, f"Unknown turn command: {turn_rpt}"
 
     ax.text(
         view_range - 1,
@@ -326,7 +341,8 @@ def visualize_inputs(
         f"AccelerationX: {ego_acc_x:.2f} m/s²\n"
         f"AccelerationY: {ego_acc_y:.2f} m/s²\n"
         f"Steering: {ego_steering:.2f} rad\n"
-        f"Yaw Rate: {ego_yaw_rate:.2f} rad/s",
+        f"Yaw Rate: {ego_yaw_rate:.2f} rad/s\n"
+        f"Turn Command: {turn_rpt_text}",
         fontsize=8,
         color="red",
         ha="right",
