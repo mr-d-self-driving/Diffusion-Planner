@@ -50,6 +50,7 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
                 "route_lanes_speed_limit": batch[8].to(args.device),
                 "route_lanes_has_speed_limit": batch[9].to(args.device),
                 "static_objects": batch[10].to(args.device),
+                "turn_rpt": batch[11].to(args.device),
             }
 
             ego_future = batch[1].to(args.device)
@@ -97,9 +98,8 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
             loss["loss"] = (
                 loss["neighbor_prediction_loss"]
                 + args.alpha_planning_loss * loss["ego_planning_loss"]
+                + loss["blinker_loss"]
             )
-
-            total_loss = loss["loss"].item()
 
             # loss backward
             loss["loss"].backward()
@@ -112,7 +112,7 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
             if args.ddp:
                 torch.cuda.synchronize()
 
-            data_epoch.set_postfix(loss="{:.4f}".format(total_loss))
+            data_epoch.set_postfix(loss="{:.4f}".format(loss["loss"].item()))
             epoch_loss.append(loss)
 
     epoch_mean_loss = get_epoch_mean_loss(epoch_loss)

@@ -41,6 +41,8 @@ class Decoder(nn.Module):
             model_type=config.diffusion_model_type,
         )
 
+        self.blinker_predictor = nn.Linear(4 * (1 + self._future_len), 4)
+
         self._state_normalizer: StateNormalizer = config.state_normalizer
         self._observation_normalizer: ObservationNormalizer = config.observation_normalizer
 
@@ -71,7 +73,7 @@ class Decoder(nn.Module):
                     "ego_current_state": current ego states,
                     "neighbor_agent_past": past and current neighbor states,
 
-                    [training-only] "sampled_trajectories": sampled current-future ego & neighbor states,        [B, P, 1 + V_future, 4]
+                    [training-only] "sampled_trajectories": sampled current-future ego & neighbor states,        [B, P, 1 + self._future_len, 4]
                     [training-only] "diffusion_time": timestep of diffusion process $t \in [0, 1]$,              [B]
                     ...
                 }
@@ -80,8 +82,8 @@ class Decoder(nn.Module):
             decoder_outputs: Dict
                 {
                     ...
-                    [training-only] "score": Predicted future states, [B, P, 1 + V_future, 4]
-                    [inference-only] "prediction": Predicted future states, [B, P, V_future, 4]
+                    [training-only] "score": Predicted future states, [B, P, 1 + self._future_len, 4]
+                    [inference-only] "prediction": Predicted future states, [B, P, self._future_len, 4]
                     ...
                 }
 
@@ -105,9 +107,11 @@ class Decoder(nn.Module):
 
         if self.training:
             sampled_trajectories = inputs["sampled_trajectories"].reshape(
-                B, P, -1
-            )  # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+                B, P, (1 + self._future_len) * 4
+            )
             diffusion_time = inputs["diffusion_time"]
+            ego_trajectory = sampled_trajectories[:, 0, :].reshape(B, 4 * (1 + self._future_len))
+            blinker_logit = self.blinker_predictor(ego_trajectory)
 
             return {
                 "score": self.dit(
@@ -116,11 +120,12 @@ class Decoder(nn.Module):
                     ego_neighbor_encoding,
                     route_lanes,
                     neighbor_current_mask,
-                ).reshape(B, P, -1, 4)
+                ).reshape(B, P, -1, 4),
+                "blinker_logit": blinker_logit,
             }
         else:
             if self._model_type == "flow_matching":
-                # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+                # [B, 1 + predicted_neighbor_num, (1 + self._future_len) * 4]
                 x = torch.cat(
                     [
                         current_states[:, :, None],
@@ -138,10 +143,12 @@ class Decoder(nn.Module):
                 x = euler_integration(func, x, NUM_STEP)
                 # x = heun_integration(func, x, NUM_STEP)
                 # x = rk4_integration(func, x, NUM_STEP)
+                x = x.reshape(B, P, (1 + self._future_len) * 4)
+                blinker_logit = self.blinker_predictor(x[:, 0, :])
                 x = self._state_normalizer.inverse(x.reshape(B, P, -1, 4))[:, :, 1:]
-                return {"prediction": x}
+                return {"prediction": x, "blinker_logit": blinker_logit}
 
-            # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+            # [B, 1 + predicted_neighbor_num, (1 + self._future_len) * 4]
             xT = torch.cat(
                 [
                     current_states[:, :, None],
@@ -183,9 +190,11 @@ class Decoder(nn.Module):
                     "guidance_type": "classifier" if self._guidance_fn is not None else "uncond",
                 },
             )
+            x0 = x0.reshape(B, P, (1 + self._future_len) * 4)
+            blinker_logit = self.blinker_predictor(x0[:, 0, :])
             x0 = self._state_normalizer.inverse(x0.reshape(B, P, -1, 4))[:, :, 1:]
 
-            return {"prediction": x0}
+            return {"prediction": x0, "blinker_logit": blinker_logit}
 
 
 class RouteEncoder(nn.Module):
