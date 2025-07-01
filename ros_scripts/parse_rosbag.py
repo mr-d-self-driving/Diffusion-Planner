@@ -437,53 +437,18 @@ def main(
         # list[FrameData] -> npz
         progress = tqdm(total=(n - PAST_TIME_STEPS - FUTURE_TIME_STEPS) // step)
         for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, step):
+            progress.update(1)
             token = f"{seq_id:08d}{i:08d}"
 
             bl2map_matrix_4x4, map2bl_matrix_4x4 = get_transform_matrix(
                 data_list[i].kinematic_state
             )
 
-            tracking_past, tracking_future = tracking_past_and_future(
-                data_list, i, map2bl_matrix_4x4
-            )
-
             traffic_light_recognition = parse_traffic_light_recognition(
                 data_list[i].traffic_signals
             )
 
-            ego_past_np = create_ego_sequence(
-                data_list, i - PAST_TIME_STEPS + 1, PAST_TIME_STEPS, map2bl_matrix_4x4
-            )
-
-            ego_tensor = create_current_ego_state(
-                data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=2.79
-            ).squeeze(0)
-
-            ego_future_np = create_ego_sequence(data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4)
-
-            neighbor_past_tensor = convert_tracked_objects_to_tensor(
-                tracked_objs=tracking_past,
-                map2bl_matrix_4x4=map2bl_matrix_4x4,
-                max_num_objects=NEIGHBOR_NUM,
-                max_timesteps=PAST_TIME_STEPS,
-            ).squeeze(0)
-
-            neighbor_future_tensor = create_neighbor_future(
-                tracked_objs=tracking_future,
-                map2bl_matrix_4x4=map2bl_matrix_4x4,
-                max_num_objects=NEIGHBOR_NUM,
-                max_timesteps=FUTURE_TIME_STEPS,
-            ).squeeze(0)
-            # (32, 80, 11) -> (32, 80, 3)
-            neighbor_future_tensor = neighbor_future_tensor[:, :, :4]
-            # fixed cos(2) sin(3) -> heading
-            neighbor_future_tensor[:, :, 2] = np.arctan2(
-                neighbor_future_tensor[:, :, 3], neighbor_future_tensor[:, :, 2]
-            )
-            neighbor_future_tensor = neighbor_future_tensor[:, :, :3]
-
-            static_objects = np.zeros((STATIC_NUM, 10), dtype=np.float32)
-
+            # lanes
             lanes_tensor, lanes_speed_limit, lanes_has_speed_limit = create_lane_tensor(
                 vector_map.lane_segments.values(),
                 map2bl_mat4x4=map2bl_matrix_4x4,
@@ -496,6 +461,7 @@ def main(
                 do_sort=True,
             )
 
+            # routes
             target_segments = [
                 vector_map.lane_segments[segment.preferred_primitive.id]
                 for segment in data_list[i].route.segments
@@ -513,6 +479,15 @@ def main(
                 do_sort=False,
             )
 
+            # ego
+            ego_past_np = create_ego_sequence(
+                data_list, i - PAST_TIME_STEPS + 1, PAST_TIME_STEPS, map2bl_matrix_4x4
+            )
+            ego_tensor = create_current_ego_state(
+                data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=2.79
+            ).squeeze(0)
+            ego_future_np = create_ego_sequence(data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4)
+
             # (1)自車が止まっている
             # (2)目の前のlanelet segmentが赤信号である
             # (3)GTのTrajectoryが進むように出ている
@@ -529,6 +504,30 @@ def main(
                 )
                 continue
 
+            # neighbor
+            tracking_past, tracking_future = tracking_past_and_future(
+                data_list, i, map2bl_matrix_4x4
+            )
+            neighbor_past_tensor = convert_tracked_objects_to_tensor(
+                tracked_objs=tracking_past,
+                map2bl_matrix_4x4=map2bl_matrix_4x4,
+                max_num_objects=NEIGHBOR_NUM,
+                max_timesteps=PAST_TIME_STEPS,
+            ).squeeze(0)
+            neighbor_future_tensor = create_neighbor_future(
+                tracked_objs=tracking_future,
+                map2bl_matrix_4x4=map2bl_matrix_4x4,
+                max_num_objects=NEIGHBOR_NUM,
+                max_timesteps=FUTURE_TIME_STEPS,
+            ).squeeze(0)
+            # (32, 80, 11) -> (32, 80, 3)
+            neighbor_future_tensor = neighbor_future_tensor[:, :, :4]
+            # fixed cos(2) sin(3) -> heading
+            neighbor_future_tensor[:, :, 2] = np.arctan2(
+                neighbor_future_tensor[:, :, 3], neighbor_future_tensor[:, :, 2]
+            )
+            neighbor_future_tensor = neighbor_future_tensor[:, :, :3]
+
             curr_data = {
                 "map_name": map_name,
                 "token": token,
@@ -537,7 +536,7 @@ def main(
                 "ego_agent_future": ego_future_np,
                 "neighbor_agents_past": neighbor_past_tensor.numpy(),
                 "neighbor_agents_future": neighbor_future_tensor.numpy(),
-                "static_objects": static_objects,
+                "static_objects": np.zeros((STATIC_NUM, 10), dtype=np.float32),
                 "lanes": lanes_tensor.squeeze(0).numpy(),
                 "lanes_speed_limit": lanes_speed_limit.squeeze(0).numpy(),
                 "lanes_has_speed_limit": lanes_has_speed_limit.squeeze(0).numpy(),
@@ -550,7 +549,6 @@ def main(
             save_dir.mkdir(parents=True, exist_ok=True)
             output_file = f"{save_dir}/{map_name}_{token}.npz"
             np.savez(output_file, **curr_data)
-            progress.update(1)
 
             # save other info
             pose_dict = {
