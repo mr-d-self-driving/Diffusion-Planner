@@ -12,7 +12,7 @@ MODEL_DIR="./training_log/diffusion-planner-training/$DIR_NAME/"
 VALID_SET_LIST_PATH="/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver15_realdata/path_list_valid.json"
 MODEL_PATH="$MODEL_DIR/latest.pth"
 ARGS_JSON_PATH="$MODEL_DIR/args.json"
-SAVE_DIR=/mnt/nvme0/sakoda/${DIR_NAME}/predictions
+SAVE_DIR=$MODEL_DIR/$DIR_NAME/predictions
 
 rm -f /tmp/tmp_dist_init
 
