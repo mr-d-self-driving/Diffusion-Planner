@@ -56,6 +56,7 @@ def diffusion_loss_func(
 
     merged_inputs = {
         **inputs,
+        "gt_trajectories": all_gt,
         "sampled_trajectories": xT,
         "diffusion_time": t,
     }

@@ -41,7 +41,7 @@ class Decoder(nn.Module):
             model_type=config.diffusion_model_type,
         )
 
-        self.blinker_predictor = nn.Linear(4 * (1 + self._future_len), 4)
+        self.blinker_predictor = nn.Linear(2 * (self._future_len // 10), 4)
 
         self._state_normalizer: StateNormalizer = config.state_normalizer
         self._observation_normalizer: ObservationNormalizer = config.observation_normalizer
@@ -110,7 +110,11 @@ class Decoder(nn.Module):
                 B, P, (1 + self._future_len) * 4
             )
             diffusion_time = inputs["diffusion_time"]
-            ego_trajectory = sampled_trajectories[:, 0, :].reshape(B, 4 * (1 + self._future_len))
+
+            gt_trajectories = inputs["gt_trajectories"].reshape(B, P, (1 + self._future_len), 4)
+            ego_trajectory = gt_trajectories[:, 0, 1::10, :2].reshape(
+                B, 2 * (self._future_len // 10)
+            )
             blinker_logit = self.blinker_predictor(ego_trajectory)
 
             return {
@@ -191,7 +195,9 @@ class Decoder(nn.Module):
                 },
             )
             x0 = x0.reshape(B, P, (1 + self._future_len) * 4)
-            blinker_logit = self.blinker_predictor(x0[:, 0, :])
+            x = x0.reshape(B, P, (1 + self._future_len), 4)
+            x = x[:, 0, 1::10, :2].reshape(B, 2 * (self._future_len // 10))
+            blinker_logit = self.blinker_predictor(x)
             x0 = self._state_normalizer.inverse(x0.reshape(B, P, -1, 4))[:, :, 1:]
 
             return {"prediction": x0, "blinker_logit": blinker_logit}
