@@ -45,6 +45,7 @@ def visualize_inputs(
     route_lanes_speed_limit=(1, 25, 1)
     route_lanes_has_speed_limit=(1, 25, 1)
     turn_indicator=(1,)
+    goal_pose=(1, 3)
     """
 
     # initialize the figure
@@ -327,6 +328,24 @@ def visualize_inputs(
         #     fontsize=8,
         #     color="black",
         # )
+
+    # ==== Goal Pose ====
+    goal_x, goal_y, goal_yaw = inputs["goal_pose"][0]  # Use the first sample in the batch
+    goal_dx = 2 * np.cos(goal_yaw)
+    goal_dy = 2 * np.sin(goal_yaw)
+    ax.arrow(
+        goal_x,
+        goal_y,
+        goal_dx,
+        goal_dy,
+        width=0.5,
+        head_width=1.0,
+        head_length=1.0,
+        fc="blue",
+        ec="blue",
+        alpha=0.7,
+        label="Goal Pose",
+    )
 
     ax.set_xlabel("X [m]")
     ax.set_ylabel("Y [m]")

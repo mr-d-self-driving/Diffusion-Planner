@@ -235,6 +235,16 @@ def tracking_past_and_future(data_list, i, map2bl_matrix_4x4):
     return tracking_past, tracking_future
 
 
+def get_relative_goal_pose(goal_pose, map2bl_matrix_4x4):
+    """Get the relative goal pose in the base link frame."""
+    pose_in_map = pose_to_mat4x4(goal_pose)
+    pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
+    x = pose_in_bl[0, 3]
+    y = pose_in_bl[1, 3]
+    yaw = Rotation.from_matrix(pose_in_bl[0:3, 0:3]).as_euler("xyz")[2]
+    return np.array([x, y, yaw], dtype=np.float32)
+
+
 def main(
     rosbag_path: Path,
     vector_map_path: Path,
@@ -478,6 +488,8 @@ def main(
                 dev="cpu",
                 do_sort=False,
             )
+            goal_pose = data_list[i].route.goal_pose
+            goal_pose_bl = get_relative_goal_pose(goal_pose, map2bl_matrix_4x4)
 
             # ego
             ego_past_np = create_ego_sequence(
@@ -544,6 +556,7 @@ def main(
                 "route_lanes_speed_limit": route_speed_limit.squeeze(0).numpy(),
                 "route_lanes_has_speed_limit": route_has_speed_limit.squeeze(0).numpy(),
                 "turn_indicator": data_list[i].turn_indicator.report,
+                "goal_pose": goal_pose_bl,
             }
             # save the data
             save_dir.mkdir(parents=True, exist_ok=True)
