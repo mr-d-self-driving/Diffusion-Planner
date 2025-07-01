@@ -36,6 +36,7 @@ from .utils import (
     convert_prediction_to_msg,
     convert_tracked_objects_to_tensor,
     create_current_ego_state,
+    filter_target_segments,
     get_nearest_msg,
     get_transform_matrix,
     parse_traffic_light_recognition,
@@ -295,18 +296,8 @@ class DiffusionPlannerNode(Node):
             self.static_map.lane_segments[segment.preferred_primitive.id]
             for segment in self.route.segments
         ]
-        closest_distance = float("inf")
-        closest_index = -1
-        for j, segment in enumerate(target_segments):
-            centerlines = segment.polyline.waypoints
-            diff_x = centerlines[:, 0] - curr_kinematic_state.pose.pose.position.x
-            diff_y = centerlines[:, 1] - curr_kinematic_state.pose.pose.position.y
-            diff = np.sqrt(diff_x**2 + diff_y**2)
-            distance = np.min(diff)
-            if distance < closest_distance:
-                closest_distance = distance
-                closest_index = j
-        target_segments = target_segments[closest_index:]
+        target_segments = filter_target_segments(target_segments, curr_kinematic_state)
+
         route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
             target_segments,
             map2bl_mat4x4=map2bl_matrix_4x4,

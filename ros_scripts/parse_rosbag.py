@@ -30,6 +30,7 @@ from diffusion_planner_ros.lanelet2_utils.lanelet_converter import (
 from diffusion_planner_ros.utils import (
     convert_tracked_objects_to_tensor,
     create_current_ego_state,
+    filter_target_segments,
     get_nearest_msg,
     get_transform_matrix,
     parse_timestamp,
@@ -443,7 +444,7 @@ def main(
             )
 
             ego_past_np = create_ego_future(
-                data_list, i - PAST_TIME_STEPS, PAST_TIME_STEPS, map2bl_matrix_4x4
+                data_list, i - PAST_TIME_STEPS, PAST_TIME_STEPS + 1, map2bl_matrix_4x4
             )
 
             ego_tensor = create_current_ego_state(
@@ -491,18 +492,7 @@ def main(
                 vector_map.lane_segments[segment.preferred_primitive.id]
                 for segment in data_list[i].route.segments
             ]
-            closest_distance = float("inf")
-            closest_index = -1
-            for j, segment in enumerate(target_segments):
-                centerlines = segment.polyline.waypoints
-                diff_x = centerlines[:, 0] - data_list[i].kinematic_state.pose.pose.position.x
-                diff_y = centerlines[:, 1] - data_list[i].kinematic_state.pose.pose.position.y
-                diff = np.sqrt(diff_x**2 + diff_y**2)
-                distance = np.min(diff)
-                if distance < closest_distance:
-                    closest_distance = distance
-                    closest_index = j
-            target_segments = target_segments[closest_index:]
+            target_segments = filter_target_segments(target_segments, data_list[i].kinematic_state)
             route_tensor, route_speed_limit, route_has_speed_limit = create_lane_tensor(
                 target_segments,
                 map2bl_mat4x4=map2bl_matrix_4x4,
