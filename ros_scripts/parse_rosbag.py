@@ -40,6 +40,34 @@ from diffusion_planner_ros.utils import (
     tracking_one_step,
 )
 
+"""
+This script makes npz files from a rosbag.
+[Contents of a npz file]
+map_name                    <U26    ()
+token                       <U16    ()
+ego_agent_past              float32 (21, 3)
+ego_current_state           float32 (10,)
+ego_agent_future            float32 (80, 3)
+neighbor_agents_past        float32 (32, 21, 11)
+neighbor_agents_future      float32 (32, 80, 3)
+static_objects              float32 (5, 10)
+lanes                       float32 (70, 20, 12)
+lanes_speed_limit           float32 (70, 1)
+lanes_has_speed_limit       bool    (70, 1)
+route_lanes                 float32 (25, 20, 12)
+route_lanes_speed_limit     float32 (25, 1)
+route_lanes_has_speed_limit bool    (25, 1)
+turn_indicator              int32   (1)
+"""
+PAST_TIME_STEPS = 21
+FUTURE_TIME_STEPS = 80
+NEIGHBOR_NUM = 32
+STATIC_NUM = 5
+LANE_NUM = 70
+LANE_LEN = 20
+ROUTE_NUM = 25
+ROUTE_LEN = 20
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -75,7 +103,7 @@ class SequenceData:
     route: LaneletRoute
 
 
-def create_ego_future(data_list, i, future_time_steps, map2bl_matrix_4x4):
+def create_ego_sequence(data_list, i, future_time_steps, map2bl_matrix_4x4):
     ego_future_x = []
     ego_future_y = []
     ego_future_yaw = []
@@ -158,6 +186,53 @@ def create_neighbor_future(
             neighbor[0, i, j, 9] = label_in_model == 1  # pedestrian
             neighbor[0, i, j, 10] = label_in_model == 2  # bicycle
     return neighbor
+
+
+def tracking_past_and_future(data_list, i, map2bl_matrix_4x4):
+    # tracking for past (including current frame)
+    tracking_past = {}
+    for frame_data in data_list[i - PAST_TIME_STEPS + 1 : i + 1]:
+        tracking_past = tracking_one_step(frame_data.tracked_objects, tracking_past)
+
+    # sort tracking_past by distance to the ego
+    def sort_key(item):
+        _, tracked_obj = item
+        last_kinematics = tracked_obj.kinematics_list[-1]
+        pose_in_map = pose_to_mat4x4(last_kinematics.pose_with_covariance.pose)
+        pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
+        return np.linalg.norm(pose_in_bl[0:2, 3])
+
+    tracking_past = dict(sorted(tracking_past.items(), key=sort_key))
+
+    # tracking for future (for ground truth)
+    tracking_future = deepcopy(tracking_past)
+    # reset lost_time and list
+    for key in tracking_future.keys():
+        tracking_future[key].lost_time = 1
+        tracking_future[key].shape_list = tracking_future[key].shape_list[-1:]
+        tracking_future[key].kinematics_list = tracking_future[key].kinematics_list[-1:]
+    # tracking
+    for frame_data in data_list[i : i + FUTURE_TIME_STEPS]:
+        tracking_future = tracking_one_step(
+            frame_data.tracked_objects,
+            tracking_future,
+            lost_time_limit=100000,  # to avoid lost
+        )
+        # filter tracking_future by tracking_past
+        # (remove the objects that are not in tracking_past)
+        tracking_future = {
+            key: value for key, value in tracking_future.items() if key in tracking_past
+        }
+    # erase losting from tracking_future
+    for key, val in tracking_future.items():
+        total = len(val.kinematics_list)
+        lost_time = val.lost_time
+        valid_t = total - lost_time
+        val.shape_list = val.shape_list[0:valid_t]
+        val.kinematics_list = val.kinematics_list[0:valid_t]
+
+    assert len(tracking_past.keys()) == len(tracking_future.keys())
+    return tracking_past, tracking_future
 
 
 def main(
@@ -341,33 +416,6 @@ def main(
         logger.info(f"After {len(sequence_data_list[i].data_list)=} frames")
         sequence_data_list.pop(i + 1)
 
-    """
-    作りたいnpz
-    map_name                    <U26    ()
-    token                       <U16    ()
-    ego_agent_past              float32 (20, 3)
-    ego_current_state           float32 (10,)
-    ego_agent_future            float32 (80, 3)
-    neighbor_agents_past        float32 (32, 21, 11)
-    neighbor_agents_future      float32 (32, 80, 3)
-    static_objects              float32 (5, 10)
-    lanes                       float32 (70, 20, 12)
-    lanes_speed_limit           float32 (70, 1)
-    lanes_has_speed_limit       bool    (70, 1)
-    route_lanes                 float32 (25, 20, 12)
-    route_lanes_speed_limit     float32 (25, 1)
-    route_lanes_has_speed_limit bool    (25, 1)
-    turn_indicator              int32   (1)
-    """
-    PAST_TIME_STEPS = 21
-    FUTURE_TIME_STEPS = 80
-    NEIGHBOR_NUM = 32
-    STATIC_NUM = 5
-    LANE_NUM = 70
-    LANE_LEN = 20
-    ROUTE_NUM = 25
-    ROUTE_LEN = 20
-
     map_name = rosbag_path.stem
     sequence_num = len(sequence_data_list)
     logger.info(f"Total {sequence_num} sequences")
@@ -395,63 +443,23 @@ def main(
                 data_list[i].kinematic_state
             )
 
-            # 2 sec tracking (for input)
-            tracking_past = {}
-            for frame_data in data_list[i - PAST_TIME_STEPS : i]:
-                tracking_past = tracking_one_step(frame_data.tracked_objects, tracking_past)
-
-            # sort tracking_past by distance to the ego
-            def sort_key(item):
-                _, tracked_obj = item
-                last_kinematics = tracked_obj.kinematics_list[-1]
-                pose_in_map = pose_to_mat4x4(last_kinematics.pose_with_covariance.pose)
-                pose_in_bl = map2bl_matrix_4x4 @ pose_in_map
-                return np.linalg.norm(pose_in_bl[0:2, 3])
-
-            tracking_past = dict(sorted(tracking_past.items(), key=sort_key))
-
-            # 8 sec tracking (for ground truth)
-            tracking_future = deepcopy(tracking_past)
-            # reset lost_time and list
-            for key in tracking_future.keys():
-                tracking_future[key].lost_time = 1
-                tracking_future[key].shape_list = tracking_future[key].shape_list[-1:]
-                tracking_future[key].kinematics_list = tracking_future[key].kinematics_list[-1:]
-            # tracking
-            for frame_data in data_list[i : i + FUTURE_TIME_STEPS]:
-                tracking_future = tracking_one_step(
-                    frame_data.tracked_objects,
-                    tracking_future,
-                    lost_time_limit=100000,  # to avoid lost
-                )
-                # filter tracking_future by tracking_past
-                # (remove the objects that are not in tracking_past)
-                tracking_future = {
-                    key: value for key, value in tracking_future.items() if key in tracking_past
-                }
-            # erase losting from tracking_future
-            for key, val in tracking_future.items():
-                total = len(val.kinematics_list)
-                lost_time = val.lost_time
-                valid_t = total - lost_time
-                val.shape_list = val.shape_list[0:valid_t]
-                val.kinematics_list = val.kinematics_list[0:valid_t]
-
-            assert len(tracking_past.keys()) == len(tracking_future.keys())
+            tracking_past, tracking_future = tracking_past_and_future(
+                data_list, i, map2bl_matrix_4x4
+            )
 
             traffic_light_recognition = parse_traffic_light_recognition(
                 data_list[i].traffic_signals
             )
 
-            ego_past_np = create_ego_future(
-                data_list, i - PAST_TIME_STEPS, PAST_TIME_STEPS + 1, map2bl_matrix_4x4
+            ego_past_np = create_ego_sequence(
+                data_list, i - PAST_TIME_STEPS + 1, PAST_TIME_STEPS, map2bl_matrix_4x4
             )
 
             ego_tensor = create_current_ego_state(
                 data_list[i].kinematic_state, data_list[i].acceleration, wheel_base=2.79
             ).squeeze(0)
 
-            ego_future_np = create_ego_future(data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4)
+            ego_future_np = create_ego_sequence(data_list, i, FUTURE_TIME_STEPS, map2bl_matrix_4x4)
 
             neighbor_past_tensor = convert_tracked_objects_to_tensor(
                 tracked_objs=tracking_past,
