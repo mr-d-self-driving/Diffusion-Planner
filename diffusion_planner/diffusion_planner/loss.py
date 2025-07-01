@@ -84,7 +84,7 @@ def diffusion_loss_func(
     assert not torch.isnan(dpm_loss).sum(), f"loss cannot be nan, z={z}"
 
     blinker_logit = decoder_output["blinker_logit"]  # [B, 4]
-    blinker_gt = inputs["turn_rpt"]
+    blinker_gt = inputs["turn_indicator"]
     blinker_loss = nn.functional.cross_entropy(blinker_logit, blinker_gt, reduction="mean")
     loss["blinker_loss"] = blinker_loss
 

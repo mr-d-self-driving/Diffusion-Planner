@@ -44,7 +44,7 @@ def visualize_inputs(
     route_lanes=(1, 25, 20, 12)
     route_lanes_speed_limit=(1, 25, 1)
     route_lanes_has_speed_limit=(1, 25, 1)
-    turn_rpt=(1,)
+    turn_indicator=(1,)
     """
 
     # initialize the figure
@@ -334,17 +334,15 @@ def visualize_inputs(
     ax.grid(True, alpha=0.3)
 
     # print status
-    turn_rpt = inputs["turn_rpt"][0]
-    if turn_rpt == 0:
-        turn_rpt_text = "->"
-    elif turn_rpt == 1:
-        turn_rpt_text = "None"
-    elif turn_rpt == 2:
-        turn_rpt_text = "<-"
-    elif turn_rpt == 3:
-        turn_rpt_text = "Hazards"
+    turn_indicator = inputs["turn_indicator"][0]
+    if turn_indicator == 1:
+        turn_indicator_text = "None"
+    elif turn_indicator == 2:
+        turn_indicator_text = "<-"
+    elif turn_indicator == 3:
+        turn_indicator_text = "->"
     else:
-        assert False, f"Unknown turn command: {turn_rpt}"
+        assert False, f"Unknown turn command: {turn_indicator}"
 
     ax.text(
         view_range - 1,
@@ -355,7 +353,7 @@ def visualize_inputs(
         f"AccelerationY: {ego_acc_y:.2f} m/s²\n"
         f"Steering: {ego_steering:.2f} rad\n"
         f"Yaw Rate: {ego_yaw_rate:.2f} rad/s\n"
-        f"Turn Command: {turn_rpt_text}",
+        f"Turn Command: {turn_indicator_text}",
         fontsize=8,
         color="red",
         ha="right",

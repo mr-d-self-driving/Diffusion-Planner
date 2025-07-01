@@ -15,9 +15,9 @@ from autoware_perception_msgs.msg import (
     TrafficLightGroupArray,
 )
 from autoware_planning_msgs.msg import LaneletRoute
+from autoware_vehicle_msgs.msg import TurnIndicatorsReport
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from nav_msgs.msg import Odometry
-from pacmod3_msgs.msg import SystemRptInt
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from scipy.spatial.transform import Rotation
@@ -60,17 +60,7 @@ class FrameData:
     kinematic_state: Odometry
     acceleration: AccelWithCovarianceStamped
     traffic_signals: TrafficLightGroupArray
-    turn_rpt: SystemRptInt
-
-
-"""
-https://github.com/astuff/pacmod3_msgs/blob/main/msg/SystemCmdInt.msg
-# Turn Command Constants
-uint16 TURN_RIGHT = 0
-uint16 TURN_NONE = 1
-uint16 TURN_LEFT = 2
-uint16 TURN_HAZARDS = 3
-"""
+    turn_indicator: TurnIndicatorsReport
 
 
 @dataclass
@@ -213,7 +203,7 @@ def main(
         "/perception/object_recognition/tracking/objects",
         "/perception/traffic_light_recognition/traffic_signals",
         "/planning/mission_planning/route",
-        "/pacmod/turn_rpt",
+        "/vehicle/status/turn_indicators_status",
     ]
 
     storage_filter = rosbag2_py.StorageFilter(topics=target_topic_list)
@@ -249,7 +239,7 @@ def main(
             "/localization/kinematic_state": None,
             "/localization/acceleration": None,
             "/perception/traffic_light_recognition/traffic_signals": None,
-            "/pacmod/turn_rpt": None,
+            "/vehicle/status/turn_indicators_status": None,
         }
 
         ok = True
@@ -318,7 +308,7 @@ def main(
                 traffic_signals=latest_msgs[
                     "/perception/traffic_light_recognition/traffic_signals"
                 ],
-                turn_rpt=latest_msgs["/pacmod/turn_rpt"],
+                turn_indicator=latest_msgs["/vehicle/status/turn_indicators_status"],
             )
         )
         progress_bar.update(1)
@@ -366,7 +356,7 @@ def main(
     route_lanes                 float32 (25, 20, 12)
     route_lanes_speed_limit     float32 (25, 1)
     route_lanes_has_speed_limit bool    (25, 1)
-    turn_rpt                    int32   (1)
+    turn_indicator              int32   (1)
     """
     PAST_TIME_STEPS = 21
     FUTURE_TIME_STEPS = 80
@@ -553,7 +543,7 @@ def main(
                 "route_lanes": route_tensor.squeeze(0).numpy(),
                 "route_lanes_speed_limit": route_speed_limit.squeeze(0).numpy(),
                 "route_lanes_has_speed_limit": route_has_speed_limit.squeeze(0).numpy(),
-                "turn_rpt": data_list[i].turn_rpt.manual_input,
+                "turn_indicator": data_list[i].turn_indicator.report,
             }
             # save the data
             save_dir.mkdir(parents=True, exist_ok=True)

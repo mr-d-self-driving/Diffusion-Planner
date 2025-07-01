@@ -50,7 +50,7 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
                 "route_lanes_speed_limit": batch[8].to(args.device),
                 "route_lanes_has_speed_limit": batch[9].to(args.device),
                 "static_objects": batch[10].to(args.device),
-                "turn_rpt": batch[11].to(args.device),
+                "turn_indicator": batch[11].to(args.device),
             }
 
             ego_future = batch[1].to(args.device)
@@ -73,7 +73,11 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
                 [
                     neighbors_future[..., :2],
                     torch.stack(
-                        [neighbors_future[..., 2].cos(), neighbors_future[..., 2].sin()], dim=-1
+                        [
+                            neighbors_future[..., 2].cos(),
+                            neighbors_future[..., 2].sin(),
+                        ],
+                        dim=-1,
                     ),
                 ],
                 dim=-1,
