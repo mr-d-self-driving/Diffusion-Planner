@@ -12,7 +12,7 @@ python3 ./parse_rosbag_for_directory.py \
     /mnt/nvme1/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
     /mnt/nvme2/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
     /mnt/nvme3/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
-    --save_root /mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver15_realdata \
+    --save_root /mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver16_realdata \
     --step 1 \
     --limit -1 \
     --min_frames 1800 \
