@@ -121,6 +121,7 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
         epoch_mean_loss = ddp.reduce_and_average_losses(epoch_mean_loss, torch.device(args.device))
 
     if ddp.get_rank() == 0:
-        print(f"epoch train loss: {epoch_mean_loss['loss']:.4f}\n")
+        print(f"{epoch_mean_loss['loss']=:.4f}")
+        print(f"{epoch_mean_loss['blinker_accuracy']=:.4f}")
 
     return epoch_mean_loss, epoch_mean_loss["loss"]
