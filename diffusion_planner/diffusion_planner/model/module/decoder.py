@@ -41,7 +41,7 @@ class Decoder(nn.Module):
             model_type=config.diffusion_model_type,
         )
 
-        self.blinker_predictor = nn.Linear(2 * (self._future_len // 10), 4)
+        self.turn_indicator_predictor = nn.Linear(2 * (self._future_len // 10), 4)
 
         self._state_normalizer: StateNormalizer = config.state_normalizer
         self._observation_normalizer: ObservationNormalizer = config.observation_normalizer
@@ -115,7 +115,7 @@ class Decoder(nn.Module):
             ego_trajectory = gt_trajectories[:, 0, 1::10, :2].reshape(
                 B, 2 * (self._future_len // 10)
             )
-            blinker_logit = self.blinker_predictor(ego_trajectory)
+            turn_indicator_logit = self.turn_indicator_predictor(ego_trajectory)
 
             return {
                 "score": self.dit(
@@ -125,7 +125,7 @@ class Decoder(nn.Module):
                     route_lanes,
                     neighbor_current_mask,
                 ).reshape(B, P, -1, 4),
-                "blinker_logit": blinker_logit,
+                "turn_indicator_logit": turn_indicator_logit,
             }
         else:
             if self._model_type == "flow_matching":
@@ -148,9 +148,9 @@ class Decoder(nn.Module):
                 # x = heun_integration(func, x, NUM_STEP)
                 # x = rk4_integration(func, x, NUM_STEP)
                 x = x.reshape(B, P, (1 + self._future_len) * 4)
-                blinker_logit = self.blinker_predictor(x[:, 0, :])
+                turn_indicator_logit = self.turn_indicator_predictor(x[:, 0, :])
                 x = self._state_normalizer.inverse(x.reshape(B, P, -1, 4))[:, :, 1:]
-                return {"prediction": x, "blinker_logit": blinker_logit}
+                return {"prediction": x, "turn_indicator_logit": turn_indicator_logit}
 
             # [B, 1 + predicted_neighbor_num, (1 + self._future_len) * 4]
             xT = torch.cat(
@@ -197,10 +197,10 @@ class Decoder(nn.Module):
             x0 = x0.reshape(B, P, (1 + self._future_len) * 4)
             x = x0.reshape(B, P, (1 + self._future_len), 4)
             x = x[:, 0, 1::10, :2].reshape(B, 2 * (self._future_len // 10))
-            blinker_logit = self.blinker_predictor(x)
+            turn_indicator_logit = self.turn_indicator_predictor(x)
             x0 = self._state_normalizer.inverse(x0.reshape(B, P, -1, 4))[:, :, 1:]
 
-            return {"prediction": x0, "blinker_logit": blinker_logit}
+            return {"prediction": x0, "turn_indicator_logit": turn_indicator_logit}
 
 
 class RouteEncoder(nn.Module):

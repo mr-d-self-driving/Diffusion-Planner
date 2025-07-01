@@ -96,8 +96,8 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
         all_gt[:, 1:][neighbor_mask] = 0.0
 
         prediction = outputs["prediction"]
-        blinker_logit = outputs["blinker_logit"]
-        blinker = blinker_logit.argmax(dim=-1)
+        turn_indicator_logit = outputs["turn_indicator_logit"]
+        turn_indicator = turn_indicator_logit.argmax(dim=-1)
         if return_pred:
             predictions.append(prediction)
 
