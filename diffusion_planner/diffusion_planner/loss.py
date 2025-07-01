@@ -88,9 +88,7 @@ def diffusion_loss_func(
     loss["blinker_loss"] = blinker_loss
 
     with torch.no_grad():
-        blinker_accuracy = (
-            (blinker_logit.argmax(dim=-1) == blinker_gt.argmax(dim=-1)).float().mean()
-        )
+        blinker_accuracy = (blinker_logit.argmax(dim=-1) == blinker_gt).float().mean()
         loss["blinker_accuracy"] = blinker_accuracy
 
     return loss, decoder_output
