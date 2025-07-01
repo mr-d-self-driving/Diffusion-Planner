@@ -526,6 +526,9 @@ def main(
                 sum_mileage += np.linalg.norm(ego_future_np[j, :2] - ego_future_np[j + 1, :2])
             is_future_forward = sum_mileage > 0.1
             if is_stop and is_red_light and is_future_forward:
+                logger.info(
+                    f"Skip this frame {i} because it is stop at red light and future trajectory is forward"
+                )
                 continue
 
             curr_data = {
