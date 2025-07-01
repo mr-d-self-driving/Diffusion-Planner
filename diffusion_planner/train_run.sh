@@ -15,8 +15,8 @@ rm -f /tmp/tmp_dist_init
 
 python3 -m torch.distributed.run --nnodes 1 --nproc-per-node 8 --standalone train_predictor.py \
 --exp_name ${exp_name} \
---train_set_list "/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver15_realdata/path_list_train.json" \
---valid_set_list "/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver15_realdata/path_list_valid.json" \
+--train_set_list "/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver16_realdata/path_list_train.json" \
+--valid_set_list "/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver16_realdata/path_list_valid.json" \
 --use_wandb True \
 --diffusion_model_type "x_start" \
 2>&1 | tee logs/result_$(date +%Y%m%d_%H%M%S).txt
