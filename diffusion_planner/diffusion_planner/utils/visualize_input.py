@@ -32,7 +32,7 @@ def visualize_inputs(
     for key in inputs:
         print(f"{key}={inputs[key].shape}")
 
-    ego_past=(1, 20, 3)
+    ego_agent_past=(1, 20, 3)
     ego_current_state=(1, 10)
     ego_agent_future=(1, 80, 3)
     neighbor_agents_past=(1, 32, 21, 11)
@@ -83,17 +83,18 @@ def visualize_inputs(
         alpha=0.7,
     )
 
-    ego_past = inputs["ego_agent_past"][0]  # Use the first sample in the batch
-    ego_past_x = ego_past[:, 0]
-    ego_past_y = ego_past[:, 1]
-    ax.plot(
-        ego_past_x,
-        ego_past_y,
-        color="orange",
-        alpha=0.5,
-        linestyle="--",
-        label="Ego Past Trajectory",
-    )
+    if "ego_agent_past" in inputs:
+        ego_past = inputs["ego_agent_past"][0]  # Use the first sample in the batch
+        ego_past_x = ego_past[:, 0]
+        ego_past_y = ego_past[:, 1]
+        ax.plot(
+            ego_past_x,
+            ego_past_y,
+            color="orange",
+            alpha=0.5,
+            linestyle="--",
+            label="Ego Past Trajectory",
+        )
 
     if "ego_agent_future" in inputs:
         ego_future = inputs["ego_agent_future"][0]
@@ -330,22 +331,23 @@ def visualize_inputs(
         # )
 
     # ==== Goal Pose ====
-    goal_x, goal_y, goal_yaw = inputs["goal_pose"][0]  # Use the first sample in the batch
-    goal_dx = 2 * np.cos(goal_yaw)
-    goal_dy = 2 * np.sin(goal_yaw)
-    ax.arrow(
-        goal_x,
-        goal_y,
-        goal_dx,
-        goal_dy,
-        width=0.5,
-        head_width=1.0,
-        head_length=1.0,
-        fc="blue",
-        ec="blue",
-        alpha=0.7,
-        label="Goal Pose",
-    )
+    if "goal_pose" in inputs:
+        goal_x, goal_y, goal_yaw = inputs["goal_pose"][0]
+        goal_dx = 2 * np.cos(goal_yaw)
+        goal_dy = 2 * np.sin(goal_yaw)
+        ax.arrow(
+            goal_x,
+            goal_y,
+            goal_dx,
+            goal_dy,
+            width=0.5,
+            head_width=1.0,
+            head_length=1.0,
+            fc="blue",
+            ec="blue",
+            alpha=0.7,
+            label="Goal Pose",
+        )
 
     ax.set_xlabel("X [m]")
     ax.set_ylabel("Y [m]")
@@ -353,15 +355,18 @@ def visualize_inputs(
     ax.grid(True, alpha=0.3)
 
     # print status
-    turn_indicator = inputs["turn_indicator"][0]
-    if turn_indicator == 1:
-        turn_indicator_text = "None"
-    elif turn_indicator == 2:
-        turn_indicator_text = "<-"
-    elif turn_indicator == 3:
-        turn_indicator_text = "->"
+    if "turn_indicator" in inputs:
+        turn_indicator = inputs["turn_indicator"][0]
+        if turn_indicator == 1:
+            turn_indicator_text = "None"
+        elif turn_indicator == 2:
+            turn_indicator_text = "<-"
+        elif turn_indicator == 3:
+            turn_indicator_text = "->"
+        else:
+            assert False, f"Unknown turn command: {turn_indicator}"
     else:
-        assert False, f"Unknown turn command: {turn_indicator}"
+        turn_indicator_text = "There is no turn command"
 
     ax.text(
         view_range - 1,
