@@ -81,13 +81,12 @@ def visualize_inputs_cv2(
         # Draw lane boundaries with low opacity
         points_left = []
         points_right = []
-        points_center = []
 
         for j in range(lanes.shape[1]):
             if np.sum(np.abs(lanes[i, j, :2])) < 1e-6:
                 break
 
-            cx, cy = lanes[i, j, 0], lanes[i, j, 1]
+            cx, cy = lanes[i, j, 0:2]
             lx = cx + lanes[i, j, 4]
             ly = cy + lanes[i, j, 5]
             rx = cx + lanes[i, j, 6]
@@ -95,57 +94,27 @@ def visualize_inputs_cv2(
 
             points_left.append(world_to_image(lx, ly))
             points_right.append(world_to_image(rx, ry))
-            points_center.append(world_to_image(cx, cy))
 
-        if len(points_left) > 1:
-            pts_left = np.array(points_left, np.int32)
-            pts_right = np.array(points_right, np.int32)
-            pts_center = np.array(points_center, np.int32)
+        pts_left = np.array(points_left, np.int32)
+        pts_right = np.array(points_right, np.int32)
 
-            # Draw directly without transparency
-            cv2.polylines(img, [pts_left], False, color, 1)
-            cv2.polylines(img, [pts_right], False, color, 1)
-            cv2.polylines(img, [pts_center], False, color, 1)
+        # Draw directly without transparency
+        cv2.polylines(img, [pts_left], False, color, 1)
+        cv2.polylines(img, [pts_right], False, color, 1)
 
     # ==== Route lanes ====
     route_lanes = inputs["route_lanes"][0]
     for i in range(route_lanes.shape[0]):
-        traffic_light = route_lanes[i, 0, 8:12]
-        if traffic_light[0] == 1:
-            color = (0, 255, 0)  # Green
-        elif traffic_light[1] == 1:
-            color = (0, 255, 255)  # Yellow
-        elif traffic_light[2] == 1:
-            color = (0, 0, 255)  # Red
-        else:
-            color = (128, 128, 128)  # Gray
-
-        points_left = []
-        points_right = []
         points_center = []
 
         for j in range(route_lanes.shape[1]):
             if np.sum(np.abs(route_lanes[i, j, :2])) < 1e-6:
                 break
-
-            cx, cy = route_lanes[i, j, 0], route_lanes[i, j, 1]
-            lx = cx + route_lanes[i, j, 4]
-            ly = cy + route_lanes[i, j, 5]
-            rx = cx + route_lanes[i, j, 6]
-            ry = cy + route_lanes[i, j, 7]
-
-            points_left.append(world_to_image(lx, ly))
-            points_right.append(world_to_image(rx, ry))
+            cx, cy = route_lanes[i, j, 0:2]
             points_center.append(world_to_image(cx, cy))
 
-        if len(points_left) > 1:
-            pts_left = np.array(points_left, np.int32)
-            pts_right = np.array(points_right, np.int32)
-            pts_center = np.array(points_center, np.int32)
-
-            cv2.polylines(img, [pts_left], False, color, 2)
-            cv2.polylines(img, [pts_right], False, color, 2)
-            cv2.polylines(img, [pts_center], False, color, 2)
+        pts_center = np.array(points_center, np.int32)
+        cv2.polylines(img, [pts_center], False, (255, 0, 255), 3)
 
     # ==== Static objects ====
     static_objects = inputs["static_objects"][0]
@@ -271,46 +240,6 @@ def visualize_inputs_cv2(
         goal_end_y = goal_y + 3 * np.sin(goal_yaw)
         draw_arrow(img, goal_x, goal_y, goal_end_x, goal_end_y, (255, 0, 0), 3)
 
-    # ==== Status text ====
-    ego_vel_x = ego_state[4]
-    ego_vel_y = ego_state[5]
-    ego_acc_x = ego_state[6]
-    ego_acc_y = ego_state[7]
-    ego_steering = ego_state[8]
-    ego_yaw_rate = ego_state[9]
-
-    if "turn_indicator" in inputs:
-        turn_indicator = inputs["turn_indicator"][0]
-        if turn_indicator == 1:
-            turn_indicator_text = "None"
-        elif turn_indicator == 2:
-            turn_indicator_text = "<-"
-        elif turn_indicator == 3:
-            turn_indicator_text = "->"
-        else:
-            turn_indicator_text = "Unknown"
-    else:
-        turn_indicator_text = "N/A"
-
-    # Draw status text
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.4
-    thickness = 1
-    y_offset = 15
-    x_pos = 10
-
-    texts = [
-        f"Vel X: {ego_vel_x:.2f} m/s",
-        f"Vel Y: {ego_vel_y:.2f} m/s",
-        f"Acc X: {ego_acc_x:.2f} m/s2",
-        f"Acc Y: {ego_acc_y:.2f} m/s2",
-        f"Steering: {ego_steering:.2f} rad",
-        f"Yaw Rate: {ego_yaw_rate:.2f} rad/s",
-        f"Turn: {turn_indicator_text}",
-    ]
-
-    for i, text in enumerate(texts):
-        cv2.putText(img, text, (x_pos, y_offset + i * 15), font, font_scale, (0, 0, 0), thickness)
 
     # Return the image array (BGR format)
     return img
