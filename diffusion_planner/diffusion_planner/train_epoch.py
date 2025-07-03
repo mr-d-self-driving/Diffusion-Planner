@@ -8,9 +8,24 @@ from diffusion_planner.utils.data_augmentation import StatePerturbation
 from diffusion_planner.utils.train_utils import get_epoch_mean_loss
 
 
-def train_epoch(
-    data_loader, model, optimizer, args, ema, aug: StatePerturbation = None
-):
+def heading_to_cos_sin(x):
+    """
+    Convert heading angle to cosine and sine.
+    Args:
+        x: [B, T, 3] where last dimension is (x, y, heading)
+    Output:
+        x: [B, T, 4] where last dimension is (x, y, cos(heading), sin(heading))
+    """
+    return torch.cat(
+        [
+            x[..., :2],
+            torch.stack([x[..., 2].cos(), x[..., 2].sin()], dim=-1),
+        ],
+        dim=-1,
+    )
+
+
+def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation = None):
     epoch_loss = []
 
     model.train()
@@ -43,51 +58,32 @@ def train_epoch(
 
             # prepare data
             inputs = {
-                "ego_current_state": batch[0].to(args.device),
-                "neighbor_agents_past": batch[2].to(args.device),
-                "lanes": batch[4].to(args.device),
-                "lanes_speed_limit": batch[5].to(args.device),
-                "lanes_has_speed_limit": batch[6].to(args.device),
-                "route_lanes": batch[7].to(args.device),
-                "route_lanes_speed_limit": batch[8].to(args.device),
-                "route_lanes_has_speed_limit": batch[9].to(args.device),
-                "static_objects": batch[10].to(args.device),
-                "turn_indicator": batch[11].to(args.device),
+                "ego_agent_past": batch[0].to(args.device),
+                "ego_current_state": batch[1].to(args.device),
+                "neighbor_agents_past": batch[3].to(args.device),
+                "lanes": batch[5].to(args.device),
+                "lanes_speed_limit": batch[6].to(args.device),
+                "lanes_has_speed_limit": batch[7].to(args.device),
+                "route_lanes": batch[8].to(args.device),
+                "route_lanes_speed_limit": batch[9].to(args.device),
+                "route_lanes_has_speed_limit": batch[10].to(args.device),
+                "static_objects": batch[11].to(args.device),
+                "turn_indicator": batch[12].to(args.device),
             }
 
-            ego_future = batch[1].to(args.device)
-            neighbors_future = batch[3].to(args.device)
+            inputs["ego_agent_past"] = heading_to_cos_sin(inputs["ego_agent_past"])
+
+            ego_future = batch[2].to(args.device)
+            neighbors_future = batch[4].to(args.device)
             # Normalize to ego-centric
             if aug is not None:
-                inputs, ego_future, neighbors_future = aug(
-                    inputs, ego_future, neighbors_future
-                )
+                inputs, ego_future, neighbors_future = aug(inputs, ego_future, neighbors_future)
 
             # heading to cos sin
-            ego_future = torch.cat(
-                [
-                    ego_future[..., :2],
-                    torch.stack(
-                        [ego_future[..., 2].cos(), ego_future[..., 2].sin()], dim=-1
-                    ),
-                ],
-                dim=-1,
-            )
+            ego_future = heading_to_cos_sin(ego_future)
 
             mask = torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
-            neighbors_future = torch.cat(
-                [
-                    neighbors_future[..., :2],
-                    torch.stack(
-                        [
-                            neighbors_future[..., 2].cos(),
-                            neighbors_future[..., 2].sin(),
-                        ],
-                        dim=-1,
-                    ),
-                ],
-                dim=-1,
-            )
+            neighbors_future = heading_to_cos_sin(neighbors_future)
             neighbors_future[mask] = 0.0
             inputs = args.observation_normalizer(inputs)
 
@@ -128,9 +124,7 @@ def train_epoch(
     epoch_mean_loss = get_epoch_mean_loss(epoch_loss)
 
     if args.ddp:
-        epoch_mean_loss = ddp.reduce_and_average_losses(
-            epoch_mean_loss, torch.device(args.device)
-        )
+        epoch_mean_loss = ddp.reduce_and_average_losses(epoch_mean_loss, torch.device(args.device))
 
     if ddp.get_rank() == 0:
         print(f"{epoch_mean_loss['loss']=:.4f}")

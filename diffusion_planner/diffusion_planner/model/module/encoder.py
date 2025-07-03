@@ -12,8 +12,14 @@ class Encoder(nn.Module):
 
         self.hidden_dim = config.hidden_dim
 
-        self.token_num = config.agent_num + config.static_objects_num + config.lane_num
+        self.token_num = 1 + config.agent_num + config.static_objects_num + config.lane_num
 
+        self.ego_encoder = EgoFusionEncoder(
+            config.time_len,
+            drop_path_rate=config.encoder_drop_path_rate,
+            hidden_dim=config.hidden_dim,
+            depth=config.encoder_depth,
+        )
         self.neighbor_encoder = AgentFusionEncoder(
             config.time_len,
             drop_path_rate=config.encoder_drop_path_rate,
@@ -46,31 +52,40 @@ class Encoder(nn.Module):
     def forward(self, inputs):
         encoder_outputs = {}
 
+        # ego agent
+        ego = inputs["ego_agent_past"]  # (B, T=21, D=4)
+
         # agents
-        neighbors = inputs["neighbor_agents_past"]
+        neighbors = inputs["neighbor_agents_past"]  # (B, N=32, T=21, D=11)
 
         # static objects
-        static = inputs["static_objects"]
+        static = inputs["static_objects"]  # (B, P=5, D=10)
 
         # vector maps
-        lanes = inputs["lanes"]
-        lanes_speed_limit = inputs["lanes_speed_limit"]
-        lanes_has_speed_limit = inputs["lanes_has_speed_limit"]
+        lanes = inputs["lanes"]  # (B, P=70, V=20, D=12)
+        lanes_speed_limit = inputs["lanes_speed_limit"]  # (B, P=70, V=20, D=1)
+        lanes_has_speed_limit = inputs["lanes_has_speed_limit"]  # (B, P=70, V=20, D=1)
 
         B = neighbors.shape[0]
 
+        encoding_ego, ego_mask, ego_pos = self.ego_encoder(ego)
         encoding_neighbors, neighbors_mask, neighbor_pos = self.neighbor_encoder(neighbors)
         encoding_static, static_mask, static_pos = self.static_encoder(static)
         encoding_lanes, lanes_mask, lane_pos = self.lane_encoder(
             lanes, lanes_speed_limit, lanes_has_speed_limit
         )
 
-        encoding_input = torch.cat([encoding_neighbors, encoding_static, encoding_lanes], dim=1)
+        encoding_input = torch.cat(
+            [encoding_ego, encoding_neighbors, encoding_static, encoding_lanes], dim=1
+        )
 
-        encoding_pos = torch.cat([neighbor_pos, static_pos, lane_pos], dim=1).view(
+        encoding_mask = torch.cat([ego_mask, neighbors_mask, static_mask, lanes_mask], dim=1).view(
+            -1
+        )
+
+        encoding_pos = torch.cat([ego_pos, neighbor_pos, static_pos, lane_pos], dim=1).view(
             B * self.token_num, -1
         )
-        encoding_mask = torch.cat([neighbors_mask, static_mask, lanes_mask], dim=1).view(-1)
         encoding_pos = self.pos_emb(encoding_pos[~encoding_mask])
         encoding_pos_result = torch.zeros(
             (B * self.token_num, self.hidden_dim), device=encoding_pos.device
@@ -104,6 +119,79 @@ class SelfAttentionBlock(nn.Module):
         x = x + self.drop_path(self.attn(self.norm1(x), x, x, key_padding_mask=mask)[0])
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
+
+
+class EgoFusionEncoder(nn.Module):
+    def __init__(
+        self,
+        time_len,
+        drop_path_rate,
+        hidden_dim,
+        depth,
+    ):
+        super().__init__()
+        tokens_mlp_dim = 64
+        channels_mlp_dim = 128
+
+        self._hidden_dim = hidden_dim
+        self._channel = channels_mlp_dim
+
+        self.channel_pre_project = Mlp(
+            in_features=4,
+            hidden_features=channels_mlp_dim,
+            out_features=channels_mlp_dim,
+            act_layer=nn.GELU,
+            drop=0.0,
+        )
+        self.token_pre_project = Mlp(
+            in_features=time_len,
+            hidden_features=tokens_mlp_dim,
+            out_features=tokens_mlp_dim,
+            act_layer=nn.GELU,
+            drop=0.0,
+        )
+
+        self.blocks = nn.ModuleList(
+            [MixerBlock(tokens_mlp_dim, channels_mlp_dim, drop_path_rate) for i in range(depth)]
+        )
+
+        self.norm = nn.LayerNorm(channels_mlp_dim)
+        self.emb_project = Mlp(
+            in_features=channels_mlp_dim,
+            hidden_features=hidden_dim,
+            out_features=hidden_dim,
+            act_layer=nn.GELU,
+            drop=drop_path_rate,
+        )
+
+    def forward(self, x):
+        """
+        x: B, T=21, D=4 (x, y, cos, sin)
+        """
+        B, T, D = x.shape
+        pos = x[:, -1].clone()  # (B, D=4[x, y, cos, sin])
+        # ego: [1,0,0]
+        class_type = torch.zeros((B, 3), device=x.device)
+        pos = torch.cat([pos, class_type], dim=-1)  # (B, T, D=7[x, y, cos, sin, type(3)])
+        pos[..., -3] = 1.0
+        pos = pos.unsqueeze(1)  # (B, 1, D=7)
+
+        mask = torch.zeros((B, 1), dtype=torch.bool, device=x.device)
+
+        x = self.channel_pre_project(x)
+        x = x.permute(0, 2, 1)
+        x = self.token_pre_project(x)
+        x = x.permute(0, 2, 1)
+
+        for block in self.blocks:
+            x = block(x)
+
+        # pooling
+        x = torch.mean(x, dim=1, keepdim=True)  # (B, 1, C=channels_mlp_dim)
+
+        x = self.emb_project(self.norm(x))  # (B, hidden_dim)
+
+        return x, mask, pos
 
 
 class AgentFusionEncoder(nn.Module):
