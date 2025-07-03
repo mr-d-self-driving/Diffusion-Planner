@@ -1,5 +1,6 @@
 #!/bin/bash
 set -ux
+cd $(dirname $0)
 
 exp_name=${1}
 

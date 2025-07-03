@@ -265,7 +265,7 @@ def visualize_inputs(
             return "red"
         elif traffic_light[3] == 1:
             return "gray"
-        return "gray"
+        return "purple"
 
     # ==== Lanes ====
     lanes = inputs["lanes"][0]  # Use the first sample in the batch
@@ -277,7 +277,7 @@ def visualize_inputs(
         color = get_traffic_light_color(traffic_light)
 
         # center line
-        ax.plot(lanes[i, :, 0], lanes[i, :, 1], alpha=0.1, linewidth=1, color=color)
+        # ax.plot(lanes[i, :, 0], lanes[i, :, 1], alpha=0.1, linewidth=1, color=color)
 
         # left right lane boundaries
         lx = lanes[i, :, 0] + lanes[i, :, 4]
@@ -311,15 +311,9 @@ def visualize_inputs(
             route_lanes[i, :, 1],
             alpha=0.5,
             linewidth=2,
-            color=color,
+            color="olive",
+            linestyle="--",
         )
-        # left right lane boundaries
-        lx = route_lanes[i, :, 0] + route_lanes[i, :, 4]
-        ly = route_lanes[i, :, 1] + route_lanes[i, :, 5]
-        ax.plot(lx, ly, alpha=0.5, linewidth=2, color=color)
-        rx = route_lanes[i, :, 0] + route_lanes[i, :, 6]
-        ry = route_lanes[i, :, 1] + route_lanes[i, :, 7]
-        ax.plot(rx, ry, alpha=0.5, linewidth=2, color=color)
 
         # print speed limit
         # ax.text(
@@ -355,18 +349,27 @@ def visualize_inputs(
     ax.grid(True, alpha=0.3)
 
     # print status
+    def turn_indicator_int_to_str(turn_indicator):
+        if turn_indicator == 1:
+            return "None"
+        elif turn_indicator == 2:
+            return "<-"
+        elif turn_indicator == 3:
+            return "->"
+        else:
+            raise ValueError(f"Unknown turn command: {turn_indicator}")
+
     if "turn_indicator" in inputs:
         turn_indicator = inputs["turn_indicator"][0]
-        if turn_indicator == 1:
-            turn_indicator_text = "None"
-        elif turn_indicator == 2:
-            turn_indicator_text = "<-"
-        elif turn_indicator == 3:
-            turn_indicator_text = "->"
-        else:
-            assert False, f"Unknown turn command: {turn_indicator}"
+        turn_indicator_text_gt = turn_indicator_int_to_str(turn_indicator)
     else:
-        turn_indicator_text = "There is no turn command"
+        turn_indicator_text_gt = "There is no turn command"
+
+    if "turn_indicator_pred" in inputs:
+        turn_indicator_pred = inputs["turn_indicator_pred"]
+        turn_indicator_text_pred = turn_indicator_int_to_str(turn_indicator_pred)
+    else:
+        turn_indicator_text_pred = "There is no predicted turn command"
 
     ax.text(
         view_range - 1,
@@ -377,7 +380,8 @@ def visualize_inputs(
         f"AccelerationY: {ego_acc_y:.2f} m/s²\n"
         f"Steering: {ego_steering:.2f} rad\n"
         f"Yaw Rate: {ego_yaw_rate:.2f} rad/s\n"
-        f"Turn Command: {turn_indicator_text}",
+        f"Turn Command GT: {turn_indicator_text_gt}\n"
+        f"Turn Command PR: {turn_indicator_text_pred}",
         fontsize=8,
         color="red",
         ha="right",
