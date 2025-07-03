@@ -118,13 +118,7 @@ class Decoder(nn.Module):
             ego_trajectory = gt_trajectories[:, 0, 1::10, :2].reshape(
                 B, 2 * (self._future_len // 10)
             )
-            turn_indicator_input = torch.cat(
-                [
-                    ego_trajectory,
-                    route_encoding,
-                ],
-                dim=-1,
-            )
+            turn_indicator_input = torch.cat([ego_trajectory, route_encoding], dim=-1)
             turn_indicator_logit = self.turn_indicator_predictor(turn_indicator_input)
 
             return {
