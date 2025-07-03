@@ -349,18 +349,27 @@ def visualize_inputs(
     ax.grid(True, alpha=0.3)
 
     # print status
+    def turn_indicator_int_to_str(turn_indicator):
+        if turn_indicator == 1:
+            return "None"
+        elif turn_indicator == 2:
+            return "<-"
+        elif turn_indicator == 3:
+            return "->"
+        else:
+            raise ValueError(f"Unknown turn command: {turn_indicator}")
+
     if "turn_indicator" in inputs:
         turn_indicator = inputs["turn_indicator"][0]
-        if turn_indicator == 1:
-            turn_indicator_text = "None"
-        elif turn_indicator == 2:
-            turn_indicator_text = "<-"
-        elif turn_indicator == 3:
-            turn_indicator_text = "->"
-        else:
-            assert False, f"Unknown turn command: {turn_indicator}"
+        turn_indicator_text_gt = turn_indicator_int_to_str(turn_indicator)
     else:
-        turn_indicator_text = "There is no turn command"
+        turn_indicator_text_gt = "There is no turn command"
+
+    if "turn_indicator_pred" in inputs:
+        turn_indicator_pred = inputs["turn_indicator_pred"]
+        turn_indicator_text_pred = turn_indicator_int_to_str(turn_indicator_pred)
+    else:
+        turn_indicator_text_pred = "There is no predicted turn command"
 
     ax.text(
         view_range - 1,
@@ -371,7 +380,8 @@ def visualize_inputs(
         f"AccelerationY: {ego_acc_y:.2f} m/s²\n"
         f"Steering: {ego_steering:.2f} rad\n"
         f"Yaw Rate: {ego_yaw_rate:.2f} rad/s\n"
-        f"Turn Command: {turn_indicator_text}",
+        f"Turn Command GT: {turn_indicator_text_gt}\n"
+        f"Turn Command PR: {turn_indicator_text_pred}",
         fontsize=8,
         color="red",
         ha="right",

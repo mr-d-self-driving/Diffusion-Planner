@@ -27,6 +27,7 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
     total_samples = 0
 
     predictions = []
+    turn_indicators = []
     loss_ego_list = []
 
     for batch in val_loader:
@@ -100,6 +101,7 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
         turn_indicator = turn_indicator_logit.argmax(dim=-1)
         if return_pred:
             predictions.append(prediction)
+            turn_indicators.append(turn_indicator)
 
         neighbors_future_valid = ~neighbor_future_mask
         all_gt = all_gt[:, :, 1:, :]  # (B, Pn + 1, T, 4)
@@ -117,11 +119,13 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
     avg_loss_neighbor = total_loss_neighbor / total_samples
     if return_pred:
         predictions = torch.cat(predictions, dim=0)
+        turn_indicators = torch.cat(turn_indicators, dim=0)
     return {
         "loss_ego": loss_ego,
         "avg_loss_ego": avg_loss_ego,
         "avg_loss_neighbor": avg_loss_neighbor,
         "predictions": predictions,
+        "turn_indicators": turn_indicators,
     }
 
 
@@ -290,8 +294,10 @@ if __name__ == "__main__":
     avg_loss_ego = valid_dict["avg_loss_ego"]
     ave_loss_neighbor = valid_dict["avg_loss_neighbor"]
     predictions = valid_dict["predictions"]
+    turn_indicators = valid_dict["turn_indicators"]
     print(f"{avg_loss_ego=:.4f} {ave_loss_neighbor=:.4f}")
     print(f"{predictions.shape=}")
+    print(f"{turn_indicators.shape=}")
 
     if args.save_predictions_dir is None:
         exit(0)
@@ -303,6 +309,7 @@ if __name__ == "__main__":
         np.savez(
             save_predictions_dir / f"prediction{i:08d}.npz",
             prediction=prediction,
+            turn_indicator=turn_indicators[i].cpu().numpy(),
         )
         loss_dict = {
             "loss_ego_total": loss_ego[i].mean().item(),
