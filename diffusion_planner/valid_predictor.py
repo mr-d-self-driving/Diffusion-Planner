@@ -10,6 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
+from diffusion_planner.train_epoch import heading_to_cos_sin
 from diffusion_planner.utils import ddp
 from diffusion_planner.utils.config import Config
 from diffusion_planner.utils.dataset import DiffusionPlannerData
@@ -32,40 +33,29 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
     for batch in val_loader:
         # データの準備
         inputs = {
-            "ego_current_state": batch[0].to(device),
-            "neighbor_agents_past": batch[2].to(device),
-            "lanes": batch[4].to(device),
-            "lanes_speed_limit": batch[5].to(device),
-            "lanes_has_speed_limit": batch[6].to(device),
-            "route_lanes": batch[7].to(device),
-            "route_lanes_speed_limit": batch[8].to(device),
-            "route_lanes_has_speed_limit": batch[9].to(device),
-            "static_objects": batch[10].to(device),
+            "ego_agent_past": batch[0].to(device),
+            "ego_current_state": batch[1].to(device),
+            "neighbor_agents_past": batch[3].to(device),
+            "lanes": batch[5].to(device),
+            "lanes_speed_limit": batch[6].to(device),
+            "lanes_has_speed_limit": batch[7].to(device),
+            "route_lanes": batch[8].to(device),
+            "route_lanes_speed_limit": batch[9].to(device),
+            "route_lanes_has_speed_limit": batch[10].to(device),
+            "static_objects": batch[11].to(device),
         }
 
         B = inputs["ego_current_state"].shape[0]
 
-        ego_future = batch[1].to(device)
-        ego_future = torch.cat(
-            [
-                ego_future[..., :2],
-                ego_future[..., 2:3].cos(),
-                ego_future[..., 2:3].sin(),
-            ],
-            dim=-1,
-        )  # (B, T, 4)
-        neighbors_future = batch[3].to(device)
+        inputs["ego_agent_past"] = heading_to_cos_sin(inputs["ego_agent_past"])
+
+        ego_future = batch[2].to(device)
+        ego_future = heading_to_cos_sin(ego_future)  # (B, T, 4)
+        neighbors_future = batch[4].to(device)
         neighbor_future_mask = (
             torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
         )  # (B, Pn, T)
-        neighbors_future = torch.cat(
-            [
-                neighbors_future[..., :2],
-                neighbors_future[..., 2:3].cos(),
-                neighbors_future[..., 2:3].sin(),
-            ],
-            dim=-1,
-        )  # (B, Pn, T, 4)
+        neighbors_future = heading_to_cos_sin(neighbors_future)  # (B, Pn, T, 4)
         neighbors_future[neighbor_future_mask] = 0.0
 
         B, Pn, T, _ = neighbors_future.shape
