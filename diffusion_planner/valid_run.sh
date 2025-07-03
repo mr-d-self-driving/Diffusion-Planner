@@ -1,5 +1,6 @@
 #!/bin/bash
 set -x
+cd $(dirname $0)
 export CUDA_VISIBLE_DEVICES=0
 
 ###################################
