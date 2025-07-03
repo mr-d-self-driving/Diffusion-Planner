@@ -8,7 +8,9 @@ from diffusion_planner.utils.data_augmentation import StatePerturbation
 from diffusion_planner.utils.train_utils import get_epoch_mean_loss
 
 
-def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation = None):
+def train_epoch(
+    data_loader, model, optimizer, args, ema, aug: StatePerturbation = None
+):
     epoch_loss = []
 
     model.train()
@@ -50,19 +52,24 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
                 "route_lanes_speed_limit": batch[8].to(args.device),
                 "route_lanes_has_speed_limit": batch[9].to(args.device),
                 "static_objects": batch[10].to(args.device),
+                "turn_indicator": batch[11].to(args.device),
             }
 
             ego_future = batch[1].to(args.device)
             neighbors_future = batch[3].to(args.device)
             # Normalize to ego-centric
             if aug is not None:
-                inputs, ego_future, neighbors_future = aug(inputs, ego_future, neighbors_future)
+                inputs, ego_future, neighbors_future = aug(
+                    inputs, ego_future, neighbors_future
+                )
 
             # heading to cos sin
             ego_future = torch.cat(
                 [
                     ego_future[..., :2],
-                    torch.stack([ego_future[..., 2].cos(), ego_future[..., 2].sin()], dim=-1),
+                    torch.stack(
+                        [ego_future[..., 2].cos(), ego_future[..., 2].sin()], dim=-1
+                    ),
                 ],
                 dim=-1,
             )
@@ -72,7 +79,11 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
                 [
                     neighbors_future[..., :2],
                     torch.stack(
-                        [neighbors_future[..., 2].cos(), neighbors_future[..., 2].sin()], dim=-1
+                        [
+                            neighbors_future[..., 2].cos(),
+                            neighbors_future[..., 2].sin(),
+                        ],
+                        dim=-1,
                     ),
                 ],
                 dim=-1,
@@ -97,9 +108,8 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
             loss["loss"] = (
                 loss["neighbor_prediction_loss"]
                 + args.alpha_planning_loss * loss["ego_planning_loss"]
+                + loss["turn_indicator_loss"]
             )
-
-            total_loss = loss["loss"].item()
 
             # loss backward
             loss["loss"].backward()
@@ -112,15 +122,18 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
             if args.ddp:
                 torch.cuda.synchronize()
 
-            data_epoch.set_postfix(loss="{:.4f}".format(total_loss))
+            data_epoch.set_postfix(loss="{:.4f}".format(loss["loss"].item()))
             epoch_loss.append(loss)
 
     epoch_mean_loss = get_epoch_mean_loss(epoch_loss)
 
     if args.ddp:
-        epoch_mean_loss = ddp.reduce_and_average_losses(epoch_mean_loss, torch.device(args.device))
+        epoch_mean_loss = ddp.reduce_and_average_losses(
+            epoch_mean_loss, torch.device(args.device)
+        )
 
     if ddp.get_rank() == 0:
-        print(f"epoch train loss: {epoch_mean_loss['loss']:.4f}\n")
+        print(f"{epoch_mean_loss['loss']=:.4f}")
+        print(f"{epoch_mean_loss['turn_indicator_accuracy']=:.4f}")
 
     return epoch_mean_loss, epoch_mean_loss["loss"]

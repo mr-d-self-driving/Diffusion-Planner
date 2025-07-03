@@ -103,7 +103,7 @@ if __name__ == "__main__":
         prediction_path = Path(prediction_path)
         info_data_path = valid_data_path.parent / f"{valid_data_path.stem}.json"
         valid_data = np.load(valid_data_path)
-        prediction = np.load(prediction_path)
+        output_dict = np.load(prediction_path)
         info_data = json.load(open(info_data_path, "r"))
         ego_x = info_data["x"]
         ego_y = info_data["y"]
@@ -118,7 +118,9 @@ if __name__ == "__main__":
             valid_data_dict[key] = torch.tensor(np.expand_dims(value, axis=0))
         valid_data_dict = config_obj.observation_normalizer(valid_data_dict)
 
-        prediction = prediction["prediction"]  # (1 + P, T, D)
+        prediction = output_dict["prediction"]  # (1 + P, T, D)
+        turn_indicator = int(output_dict["turn_indicator"])  # ()
+        valid_data_dict["turn_indicator_pred"] = turn_indicator
         loss_ego, loss_nei, neighbors_future_valid = calc_loss(valid_data, prediction)
         # loss_ego (T, 4)
         # loss_nei (P, T, 4)

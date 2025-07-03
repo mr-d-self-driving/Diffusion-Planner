@@ -29,17 +29,23 @@ def visualize_inputs(
         inputs[key] = to_numpy(inputs[key])
 
     """
-    key='ego_current_state', inputs[key].shape=(1, 10)
-    key='neighbor_agents_past', inputs[key].shape=(1, 32, 21, 11)
-    key='lanes', inputs[key].shape=(1, 70, 20, 12)
-    key='lanes_speed_limit', inputs[key].shape=(1, 70, 1)
-    key='lanes_has_speed_limit', inputs[key].shape=(1, 70, 1)
-    key='route_lanes', inputs[key].shape=(1, 25, 20, 12)
-    key='route_lanes_speed_limit', inputs[key].shape=(1, 25, 1)
-    key='route_lanes_has_speed_limit', inputs[key].shape=(1, 25, 1)
-    key='static_objects', inputs[key].shape=(1, 5, 10)
-    key='sampled_trajectories', inputs[key].shape=(1, 11, 81, 4)
-    key='diffusion_time', inputs[key].shape=(1,)
+    for key in inputs:
+        print(f"{key}={inputs[key].shape}")
+
+    ego_agent_past=(1, 20, 3)
+    ego_current_state=(1, 10)
+    ego_agent_future=(1, 80, 3)
+    neighbor_agents_past=(1, 32, 21, 11)
+    neighbor_agents_future=(1, 32, 80, 3)
+    static_objects=(1, 5, 10)
+    lanes=(1, 70, 20, 12)
+    lanes_speed_limit=(1, 70, 1)
+    lanes_has_speed_limit=(1, 70, 1)
+    route_lanes=(1, 25, 20, 12)
+    route_lanes_speed_limit=(1, 25, 1)
+    route_lanes_has_speed_limit=(1, 25, 1)
+    turn_indicator=(1,)
+    goal_pose=(1, 3)
     """
 
     # initialize the figure
@@ -76,6 +82,19 @@ def visualize_inputs(
         ec="r",
         alpha=0.7,
     )
+
+    if "ego_agent_past" in inputs:
+        ego_past = inputs["ego_agent_past"][0]  # Use the first sample in the batch
+        ego_past_x = ego_past[:, 0]
+        ego_past_y = ego_past[:, 1]
+        ax.plot(
+            ego_past_x,
+            ego_past_y,
+            color="orange",
+            alpha=0.5,
+            linestyle="--",
+            label="Ego Past Trajectory",
+        )
 
     if "ego_agent_future" in inputs:
         ego_future = inputs["ego_agent_future"][0]
@@ -246,7 +265,7 @@ def visualize_inputs(
             return "red"
         elif traffic_light[3] == 1:
             return "gray"
-        return "gray"
+        return "purple"
 
     # ==== Lanes ====
     lanes = inputs["lanes"][0]  # Use the first sample in the batch
@@ -258,7 +277,7 @@ def visualize_inputs(
         color = get_traffic_light_color(traffic_light)
 
         # center line
-        ax.plot(lanes[i, :, 0], lanes[i, :, 1], alpha=0.1, linewidth=1, color=color)
+        # ax.plot(lanes[i, :, 0], lanes[i, :, 1], alpha=0.1, linewidth=1, color=color)
 
         # left right lane boundaries
         lx = lanes[i, :, 0] + lanes[i, :, 4]
@@ -292,15 +311,9 @@ def visualize_inputs(
             route_lanes[i, :, 1],
             alpha=0.5,
             linewidth=2,
-            color=color,
+            color="olive",
+            linestyle="--",
         )
-        # left right lane boundaries
-        lx = route_lanes[i, :, 0] + route_lanes[i, :, 4]
-        ly = route_lanes[i, :, 1] + route_lanes[i, :, 5]
-        ax.plot(lx, ly, alpha=0.5, linewidth=2, color=color)
-        rx = route_lanes[i, :, 0] + route_lanes[i, :, 6]
-        ry = route_lanes[i, :, 1] + route_lanes[i, :, 7]
-        ax.plot(rx, ry, alpha=0.5, linewidth=2, color=color)
 
         # print speed limit
         # ax.text(
@@ -311,12 +324,52 @@ def visualize_inputs(
         #     color="black",
         # )
 
+    # ==== Goal Pose ====
+    if "goal_pose" in inputs:
+        goal_x, goal_y, goal_yaw = inputs["goal_pose"][0]
+        goal_dx = 2 * np.cos(goal_yaw)
+        goal_dy = 2 * np.sin(goal_yaw)
+        ax.arrow(
+            goal_x,
+            goal_y,
+            goal_dx,
+            goal_dy,
+            width=0.5,
+            head_width=1.0,
+            head_length=1.0,
+            fc="blue",
+            ec="blue",
+            alpha=0.7,
+            label="Goal Pose",
+        )
+
     ax.set_xlabel("X [m]")
     ax.set_ylabel("Y [m]")
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.3)
 
     # print status
+    def turn_indicator_int_to_str(turn_indicator):
+        if turn_indicator == 1:
+            return "None"
+        elif turn_indicator == 2:
+            return "<-"
+        elif turn_indicator == 3:
+            return "->"
+        else:
+            raise ValueError(f"Unknown turn command: {turn_indicator}")
+
+    if "turn_indicator" in inputs:
+        turn_indicator = inputs["turn_indicator"][0]
+        turn_indicator_text_gt = turn_indicator_int_to_str(turn_indicator)
+    else:
+        turn_indicator_text_gt = "There is no turn command"
+
+    if "turn_indicator_pred" in inputs:
+        turn_indicator_pred = inputs["turn_indicator_pred"]
+        turn_indicator_text_pred = turn_indicator_int_to_str(turn_indicator_pred)
+    else:
+        turn_indicator_text_pred = "There is no predicted turn command"
 
     ax.text(
         view_range - 1,
@@ -326,7 +379,9 @@ def visualize_inputs(
         f"AccelerationX: {ego_acc_x:.2f} m/s²\n"
         f"AccelerationY: {ego_acc_y:.2f} m/s²\n"
         f"Steering: {ego_steering:.2f} rad\n"
-        f"Yaw Rate: {ego_yaw_rate:.2f} rad/s",
+        f"Yaw Rate: {ego_yaw_rate:.2f} rad/s\n"
+        f"Turn Command GT: {turn_indicator_text_gt}\n"
+        f"Turn Command PR: {turn_indicator_text_pred}",
         fontsize=8,
         color="red",
         ha="right",

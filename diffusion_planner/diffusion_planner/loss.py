@@ -56,6 +56,7 @@ def diffusion_loss_func(
 
     merged_inputs = {
         **inputs,
+        "gt_trajectories": all_gt,
         "sampled_trajectories": xT,
         "diffusion_time": t,
     }
@@ -81,5 +82,18 @@ def diffusion_loss_func(
     loss["ego_planning_loss"] = dpm_loss[:, 0, :].mean()
 
     assert not torch.isnan(dpm_loss).sum(), f"loss cannot be nan, z={z}"
+
+    turn_indicator_logit = decoder_output["turn_indicator_logit"]  # [B, 4]
+    turn_indicator_gt = inputs["turn_indicator"]
+    turn_indicator_loss = nn.functional.cross_entropy(
+        turn_indicator_logit, turn_indicator_gt, reduction="mean"
+    )
+    loss["turn_indicator_loss"] = turn_indicator_loss
+
+    with torch.no_grad():
+        turn_indicator_accuracy = (
+            (turn_indicator_logit.argmax(dim=-1) == turn_indicator_gt).float().mean()
+        )
+        loss["turn_indicator_accuracy"] = turn_indicator_accuracy
 
     return loss, decoder_output

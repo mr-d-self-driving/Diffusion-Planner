@@ -2,6 +2,7 @@
     "python.autoComplete.extraPaths": [
         "/home/ubuntu/sakoda/autoware/install/autoware_perception_msgs/local/lib/python3.10/dist-packages",
         "/home/ubuntu/sakoda/autoware/install/autoware_planning_msgs/local/lib/python3.10/dist-packages",
+        "/home/ubuntu/sakoda/autoware/install/pacmod3_msgs/local/lib/python3.10/dist-packages/",
         "${workspaceFolder}",
         "${workspaceFolder}/diffusion_planner_ros",
         "/opt/ros/humble/lib/python3.10/site-packages",
@@ -10,6 +11,7 @@
     "python.analysis.extraPaths": [
         "/home/ubuntu/sakoda/autoware/install/autoware_perception_msgs/local/lib/python3.10/dist-packages",
         "/home/ubuntu/sakoda/autoware/install/autoware_planning_msgs/local/lib/python3.10/dist-packages",
+        "/home/ubuntu/sakoda/autoware/install/pacmod3_msgs/local/lib/python3.10/dist-packages/",
         "${workspaceFolder}",
         "${workspaceFolder}/diffusion_planner_ros",
         "/opt/ros/humble/lib/python3.10/site-packages",

@@ -33,6 +33,8 @@ class DiffusionPlannerData(Dataset):
 
         static_objects = data["static_objects"]
 
+        turn_indicator = data["turn_indicator"]
+
         data = {
             "ego_current_state": ego_current_state,
             "ego_future_gt": ego_agent_future,
@@ -45,6 +47,7 @@ class DiffusionPlannerData(Dataset):
             "route_lanes_speed_limit": route_lanes_speed_limit,
             "route_lanes_has_speed_limit": route_lanes_has_speed_limit,
             "static_objects": static_objects,
+            "turn_indicator": turn_indicator,
         }
 
         return tuple(data.values())

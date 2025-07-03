@@ -27,18 +27,22 @@ class Decoder(nn.Module):
 
         self.dit = DiT(
             sde=self._sde,
-            route_encoder=RouteEncoder(
-                config.route_num,
-                config.lane_len,
-                drop_path_rate=config.encoder_drop_path_rate,
-                hidden_dim=config.hidden_dim,
-            ),
             depth=config.decoder_depth,
             output_dim=(config.future_len + 1) * 4,  # x, y, cos, sin
             hidden_dim=config.hidden_dim,
             heads=config.num_heads,
             dropout=dpr,
             model_type=config.diffusion_model_type,
+        )
+        self.route_encoder = RouteEncoder(
+            config.route_num,
+            config.lane_len,
+            drop_path_rate=config.encoder_drop_path_rate,
+            hidden_dim=config.hidden_dim,
+        )
+
+        self.turn_indicator_predictor = nn.Linear(
+            2 * (self._future_len // 10) + config.hidden_dim, 4
         )
 
         self._state_normalizer: StateNormalizer = config.state_normalizer
@@ -71,7 +75,7 @@ class Decoder(nn.Module):
                     "ego_current_state": current ego states,
                     "neighbor_agent_past": past and current neighbor states,
 
-                    [training-only] "sampled_trajectories": sampled current-future ego & neighbor states,        [B, P, 1 + V_future, 4]
+                    [training-only] "sampled_trajectories": sampled current-future ego & neighbor states,        [B, P, 1 + self._future_len, 4]
                     [training-only] "diffusion_time": timestep of diffusion process $t \in [0, 1]$,              [B]
                     ...
                 }
@@ -80,8 +84,8 @@ class Decoder(nn.Module):
             decoder_outputs: Dict
                 {
                     ...
-                    [training-only] "score": Predicted future states, [B, P, 1 + V_future, 4]
-                    [inference-only] "prediction": Predicted future states, [B, P, V_future, 4]
+                    [training-only] "score": Predicted future states, [B, P, 1 + self._future_len, 4]
+                    [inference-only] "prediction": Predicted future states, [B, P, self._future_len, 4]
                     ...
                 }
 
@@ -102,25 +106,40 @@ class Decoder(nn.Module):
         # Extract context encoding
         ego_neighbor_encoding = encoder_outputs["encoding"]
         route_lanes = inputs["route_lanes"]
+        route_encoding = self.route_encoder(route_lanes)
 
         if self.training:
             sampled_trajectories = inputs["sampled_trajectories"].reshape(
-                B, P, -1
-            )  # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+                B, P, (1 + self._future_len) * 4
+            )
             diffusion_time = inputs["diffusion_time"]
+
+            gt_trajectories = inputs["gt_trajectories"].reshape(B, P, (1 + self._future_len), 4)
+            ego_trajectory = gt_trajectories[:, 0, 1::10, :2].reshape(
+                B, 2 * (self._future_len // 10)
+            )
+            turn_indicator_input = torch.cat(
+                [
+                    ego_trajectory,
+                    route_encoding,
+                ],
+                dim=-1,
+            )
+            turn_indicator_logit = self.turn_indicator_predictor(turn_indicator_input)
 
             return {
                 "score": self.dit(
                     sampled_trajectories,
                     diffusion_time,
                     ego_neighbor_encoding,
-                    route_lanes,
+                    route_encoding,
                     neighbor_current_mask,
-                ).reshape(B, P, -1, 4)
+                ).reshape(B, P, -1, 4),
+                "turn_indicator_logit": turn_indicator_logit,
             }
         else:
             if self._model_type == "flow_matching":
-                # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+                # [B, 1 + predicted_neighbor_num, (1 + self._future_len) * 4]
                 x = torch.cat(
                     [
                         current_states[:, :, None],
@@ -132,16 +151,25 @@ class Decoder(nn.Module):
                 func = partial(
                     self.dit,
                     cross_c=ego_neighbor_encoding,
-                    route_lanes=route_lanes,
+                    route_encoding=route_encoding,
                     neighbor_current_mask=neighbor_current_mask,
                 )
                 x = euler_integration(func, x, NUM_STEP)
                 # x = heun_integration(func, x, NUM_STEP)
                 # x = rk4_integration(func, x, NUM_STEP)
+                x = x.reshape(B, P, (1 + self._future_len) * 4)
+                turn_indicator_input = torch.cat(
+                    [
+                        x[:, 0, 1::10, :2].reshape(B, 2 * (self._future_len // 10)),
+                        route_encoding,
+                    ],
+                    dim=-1,
+                )
+                turn_indicator_logit = self.turn_indicator_predictor(turn_indicator_input)
                 x = self._state_normalizer.inverse(x.reshape(B, P, -1, 4))[:, :, 1:]
-                return {"prediction": x}
+                return {"prediction": x, "turn_indicator_logit": turn_indicator_logit}
 
-            # [B, 1 + predicted_neighbor_num, (1 + V_future) * 4]
+            # [B, 1 + predicted_neighbor_num, (1 + self._future_len) * 4]
             xT = torch.cat(
                 [
                     current_states[:, :, None],
@@ -160,7 +188,7 @@ class Decoder(nn.Module):
                 xT,
                 other_model_params={
                     "cross_c": ego_neighbor_encoding,
-                    "route_lanes": route_lanes,
+                    "route_encoding": route_encoding,
                     "neighbor_current_mask": neighbor_current_mask,
                 },
                 dpm_solver_params={
@@ -172,7 +200,7 @@ class Decoder(nn.Module):
                         "model": self.dit,
                         "model_condition": {
                             "cross_c": ego_neighbor_encoding,
-                            "route_lanes": route_lanes,
+                            "route_encoding": route_encoding,
                             "neighbor_current_mask": neighbor_current_mask,
                         },
                         "inputs": inputs,
@@ -183,9 +211,14 @@ class Decoder(nn.Module):
                     "guidance_type": "classifier" if self._guidance_fn is not None else "uncond",
                 },
             )
+            x0 = x0.reshape(B, P, (1 + self._future_len) * 4)
+            x = x0.reshape(B, P, (1 + self._future_len), 4)
+            x = x[:, 0, 1::10, :2].reshape(B, 2 * (self._future_len // 10))
+            turn_indicator_input = torch.cat([x, route_encoding], dim=-1)
+            turn_indicator_logit = self.turn_indicator_predictor(turn_indicator_input)
             x0 = self._state_normalizer.inverse(x0.reshape(B, P, -1, 4))[:, :, 1:]
 
-            return {"prediction": x0}
+            return {"prediction": x0, "turn_indicator_logit": turn_indicator_logit}
 
 
 class RouteEncoder(nn.Module):
@@ -264,7 +297,6 @@ class DiT(nn.Module):
     def __init__(
         self,
         sde: SDE,
-        route_encoder: nn.Module,
         depth,
         output_dim,
         hidden_dim=192,
@@ -279,7 +311,6 @@ class DiT(nn.Module):
             f"Unknown model type: {model_type}"
         )
         self._model_type = model_type
-        self.route_encoder = route_encoder
         self.agent_embedding = nn.Embedding(2, hidden_dim)
         self.preproj = Mlp(
             in_features=output_dim,
@@ -300,7 +331,7 @@ class DiT(nn.Module):
     def model_type(self):
         return self._model_type
 
-    def forward(self, x, t, cross_c, route_lanes, neighbor_current_mask):
+    def forward(self, x, t, cross_c, route_encoding, neighbor_current_mask):
         """
         Forward pass of DiT.
         x: (B, P, output_dim)   -> Embedded out of DiT
@@ -321,9 +352,7 @@ class DiT(nn.Module):
         x_embedding = x_embedding[None, :, :].expand(B, -1, -1)  # (B, P, D)
         x = x + x_embedding
 
-        route_encoding = self.route_encoder(route_lanes)
-        y = route_encoding
-        y = y + self.t_embedder(t)
+        y = route_encoding + self.t_embedder(t)
 
         attn_mask = torch.zeros((B, P), dtype=torch.bool, device=x.device)
         attn_mask[:, 1:] = neighbor_current_mask

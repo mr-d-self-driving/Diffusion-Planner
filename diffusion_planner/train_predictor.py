@@ -34,12 +34,7 @@ def boolean(v):
 def get_args():
     # Arguments
     parser = argparse.ArgumentParser(description="Training")
-    parser.add_argument(
-        "--name",
-        type=str,
-        help='log name (default: "diffusion-planner-training")',
-        default="diffusion-planner-training",
-    )
+    parser.add_argument("--exp_name", type=str, required=True)
     parser.add_argument("--save_dir", type=str, help="save dir for model ckpt", default=".")
 
     # Data
@@ -159,7 +154,7 @@ def model_training(args):
 
     if global_rank == 0:
         # Logging
-        print("------------- {} -------------".format(args.name))
+        print("------------- {} -------------".format(args.exp_name))
         print("Batch size: {}".format(args.batch_size))
         print("Learning rate: {}".format(args.learning_rate))
         print("Use device: {}".format(args.device))
@@ -172,7 +167,9 @@ def model_training(args):
             time = datetime.now()
             time = time.strftime("%Y%m%d-%H%M%S")
 
-            save_path = f"{args.save_dir}/training_log/{args.name}/{time}/"
+            save_path = (
+                f"{args.save_dir}/training_log/diffusion-planner-training/{time}_{args.exp_name}/"
+            )
             os.makedirs(save_path, exist_ok=True)
 
         # Save args
@@ -294,7 +291,7 @@ def model_training(args):
         os.environ["WANDB_MODE"] = "online" if args.use_wandb else "offline"
         wandb.init(
             project="Diffusion-Planner",
-            name=args.name,
+            name=args.exp_name,
             notes=args.notes,
             resume="allow",
             id=wandb_id,
