@@ -104,7 +104,7 @@ class Decoder(nn.Module):
         assert P == (1 + self._predicted_neighbor_num)
 
         # Extract context encoding
-        ego_neighbor_encoding = encoder_outputs["encoding"]
+        encoding = encoder_outputs["encoding"]
         route_lanes = inputs["route_lanes"]
         route_encoding = self.route_encoder(route_lanes)
 
@@ -125,8 +125,7 @@ class Decoder(nn.Module):
                 "score": self.dit(
                     sampled_trajectories,
                     diffusion_time,
-                    ego_neighbor_encoding,
-                    route_encoding,
+                    encoding,
                     neighbor_current_mask,
                 ).reshape(B, P, -1, 4),
                 "turn_indicator_logit": turn_indicator_logit,
@@ -144,8 +143,7 @@ class Decoder(nn.Module):
                 NUM_STEP = 10
                 func = partial(
                     self.dit,
-                    cross_c=ego_neighbor_encoding,
-                    route_encoding=route_encoding,
+                    cross_c=encoding,
                     neighbor_current_mask=neighbor_current_mask,
                 )
                 x = euler_integration(func, x, NUM_STEP)
@@ -181,8 +179,7 @@ class Decoder(nn.Module):
                 self.dit,
                 xT,
                 other_model_params={
-                    "cross_c": ego_neighbor_encoding,
-                    "route_encoding": route_encoding,
+                    "cross_c": encoding,
                     "neighbor_current_mask": neighbor_current_mask,
                 },
                 dpm_solver_params={
@@ -193,8 +190,7 @@ class Decoder(nn.Module):
                     "classifier_kwargs": {
                         "model": self.dit,
                         "model_condition": {
-                            "cross_c": ego_neighbor_encoding,
-                            "route_encoding": route_encoding,
+                            "cross_c": encoding,
                             "neighbor_current_mask": neighbor_current_mask,
                         },
                         "inputs": inputs,
@@ -325,7 +321,7 @@ class DiT(nn.Module):
     def model_type(self):
         return self._model_type
 
-    def forward(self, x, t, cross_c, route_encoding, neighbor_current_mask):
+    def forward(self, x, t, cross_c, neighbor_current_mask):
         """
         Forward pass of DiT.
         x: (B, P, output_dim)   -> Embedded out of DiT
@@ -346,7 +342,7 @@ class DiT(nn.Module):
         x_embedding = x_embedding[None, :, :].expand(B, -1, -1)  # (B, P, D)
         x = x + x_embedding
 
-        y = route_encoding + self.t_embedder(t)
+        y = self.t_embedder(t)
 
         attn_mask = torch.zeros((B, P), dtype=torch.bool, device=x.device)
         attn_mask[:, 1:] = neighbor_current_mask

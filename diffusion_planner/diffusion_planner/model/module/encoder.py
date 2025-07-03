@@ -12,7 +12,9 @@ class Encoder(nn.Module):
 
         self.hidden_dim = config.hidden_dim
 
-        self.token_num = 1 + config.agent_num + config.static_objects_num + config.lane_num
+        self.token_num = (
+            1 + config.agent_num + config.static_objects_num + config.lane_num + config.route_num
+        )
 
         self.ego_encoder = EgoFusionEncoder(
             config.time_len,
@@ -33,6 +35,12 @@ class Encoder(nn.Module):
         )
         self.lane_encoder = LaneFusionEncoder(
             config.lane_len,
+            drop_path_rate=config.encoder_drop_path_rate,
+            hidden_dim=config.hidden_dim,
+            depth=config.encoder_depth,
+        )
+        self.route_encoder = LaneFusionEncoder(
+            config.route_len,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
             depth=config.encoder_depth,
@@ -66,6 +74,11 @@ class Encoder(nn.Module):
         lanes_speed_limit = inputs["lanes_speed_limit"]  # (B, P=70, V=20, D=1)
         lanes_has_speed_limit = inputs["lanes_has_speed_limit"]  # (B, P=70, V=20, D=1)
 
+        # route
+        route = inputs["route_lanes"]  # (B, P=25, V=20, D=12)
+        route_speed_limit = inputs["route_lanes_speed_limit"]  # (B, P=25, V=20, D=1)
+        route_has_speed_limit = inputs["route_lanes_has_speed_limit"]  # (B, P=25, V=20, D=1)
+
         B = neighbors.shape[0]
 
         encoding_ego, ego_mask, ego_pos = self.ego_encoder(ego)
@@ -74,16 +87,19 @@ class Encoder(nn.Module):
         encoding_lanes, lanes_mask, lane_pos = self.lane_encoder(
             lanes, lanes_speed_limit, lanes_has_speed_limit
         )
-
-        encoding_input = torch.cat(
-            [encoding_ego, encoding_neighbors, encoding_static, encoding_lanes], dim=1
+        encoding_route, route_mask, route_pos = self.lane_encoder(
+            route, route_speed_limit, route_has_speed_limit
         )
 
-        encoding_mask = torch.cat([ego_mask, neighbors_mask, static_mask, lanes_mask], dim=1).view(
+        encoding_input = torch.cat(
+            [encoding_ego, encoding_neighbors, encoding_static, encoding_lanes, encoding_route], dim=1
+        )
+
+        encoding_mask = torch.cat([ego_mask, neighbors_mask, static_mask, lanes_mask, route_mask], dim=1).view(
             -1
         )
 
-        encoding_pos = torch.cat([ego_pos, neighbor_pos, static_pos, lane_pos], dim=1).view(
+        encoding_pos = torch.cat([ego_pos, neighbor_pos, static_pos, lane_pos, route_pos], dim=1).view(
             B * self.token_num, -1
         )
         encoding_pos = self.pos_emb(encoding_pos[~encoding_mask])
