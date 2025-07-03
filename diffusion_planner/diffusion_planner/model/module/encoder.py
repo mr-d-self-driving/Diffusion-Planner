@@ -5,6 +5,29 @@ from timm.models.layers import Mlp
 
 from diffusion_planner.model.module.mixer import MixerBlock
 
+CLASS_TYPE_EGO = 0
+CLASS_TYPE_NEIGHBOR = 1
+CLASS_TYPE_STATIC = 2
+CLASS_TYPE_LANE = 3
+CLASS_TYPE_ROUTE = 4
+CLASS_TYPE_NUM = 5
+
+
+def add_class_type(x, class_type):
+    """
+    Add class type to the input tensor.
+    Args:
+        x: Tensor of shape (B, T, D=4) where D=4 represents (x, y, cos, sin)
+        class_type: Class type to add (int)
+    Returns:
+        x: Tensor with class type added at the end
+    """
+    B, T, D = x.shape
+    assert D == 4, "Input tensor must have 4 features (x, y, cos, sin)"
+    class_type_tensor = torch.zeros((B, T, CLASS_TYPE_NUM), device=x.device)
+    class_type_tensor[..., class_type] = 1.0
+    return torch.cat([x, class_type_tensor], dim=-1)
+
 
 class Encoder(nn.Module):
     def __init__(self, config):
@@ -12,35 +35,42 @@ class Encoder(nn.Module):
 
         self.hidden_dim = config.hidden_dim
 
+        ego_num = 1
         self.token_num = (
-            1 + config.agent_num + config.static_objects_num + config.lane_num + config.route_num
+            ego_num
+            + config.agent_num
+            + config.static_objects_num
+            + config.lane_num
+            + config.route_num
         )
 
-        self.ego_encoder = EgoFusionEncoder(
+        self.ego_encoder = EgoEncoder(
             config.time_len,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
             depth=config.encoder_depth,
         )
-        self.neighbor_encoder = AgentFusionEncoder(
+        self.neighbor_encoder = NeighborEncoder(
             config.time_len,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
             depth=config.encoder_depth,
         )
-        self.static_encoder = StaticFusionEncoder(
+        self.static_encoder = StaticEncoder(
             config.static_objects_state_dim,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
         )
-        self.lane_encoder = LaneFusionEncoder(
+        self.lane_encoder = LaneEncoder(
             config.lane_len,
+            class_type=CLASS_TYPE_LANE,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
             depth=config.encoder_depth,
         )
-        self.route_encoder = LaneFusionEncoder(
+        self.route_encoder = LaneEncoder(
             config.route_len,
+            class_type=CLASS_TYPE_ROUTE,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
             depth=config.encoder_depth,
@@ -55,7 +85,7 @@ class Encoder(nn.Module):
         )
 
         # position embedding encode x, y, cos, sin, type
-        self.pos_emb = nn.Linear(7, config.hidden_dim)
+        self.pos_emb = nn.Linear(4 + CLASS_TYPE_NUM, config.hidden_dim)
 
     def forward(self, inputs):
         encoder_outputs = {}
@@ -87,21 +117,22 @@ class Encoder(nn.Module):
         encoding_lanes, lanes_mask, lane_pos = self.lane_encoder(
             lanes, lanes_speed_limit, lanes_has_speed_limit
         )
-        encoding_route, route_mask, route_pos = self.lane_encoder(
+        encoding_route, route_mask, route_pos = self.route_encoder(
             route, route_speed_limit, route_has_speed_limit
         )
 
         encoding_input = torch.cat(
-            [encoding_ego, encoding_neighbors, encoding_static, encoding_lanes, encoding_route], dim=1
+            [encoding_ego, encoding_neighbors, encoding_static, encoding_lanes, encoding_route],
+            dim=1,
         )
 
-        encoding_mask = torch.cat([ego_mask, neighbors_mask, static_mask, lanes_mask, route_mask], dim=1).view(
-            -1
-        )
+        encoding_mask = torch.cat(
+            [ego_mask, neighbors_mask, static_mask, lanes_mask, route_mask], dim=1
+        ).view(-1)
 
-        encoding_pos = torch.cat([ego_pos, neighbor_pos, static_pos, lane_pos, route_pos], dim=1).view(
-            B * self.token_num, -1
-        )
+        encoding_pos = torch.cat(
+            [ego_pos, neighbor_pos, static_pos, lane_pos, route_pos], dim=1
+        ).view(B * self.token_num, -1)
         encoding_pos = self.pos_emb(encoding_pos[~encoding_mask])
         encoding_pos_result = torch.zeros(
             (B * self.token_num, self.hidden_dim), device=encoding_pos.device
@@ -137,7 +168,7 @@ class SelfAttentionBlock(nn.Module):
         return x
 
 
-class EgoFusionEncoder(nn.Module):
+class EgoEncoder(nn.Module):
     def __init__(
         self,
         time_len,
@@ -186,11 +217,8 @@ class EgoFusionEncoder(nn.Module):
         """
         B, T, D = x.shape
         pos = x[:, -1].clone()  # (B, D=4[x, y, cos, sin])
-        # ego: [1,0,0]
-        class_type = torch.zeros((B, 3), device=x.device)
-        pos = torch.cat([pos, class_type], dim=-1)  # (B, T, D=7[x, y, cos, sin, type(3)])
-        pos[..., -3] = 1.0
-        pos = pos.unsqueeze(1)  # (B, 1, D=7)
+        pos = pos.unsqueeze(1)  # (B, 1, D=4)
+        pos = add_class_type(pos, CLASS_TYPE_EGO)
 
         mask = torch.zeros((B, 1), dtype=torch.bool, device=x.device)
 
@@ -210,7 +238,7 @@ class EgoFusionEncoder(nn.Module):
         return x, mask, pos
 
 
-class AgentFusionEncoder(nn.Module):
+class NeighborEncoder(nn.Module):
     def __init__(
         self,
         time_len,
@@ -262,10 +290,8 @@ class AgentFusionEncoder(nn.Module):
         neighbor_type = x[:, :, -1, 8:]
         x = x[..., :8]
 
-        pos = x[:, :, -1, :7].clone()  # x, y, cos, sin
-        # neighbor: [1,0,0]
-        pos[..., -3:] = 0.0
-        pos[..., -3] = 1.0
+        pos = x[:, :, -1, :4].clone()  # x, y, cos, sin
+        pos = add_class_type(pos, CLASS_TYPE_NEIGHBOR)
 
         B, P, V, _ = x.shape
         mask_v = torch.sum(torch.ne(x[..., :8], 0), dim=-1).to(x.device) == 0
@@ -299,7 +325,7 @@ class AgentFusionEncoder(nn.Module):
         return x_result.view(B, P, -1), mask_p.reshape(B, -1), pos.view(B, P, -1)
 
 
-class StaticFusionEncoder(nn.Module):
+class StaticEncoder(nn.Module):
     def __init__(self, dim, drop_path_rate=0.3, hidden_dim=192, device="cuda"):
         super().__init__()
 
@@ -319,10 +345,8 @@ class StaticFusionEncoder(nn.Module):
         """
         B, P, _ = x.shape
 
-        pos = x[:, :, :7].clone()  # x, y, cos, sin
-        # static: [0,1,0]
-        pos[..., -3:] = 0.0
-        pos[..., -2] = 1.0
+        pos = x[:, :, :4].clone()  # x, y, cos, sin
+        pos = add_class_type(pos, CLASS_TYPE_STATIC)
 
         x_result = torch.zeros((B * P, self._hidden_dim), device=x.device)
 
@@ -339,10 +363,11 @@ class StaticFusionEncoder(nn.Module):
         return x_result.view(B, P, -1), mask_p.view(B, P), pos.view(B, P, -1)
 
 
-class LaneFusionEncoder(nn.Module):
+class LaneEncoder(nn.Module):
     def __init__(
         self,
         lane_len,
+        class_type,
         drop_path_rate=0.3,
         hidden_dim=192,
         depth=3,
@@ -351,7 +376,12 @@ class LaneFusionEncoder(nn.Module):
     ):
         super().__init__()
 
+        assert class_type in [CLASS_TYPE_LANE, CLASS_TYPE_ROUTE], (
+            "Invalid class type for LaneEncoder"
+        )
+
         self._lane_len = lane_len
+        self._class_type = class_type
         self._channel = channels_mlp_dim
 
         self.speed_limit_emb = nn.Linear(1, channels_mlp_dim)
@@ -395,13 +425,11 @@ class LaneFusionEncoder(nn.Module):
         traffic = x[:, :, 0, 8:]
         x = x[..., :8]
 
-        pos = x[:, :, int(self._lane_len / 2), :7].clone()  # x, y, x'-x, y'-y
+        pos = x[:, :, int(self._lane_len / 2), :4].clone()  # x, y, x'-x, y'-y
         heading = torch.atan2(pos[..., 3], pos[..., 2])
         pos[..., 2] = torch.cos(heading)
         pos[..., 3] = torch.sin(heading)
-        # lane: [0,0,1]
-        pos[..., -3:] = 0.0
-        pos[..., -1] = 1.0
+        pos = add_class_type(pos, self._class_type)
 
         B, P, V, _ = x.shape
         mask_v = torch.sum(torch.ne(x[..., :8], 0), dim=-1).to(x.device) == 0
