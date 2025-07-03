@@ -62,7 +62,7 @@ class ONNXWrapper(nn.Module):
             "route_lanes": route_lanes,
         }
         encoder_outputs, decoder_outputs = self.model(inputs)
-        return decoder_outputs
+        return decoder_outputs["prediction"], decoder_outputs["turn_indicator_logit"]
 
 
 def create_input(input_dict, input_type="onnx"):
@@ -89,12 +89,26 @@ def create_input(input_dict, input_type="onnx"):
 
 
 def compare_outputs(torch_output, onnx_output):
-    print(f"torch output, with shape {torch_output.shape}:")
-    print(f"onnx output, with shape {onnx_output[0].shape}:")
-    abs_diff = np.abs(torch_output - onnx_output[0])
-    print(f"Max diff: {abs_diff.max()}")
-    print(f"Mean diff: {abs_diff.mean()}")
-    print(f"Close? {np.allclose(torch_output, onnx_output[0], rtol=1e-03, atol=1e-05)}")
+    torch_prediction, torch_turn_indicator = torch_output
+    onnx_prediction, onnx_turn_indicator = onnx_output
+
+    print(f"Prediction comparison:")
+    print(f"torch prediction, with shape {torch_prediction.shape}:")
+    print(f"onnx prediction, with shape {onnx_prediction.shape}:")
+    abs_diff_pred = np.abs(torch_prediction - onnx_prediction)
+    print(f"Max diff: {abs_diff_pred.max()}")
+    print(f"Mean diff: {abs_diff_pred.mean()}")
+    print(f"Close? {np.allclose(torch_prediction, onnx_prediction, rtol=1e-03, atol=1e-05)}")
+
+    print(f"\nTurn indicator comparison:")
+    print(f"torch turn_indicator, with shape {torch_turn_indicator.shape}:")
+    print(f"onnx turn_indicator, with shape {onnx_turn_indicator.shape}:")
+    abs_diff_turn = np.abs(torch_turn_indicator - onnx_turn_indicator)
+    print(f"Max diff: {abs_diff_turn.max()}")
+    print(f"Mean diff: {abs_diff_turn.mean()}")
+    print(
+        f"Close? {np.allclose(torch_turn_indicator, onnx_turn_indicator, rtol=1e-03, atol=1e-05)}"
+    )
 
 
 if __name__ == "__main__":
@@ -177,7 +191,7 @@ if __name__ == "__main__":
             torch_input_tuple,
             onnx_path,
             input_names=input_names,
-            output_names=["output"],
+            output_names=["prediction", "turn_indicator_logit"],
             # dynamic_axes=None,
             dynamic_axes={name: {0: "batch"} for name in input_names},  # optional, but useful
             opset_version=20,
@@ -185,7 +199,7 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         output = wrapper(*torch_input_tuple)
-        torch_output = output["prediction"].cpu().numpy()
+        torch_output = (output[0].cpu().numpy(), output[1].cpu().numpy())
 
     sess_options = ort.SessionOptions()
     # sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
@@ -211,7 +225,7 @@ if __name__ == "__main__":
     torch_input_tuple = create_input(sample_input, "torch")
     with torch.no_grad():
         output = wrapper(*torch_input_tuple)
-        torch_output = output["prediction"].cpu().numpy()
+        torch_output = (output[0].cpu().numpy(), output[1].cpu().numpy())
     onnx_inputs = create_input(sample_input, "onnx")
     onnx_output = ort_session.run(None, onnx_inputs)
 
