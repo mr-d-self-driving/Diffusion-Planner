@@ -17,6 +17,7 @@ class DiffusionPlannerData(Dataset):
     def __getitem__(self, idx):
         data = np.load(self.data_list[idx], allow_pickle=True)
 
+        ego_agent_past = data["ego_agent_past"].astype(np.float32)
         ego_current_state = data["ego_current_state"]
         ego_agent_future = data["ego_agent_future"].astype(np.float32)
 
@@ -36,6 +37,7 @@ class DiffusionPlannerData(Dataset):
         turn_indicator = data["turn_indicator"]
 
         data = {
+            "ego_agent_past": ego_agent_past,
             "ego_current_state": ego_current_state,
             "ego_future_gt": ego_agent_future,
             "neighbor_agents_past": neighbor_agents_past,
