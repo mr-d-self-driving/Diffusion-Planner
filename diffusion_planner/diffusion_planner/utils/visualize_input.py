@@ -277,7 +277,7 @@ def visualize_inputs(
         color = get_traffic_light_color(traffic_light)
 
         # center line
-        ax.plot(lanes[i, :, 0], lanes[i, :, 1], alpha=0.1, linewidth=1, color=color)
+        # ax.plot(lanes[i, :, 0], lanes[i, :, 1], alpha=0.1, linewidth=1, color=color)
 
         # left right lane boundaries
         lx = lanes[i, :, 0] + lanes[i, :, 4]
@@ -311,15 +311,9 @@ def visualize_inputs(
             route_lanes[i, :, 1],
             alpha=0.5,
             linewidth=2,
-            color=color,
+            color="olive",
+            linestyle="--",
         )
-        # left right lane boundaries
-        lx = route_lanes[i, :, 0] + route_lanes[i, :, 4]
-        ly = route_lanes[i, :, 1] + route_lanes[i, :, 5]
-        ax.plot(lx, ly, alpha=0.5, linewidth=2, color=color)
-        rx = route_lanes[i, :, 0] + route_lanes[i, :, 6]
-        ry = route_lanes[i, :, 1] + route_lanes[i, :, 7]
-        ax.plot(rx, ry, alpha=0.5, linewidth=2, color=color)
 
         # print speed limit
         # ax.text(
