@@ -265,7 +265,7 @@ def visualize_inputs(
             return "red"
         elif traffic_light[3] == 1:
             return "gray"
-        return "gray"
+        return "purple"
 
     # ==== Lanes ====
     lanes = inputs["lanes"][0]  # Use the first sample in the batch
