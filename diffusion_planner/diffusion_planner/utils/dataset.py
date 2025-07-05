@@ -39,7 +39,7 @@ class DiffusionPlannerData(Dataset):
         goal_pose = data["goal_pose"]
 
         # wheel_base, length, width
-        ego_shape = np.array([2.75, 4.34, 1.70])
+        ego_shape = np.array([2.75, 4.34, 1.70], dtype=np.float32)
 
         data = {
             "ego_agent_past": ego_agent_past,
