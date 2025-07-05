@@ -167,9 +167,7 @@ def model_training(args):
             time = datetime.now()
             time = time.strftime("%Y%m%d-%H%M%S")
 
-            save_path = (
-                f"{args.save_dir}/training_log/diffusion-planner-training/{time}_{args.exp_name}/"
-            )
+            save_path = f"{args.save_dir}/{time}_{args.exp_name}/"
             os.makedirs(save_path, exist_ok=True)
 
         # Save args
