@@ -44,11 +44,14 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
             "route_lanes_speed_limit": batch[9].to(device),
             "route_lanes_has_speed_limit": batch[10].to(device),
             "static_objects": batch[11].to(device),
+            "goal_pose": batch[13].to(args.device),
+            "ego_shape": batch[14].to(args.device),
         }
 
         B = inputs["ego_current_state"].shape[0]
 
         inputs["ego_agent_past"] = heading_to_cos_sin(inputs["ego_agent_past"])
+        inputs["goal_pose"] = heading_to_cos_sin(inputs["goal_pose"])
 
         ego_future = batch[2].to(device)
         ego_future = heading_to_cos_sin(ego_future)  # (B, T, 4)

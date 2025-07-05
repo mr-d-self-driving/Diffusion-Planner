@@ -19,7 +19,8 @@ def heading_to_cos_sin(x):
     return torch.cat(
         [
             x[..., :2],
-            torch.stack([x[..., 2].cos(), x[..., 2].sin()], dim=-1),
+            x[..., 2:3].cos(),
+            x[..., 2:3].sin(),
         ],
         dim=-1,
     )
@@ -69,9 +70,12 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
                 "route_lanes_has_speed_limit": batch[10].to(args.device),
                 "static_objects": batch[11].to(args.device),
                 "turn_indicator": batch[12].to(args.device),
+                "goal_pose": batch[13].to(args.device),
+                "ego_shape": batch[14].to(args.device),
             }
 
             inputs["ego_agent_past"] = heading_to_cos_sin(inputs["ego_agent_past"])
+            inputs["goal_pose"] = heading_to_cos_sin(inputs["goal_pose"])
 
             ego_future = batch[2].to(args.device)
             neighbors_future = batch[4].to(args.device)

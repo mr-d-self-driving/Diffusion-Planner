@@ -36,6 +36,11 @@ class DiffusionPlannerData(Dataset):
 
         turn_indicator = data["turn_indicator"]
 
+        goal_pose = data["goal_pose"]
+
+        # wheel_base, length, width
+        ego_shape = np.array([2.75, 4.34, 1.70])
+
         data = {
             "ego_agent_past": ego_agent_past,
             "ego_current_state": ego_current_state,
@@ -50,6 +55,8 @@ class DiffusionPlannerData(Dataset):
             "route_lanes_has_speed_limit": route_lanes_has_speed_limit,
             "static_objects": static_objects,
             "turn_indicator": turn_indicator,
+            "goal_pose": goal_pose,
+            "ego_shape": ego_shape,
         }
 
         return tuple(data.values())

@@ -34,5 +34,9 @@
   "route_lanes_speed_limit": {
     "mean": [0],
     "std": [20]
+  },
+  "goal_pose": {
+    "mean": [10, 0, 0, 0],
+    "std": [20, 20, 1, 1]
   }
 }
