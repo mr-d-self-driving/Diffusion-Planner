@@ -10,7 +10,8 @@ CLASS_TYPE_NEIGHBOR = 1
 CLASS_TYPE_STATIC = 2
 CLASS_TYPE_LANE = 3
 CLASS_TYPE_ROUTE = 4
-CLASS_TYPE_NUM = 5
+CLASS_TYPE_GOAL_POSE = 5
+CLASS_TYPE_NUM = 6
 
 
 def add_class_type(x, class_type):
@@ -36,12 +37,14 @@ class Encoder(nn.Module):
         self.hidden_dim = config.hidden_dim
 
         ego_num = 1
+        goal_pose_num = 1
         self.token_num = (
             ego_num
             + config.agent_num
             + config.static_objects_num
             + config.lane_num
             + config.route_num
+            + goal_pose_num
         )
 
         self.ego_encoder = EgoEncoder(
@@ -71,6 +74,11 @@ class Encoder(nn.Module):
         self.route_encoder = LaneEncoder(
             config.route_len,
             class_type=CLASS_TYPE_ROUTE,
+            drop_path_rate=config.encoder_drop_path_rate,
+            hidden_dim=config.hidden_dim,
+            depth=config.encoder_depth,
+        )
+        self.goal_pose_encoder = GoalPoseEncoder(
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
             depth=config.encoder_depth,
@@ -109,6 +117,9 @@ class Encoder(nn.Module):
         route_speed_limit = inputs["route_lanes_speed_limit"]  # (B, P=25, V=20, D=1)
         route_has_speed_limit = inputs["route_lanes_has_speed_limit"]  # (B, P=25, V=20, D=1)
 
+        # goal pose
+        goal_pose = inputs["goal_pose"]  # (B, D=4)
+
         B = neighbors.shape[0]
 
         encoding_ego, ego_mask, ego_pos = self.ego_encoder(ego)
@@ -120,18 +131,26 @@ class Encoder(nn.Module):
         encoding_route, route_mask, route_pos = self.route_encoder(
             route, route_speed_limit, route_has_speed_limit
         )
+        encoding_goal_pose, goal_pose_mask, goal_pose_pos = self.goal_pose_encoder(goal_pose)
 
         encoding_input = torch.cat(
-            [encoding_ego, encoding_neighbors, encoding_static, encoding_lanes, encoding_route],
+            [
+                encoding_ego,
+                encoding_neighbors,
+                encoding_static,
+                encoding_lanes,
+                encoding_route,
+                encoding_goal_pose,
+            ],
             dim=1,
         )
 
         encoding_mask = torch.cat(
-            [ego_mask, neighbors_mask, static_mask, lanes_mask, route_mask], dim=1
+            [ego_mask, neighbors_mask, static_mask, lanes_mask, route_mask, goal_pose_mask], dim=1
         ).view(-1)
 
         encoding_pos = torch.cat(
-            [ego_pos, neighbor_pos, static_pos, lane_pos, route_pos], dim=1
+            [ego_pos, neighbor_pos, static_pos, lane_pos, route_pos, goal_pose_pos], dim=1
         ).view(B * self.token_num, -1)
         encoding_pos = self.pos_emb(encoding_pos[~encoding_mask])
         encoding_pos_result = torch.zeros(
@@ -483,6 +502,51 @@ class LaneEncoder(nn.Module):
         x_result[valid_indices] = x  # Fill in valid parts
 
         return x_result.view(B, P, -1), mask_p.reshape(B, -1), pos.view(B, P, -1)
+
+
+class GoalPoseEncoder(nn.Module):
+    def __init__(self, drop_path_rate, hidden_dim, depth):
+        super().__init__()
+        tokens_mlp_dim = 64
+        channels_mlp_dim = 128
+
+        self._hidden_dim = hidden_dim
+        self._channel = channels_mlp_dim
+
+        self.channel_pre_project = Mlp(
+            in_features=4,
+            hidden_features=channels_mlp_dim,
+            out_features=channels_mlp_dim,
+            act_layer=nn.GELU,
+            drop=0.0,
+        )
+
+        self.norm = nn.LayerNorm(channels_mlp_dim)
+        self.emb_project = Mlp(
+            in_features=channels_mlp_dim,
+            hidden_features=hidden_dim,
+            out_features=hidden_dim,
+            act_layer=nn.GELU,
+            drop=drop_path_rate,
+        )
+
+    def forward(self, x):
+        """
+        x: B, D=4 (x, y, cos, sin)
+        """
+        B, D = x.shape
+        pos = x.clone()  # (B, D=4[x, y, cos, sin])
+        pos = pos.unsqueeze(1)  # (B, 1, D=4)
+        pos = add_class_type(pos, CLASS_TYPE_GOAL_POSE)
+
+        mask = torch.zeros((B, 1), dtype=torch.bool, device=x.device)
+
+        x = self.channel_pre_project(x)  # (B, C=channels_mlp_dim)
+        x = x.unsqueeze(1)  # (B, 1, C=channels_mlp_dim)
+
+        x = self.emb_project(self.norm(x))  # (B, 1, hidden_dim)
+
+        return x, mask, pos
 
 
 class FusionEncoder(nn.Module):
