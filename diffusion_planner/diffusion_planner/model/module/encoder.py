@@ -11,7 +11,8 @@ CLASS_TYPE_STATIC = 2
 CLASS_TYPE_LANE = 3
 CLASS_TYPE_ROUTE = 4
 CLASS_TYPE_GOAL_POSE = 5
-CLASS_TYPE_NUM = 6
+CLASS_TYPE_EGO_SHAPE = 6
+CLASS_TYPE_NUM = 7
 
 
 def add_class_type(x, class_type):
@@ -38,6 +39,7 @@ class Encoder(nn.Module):
 
         ego_num = 1
         goal_pose_num = 1
+        ego_shape_num = 1
         self.token_num = (
             ego_num
             + config.agent_num
@@ -45,6 +47,7 @@ class Encoder(nn.Module):
             + config.lane_num
             + config.route_num
             + goal_pose_num
+            + ego_shape_num
         )
 
         self.ego_encoder = EgoEncoder(
@@ -79,6 +82,11 @@ class Encoder(nn.Module):
             depth=config.encoder_depth,
         )
         self.goal_pose_encoder = GoalPoseEncoder(
+            drop_path_rate=config.encoder_drop_path_rate,
+            hidden_dim=config.hidden_dim,
+            depth=config.encoder_depth,
+        )
+        self.ego_shape_encoder = EgoShapeEncoder(
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
             depth=config.encoder_depth,
@@ -120,6 +128,9 @@ class Encoder(nn.Module):
         # goal pose
         goal_pose = inputs["goal_pose"]  # (B, D=4)
 
+        # ego shape
+        ego_shape = inputs["ego_shape"]  # (B, D=3)
+
         B = neighbors.shape[0]
 
         encoding_ego, ego_mask, ego_pos = self.ego_encoder(ego)
@@ -132,6 +143,7 @@ class Encoder(nn.Module):
             route, route_speed_limit, route_has_speed_limit
         )
         encoding_goal_pose, goal_pose_mask, goal_pose_pos = self.goal_pose_encoder(goal_pose)
+        encoding_ego_shape, ego_shape_mask, ego_shape_pos = self.ego_shape_encoder(ego_shape)
 
         encoding_input = torch.cat(
             [
@@ -141,16 +153,27 @@ class Encoder(nn.Module):
                 encoding_lanes,
                 encoding_route,
                 encoding_goal_pose,
+                encoding_ego_shape,
             ],
             dim=1,
         )
 
         encoding_mask = torch.cat(
-            [ego_mask, neighbors_mask, static_mask, lanes_mask, route_mask, goal_pose_mask], dim=1
+            [
+                ego_mask,
+                neighbors_mask,
+                static_mask,
+                lanes_mask,
+                route_mask,
+                goal_pose_mask,
+                ego_shape_mask,
+            ],
+            dim=1,
         ).view(-1)
 
         encoding_pos = torch.cat(
-            [ego_pos, neighbor_pos, static_pos, lane_pos, route_pos, goal_pose_pos], dim=1
+            [ego_pos, neighbor_pos, static_pos, lane_pos, route_pos, goal_pose_pos, ego_shape_pos],
+            dim=1,
         ).view(B * self.token_num, -1)
         encoding_pos = self.pos_emb(encoding_pos[~encoding_mask])
         encoding_pos_result = torch.zeros(
@@ -538,6 +561,52 @@ class GoalPoseEncoder(nn.Module):
         pos = x.clone()  # (B, D=4[x, y, cos, sin])
         pos = pos.unsqueeze(1)  # (B, 1, D=4)
         pos = add_class_type(pos, CLASS_TYPE_GOAL_POSE)
+
+        mask = torch.zeros((B, 1), dtype=torch.bool, device=x.device)
+
+        x = self.channel_pre_project(x)  # (B, C=channels_mlp_dim)
+        x = x.unsqueeze(1)  # (B, 1, C=channels_mlp_dim)
+
+        x = self.emb_project(self.norm(x))  # (B, 1, hidden_dim)
+
+        return x, mask, pos
+
+
+class EgoShapeEncoder(nn.Module):
+    def __init__(self, drop_path_rate, hidden_dim, depth):
+        super().__init__()
+        tokens_mlp_dim = 64
+        channels_mlp_dim = 128
+
+        self._hidden_dim = hidden_dim
+        self._channel = channels_mlp_dim
+
+        self.channel_pre_project = Mlp(
+            in_features=3,
+            hidden_features=channels_mlp_dim,
+            out_features=channels_mlp_dim,
+            act_layer=nn.GELU,
+            drop=0.0,
+        )
+
+        self.norm = nn.LayerNorm(channels_mlp_dim)
+        self.emb_project = Mlp(
+            in_features=channels_mlp_dim,
+            hidden_features=hidden_dim,
+            out_features=hidden_dim,
+            act_layer=nn.GELU,
+            drop=drop_path_rate,
+        )
+
+    def forward(self, x):
+        """
+        x: B, D=3 (wheel_base, ego_length, ego_width)
+        """
+        B, D = x.shape
+        pos = torch.zeros((B, 4), device=x.device)  # (B, D=4[x, y, cos, sin])
+        pos[:, 2] = 1.0  # cos(0) = 1
+        pos = pos.unsqueeze(1)  # (B, 1, D=4)
+        pos = add_class_type(pos, CLASS_TYPE_EGO_SHAPE)
 
         mask = torch.zeros((B, 1), dtype=torch.bool, device=x.device)
 
