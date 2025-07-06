@@ -84,12 +84,10 @@ class Encoder(nn.Module):
         self.goal_pose_encoder = GoalPoseEncoder(
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
-            depth=config.encoder_depth,
         )
         self.ego_shape_encoder = EgoShapeEncoder(
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
-            depth=config.encoder_depth,
         )
 
         self.fusion = FusionEncoder(
@@ -97,7 +95,6 @@ class Encoder(nn.Module):
             num_heads=config.num_heads,
             drop_path_rate=config.encoder_drop_path_rate,
             depth=config.encoder_depth,
-            device=config.device,
         )
 
         # position embedding encode x, y, cos, sin, type
@@ -191,8 +188,9 @@ class Encoder(nn.Module):
 
 
 class SelfAttentionBlock(nn.Module):
-    def __init__(self, dim=192, heads=6, dropout=0.1, mlp_ratio=4.0):
+    def __init__(self, dim, heads, dropout):
         super().__init__()
+        mlp_ratio = 4.0
 
         self.norm1 = nn.LayerNorm(dim)
         self.attn = nn.MultiheadAttention(dim, heads, dropout, batch_first=True)
@@ -211,13 +209,7 @@ class SelfAttentionBlock(nn.Module):
 
 
 class EgoEncoder(nn.Module):
-    def __init__(
-        self,
-        time_len,
-        drop_path_rate,
-        hidden_dim,
-        depth,
-    ):
+    def __init__(self, time_len, drop_path_rate, hidden_dim, depth):
         super().__init__()
         tokens_mlp_dim = 64
         channels_mlp_dim = 128
@@ -281,16 +273,10 @@ class EgoEncoder(nn.Module):
 
 
 class NeighborEncoder(nn.Module):
-    def __init__(
-        self,
-        time_len,
-        drop_path_rate=0.3,
-        hidden_dim=192,
-        depth=3,
-        tokens_mlp_dim=64,
-        channels_mlp_dim=128,
-    ):
+    def __init__(self, time_len, drop_path_rate, hidden_dim, depth):
         super().__init__()
+        tokens_mlp_dim = 64
+        channels_mlp_dim = 128
 
         self._hidden_dim = hidden_dim
         self._channel = channels_mlp_dim
@@ -368,7 +354,7 @@ class NeighborEncoder(nn.Module):
 
 
 class StaticEncoder(nn.Module):
-    def __init__(self, dim, drop_path_rate=0.3, hidden_dim=192, device="cuda"):
+    def __init__(self, dim, drop_path_rate, hidden_dim):
         super().__init__()
 
         self._hidden_dim = hidden_dim
@@ -406,17 +392,10 @@ class StaticEncoder(nn.Module):
 
 
 class LaneEncoder(nn.Module):
-    def __init__(
-        self,
-        lane_len,
-        class_type,
-        drop_path_rate=0.3,
-        hidden_dim=192,
-        depth=3,
-        tokens_mlp_dim=64,
-        channels_mlp_dim=128,
-    ):
+    def __init__(self, lane_len, class_type, drop_path_rate, hidden_dim, depth):
         super().__init__()
+        tokens_mlp_dim = 64
+        channels_mlp_dim = 128
 
         assert class_type in [CLASS_TYPE_LANE, CLASS_TYPE_ROUTE], (
             "Invalid class type for LaneEncoder"
@@ -528,9 +507,8 @@ class LaneEncoder(nn.Module):
 
 
 class GoalPoseEncoder(nn.Module):
-    def __init__(self, drop_path_rate, hidden_dim, depth):
+    def __init__(self, drop_path_rate, hidden_dim):
         super().__init__()
-        tokens_mlp_dim = 64
         channels_mlp_dim = 128
 
         self._hidden_dim = hidden_dim
@@ -573,9 +551,8 @@ class GoalPoseEncoder(nn.Module):
 
 
 class EgoShapeEncoder(nn.Module):
-    def __init__(self, drop_path_rate, hidden_dim, depth):
+    def __init__(self, drop_path_rate, hidden_dim):
         super().__init__()
-        tokens_mlp_dim = 64
         channels_mlp_dim = 128
 
         self._hidden_dim = hidden_dim
@@ -619,7 +596,7 @@ class EgoShapeEncoder(nn.Module):
 
 
 class FusionEncoder(nn.Module):
-    def __init__(self, hidden_dim=192, num_heads=6, drop_path_rate=0.3, depth=3, device="cuda"):
+    def __init__(self, hidden_dim, num_heads, drop_path_rate, depth):
         super().__init__()
 
         dpr = drop_path_rate
