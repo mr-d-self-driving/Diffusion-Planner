@@ -326,9 +326,9 @@ def visualize_inputs(
 
     # ==== Goal Pose ====
     if "goal_pose" in inputs:
-        goal_x, goal_y, goal_yaw = inputs["goal_pose"][0]
-        goal_dx = 2 * np.cos(goal_yaw)
-        goal_dy = 2 * np.sin(goal_yaw)
+        goal_x, goal_y, goal_cos, goal_sin = inputs["goal_pose"][0]
+        goal_dx = 2 * goal_cos
+        goal_dy = 2 * goal_sin
         ax.arrow(
             goal_x,
             goal_y,
