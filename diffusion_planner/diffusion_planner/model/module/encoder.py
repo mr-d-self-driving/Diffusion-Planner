@@ -100,6 +100,11 @@ class Encoder(nn.Module):
         # position embedding encode x, y, cos, sin, type
         self.pos_emb = nn.Linear(4 + CLASS_TYPE_NUM, config.hidden_dim)
 
+        # positional embedding for route
+        self.route_position_embedding = nn.Parameter(
+            torch.randn(1, config.route_num, config.hidden_dim)
+        )
+
     def forward(self, inputs):
         encoder_outputs = {}
 
@@ -139,6 +144,16 @@ class Encoder(nn.Module):
         encoding_route, route_mask, route_pos = self.route_encoder(
             route, route_speed_limit, route_has_speed_limit
         )
+
+        # add positional embedding for route
+        route_num = encoding_route.shape[1]
+        route_position_emb = self.route_position_embedding[:, :route_num]  # (1, P, hidden_dim)
+        route_position_emb = route_position_emb.expand(B, -1, -1)  # (B, P, hidden_dim)
+        valid_route_mask = ~route_mask
+        encoding_route = (
+            encoding_route + route_position_emb * valid_route_mask.unsqueeze(-1).float()
+        )
+
         encoding_goal_pose, goal_pose_mask, goal_pose_pos = self.goal_pose_encoder(goal_pose)
         encoding_ego_shape, ego_shape_mask, ego_shape_pos = self.ego_shape_encoder(ego_shape)
 
@@ -376,15 +391,17 @@ class StaticEncoder(nn.Module):
         pos = x[:, :, :4].clone()  # x, y, cos, sin
         pos = add_class_type(pos, CLASS_TYPE_STATIC)
 
+        x_result = torch.zeros((B * P, self._hidden_dim), device=x.device)
+
         mask_p = torch.sum(torch.ne(x[..., :10], 0), dim=-1).to(x.device) == 0
-        valid_mask = ~mask_p.view(-1)
 
-        # Reshape and apply projection to all elements
-        x_flat = x.view(B * P, -1)
-        x_projected = self.projection(x_flat)
+        valid_indices = ~mask_p.view(-1)
 
-        # Apply mask to zero out invalid positions
-        x_result = x_projected * valid_mask.float().unsqueeze(-1)
+        if valid_indices.sum() > 0:
+            x = x.view(B * P, -1)
+            x = x[valid_indices]
+            x = self.projection(x)
+            x_result[valid_indices] = x
 
         return x_result.view(B, P, -1), mask_p.view(B, P), pos.view(B, P, -1)
 
@@ -453,11 +470,10 @@ class LaneEncoder(nn.Module):
         B, P, V, _ = x.shape
         mask_v = torch.sum(torch.ne(x[..., :8], 0), dim=-1).to(x.device) == 0
         mask_p = torch.sum(~mask_v, dim=-1) == 0
-        valid_indices = ~mask_p.view(-1)
-
         x = x.view(B * P, V, -1)
-        # Use torch.where instead of indexing to maintain fixed size
-        x = torch.where(valid_indices.view(-1, 1, 1), x, torch.zeros_like(x))
+
+        valid_indices = ~mask_p.view(-1)
+        x = x[valid_indices]
 
         x = self.channel_pre_project(x)
         x = x.permute(0, 2, 1)
@@ -473,23 +489,36 @@ class LaneEncoder(nn.Module):
         has_speed_limit = has_speed_limit.view(B * P, 1)
         traffic = traffic.view(B * P, -1)
 
-        # Create embeddings for all positions
-        speed_limit_emb = self.speed_limit_emb(speed_limit)
-        unknown_speed_emb = self.unknown_speed_emb(
-            torch.zeros(B * P, dtype=torch.long, device=x.device)
-        )
-        speed_limit_embedding = torch.where(has_speed_limit, speed_limit_emb, unknown_speed_emb)
+        # Apply embedding directly to valid speed limit data
+        has_speed_limit = has_speed_limit[valid_indices].squeeze(-1)
+        speed_limit = speed_limit[valid_indices].squeeze(-1)
+        speed_limit_embedding = torch.zeros((speed_limit.shape[0], self._channel), device=x.device)
 
-        # Process traffic lights for all positions
-        traffic_light_embedding = self.traffic_emb(traffic)
+        if has_speed_limit.sum() > 0:
+            speed_limit_with_limit = self.speed_limit_emb(
+                speed_limit[has_speed_limit].unsqueeze(-1)
+            )
+            speed_limit_embedding[has_speed_limit] = speed_limit_with_limit
+
+        if (~has_speed_limit).sum() > 0:
+            speed_limit_no_limit = self.unknown_speed_emb.weight.expand(
+                (~has_speed_limit).sum().item(), -1
+            )
+            speed_limit_embedding[~has_speed_limit] = speed_limit_no_limit
+
+        # Process traffic lights directly for valid positions
+        traffic = traffic[valid_indices]
+        traffic_light_embedding = self.traffic_emb(
+            traffic
+        )  # Traffic light embedding for valid data
 
         x = x + speed_limit_embedding + traffic_light_embedding
         x = self.emb_project(self.norm(x))
 
-        # Apply mask to zero out invalid positions
-        x = x * valid_indices.float().unsqueeze(-1)
+        x_result = torch.zeros((B * P, x.shape[-1]), device=x.device)
+        x_result[valid_indices] = x  # Fill in valid parts
 
-        return x.view(B, P, -1), mask_p.reshape(B, -1), pos.view(B, P, -1)
+        return x_result.view(B, P, -1), mask_p.reshape(B, -1), pos.view(B, P, -1)
 
 
 class GoalPoseEncoder(nn.Module):
