@@ -6,7 +6,6 @@ import numpy as np
 import onnxruntime as ort
 import torch
 import torch.nn as nn
-from onnx_compatible_transformer import *
 
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.utils.config import Config
@@ -173,11 +172,7 @@ if __name__ == "__main__":
     model.load_state_dict(new_state_dict)
 
     # Wrap model for onnx compatibility
-    if wrap_with_onnx:
-        onnx_safe_model = ONNXSafeModel(model).eval()
-        wrapper = ONNXWrapper(onnx_safe_model).eval()
-    else:
-        wrapper = ONNXWrapper(model).eval()
+    wrapper = ONNXWrapper(model).eval()
 
     # Prepare input
     torch_input_tuple = tuple(inputs.values())
