@@ -1,5 +1,5 @@
 <launch>
-  <arg name="model_dir" default="/media/shintarosakoda/5EA85517A854EF51/diffusion_planner_training_result/train_result/20250610-110759_with_psim_data/"/>
+  <arg name="model_dir" default="/media/shintarosakoda/5EA85517A854EF51/diffusion_planner_training_result/train_result/20250706-072322_add_goal_pose_and_ego_shape/"/>
 
   <node pkg="diffusion_planner_ros" exec="diffusion_planner_node" name="diffusion_planner_node_python" output="both">
     <param name="vector_map_path" value="$(var map_path)/lanelet2_map.osm"/>

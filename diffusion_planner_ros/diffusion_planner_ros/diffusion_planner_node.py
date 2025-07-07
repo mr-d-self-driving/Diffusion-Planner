@@ -36,10 +36,13 @@ from .utils import (
     convert_prediction_to_msg,
     convert_tracked_objects_to_tensor,
     create_current_ego_state,
+    create_ego_agent_past,
     filter_target_segments,
     get_nearest_msg,
     get_transform_matrix,
     parse_traffic_light_recognition,
+    pose_to_mat4x4,
+    rot3x3_to_heading_cos_sin,
     tracking_one_step,
 )
 from .visualization import (
@@ -104,6 +107,14 @@ class DiffusionPlannerNode(Node):
         # param(5) batch_size
         self.batch_size = self.declare_parameter("batch_size", value=1).value
         self.get_logger().info(f"Batch size: {self.batch_size}")
+
+        # param(6) ego_length
+        self.ego_length = self.declare_parameter("ego_length", value=4.34).value
+        self.get_logger().info(f"Ego length: {self.ego_length}")
+
+        # param(7) ego_width
+        self.ego_width = self.declare_parameter("ego_width", value=1.70).value
+        self.get_logger().info(f"Ego width: {self.ego_width}")
 
         ###############
         # Subscribers #
@@ -207,11 +218,17 @@ class DiffusionPlannerNode(Node):
         self.traffic_light_list = []
         self.route = None
         self.tracked_objs = {}  # object_id -> TrackingObject
+        self.ego_history = []  # Store ego positions for ego_agent_past
 
         self.get_logger().info("Diffusion Planner Node has been initialized")
 
     def cb_kinematic_state(self, msg):
         self.kinematic_state_list.append(msg)
+        # Keep ego history for ego_agent_past
+        self.ego_history.append(msg)
+        # Keep only last 21 timesteps (2.1 seconds at 10Hz)
+        if len(self.ego_history) > 21:
+            self.ego_history = self.ego_history[-21:]
 
     def cb_acceleration(self, msg):
         self.acceleration_list.append(msg)
@@ -254,6 +271,10 @@ class DiffusionPlannerNode(Node):
             curr_acceleration,
             self.wheel_base,
         ).to(dev)
+
+        # Create ego_agent_past
+        ego_agent_past = create_ego_agent_past(self.ego_history, map2bl_matrix_4x4).to(dev)
+
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Ego      : {elapsed_msec:.4f} msec")
@@ -315,25 +336,52 @@ class DiffusionPlannerNode(Node):
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Route    : {elapsed_msec:.4f} msec")
 
+        # Create goal pose from route message
+        # Transform goal pose from map to base_link frame
+        goal_pose_map_4x4 = pose_to_mat4x4(self.route.goal_pose)
+        goal_pose_bl_4x4 = map2bl_matrix_4x4 @ goal_pose_map_4x4
+
+        # Extract position and heading in base_link frame
+        x = goal_pose_bl_4x4[0, 3]
+        y = goal_pose_bl_4x4[1, 3]
+        cos, sin = rot3x3_to_heading_cos_sin(goal_pose_bl_4x4[0:3, 0:3])
+
+        goal_pose = torch.tensor(
+            [[x, y, cos, sin]],
+            dtype=torch.float32,
+            device=dev,
+        )
+
+        # Create ego shape
+        ego_shape = torch.tensor(
+            [[self.wheel_base, self.ego_length, self.ego_width]], dtype=torch.float32, device=dev
+        )
+
         # Inference
         input_dict = {
+            "ego_agent_past": ego_agent_past,
             "ego_current_state": ego_current_state,
             "neighbor_agents_past": neighbor,
             "lanes": lanes_tensor,
             "lanes_speed_limit": lanes_speed_limit,
             "lanes_has_speed_limit": lanes_has_speed_limit,
             "route_lanes": route_tensor,
-            # "route_lanes_speed_limit": route_speed_limit,
-            # "route_lanes_has_speed_limit": route_has_speed_limit,
+            "route_lanes_speed_limit": route_speed_limit,
+            "route_lanes_has_speed_limit": route_has_speed_limit,
             "static_objects": torch.zeros((1, 5, 10), device=dev),
+            "goal_pose": goal_pose,
+            "ego_shape": ego_shape,
         }
         if self.batch_size > 1:
             # copy the input dict for batch size
             for key in input_dict.keys():
-                s = input_dict[key].shape
-                ones = [1] * (len(s) - 1)
-                input_dict[key] = input_dict[key].repeat(self.batch_size, *ones)
-                input_dict[key] = input_dict[key]
+                if key == "turn_indicator":
+                    # Special handling for turn_indicator (1D tensor)
+                    input_dict[key] = input_dict[key].repeat(self.batch_size)
+                else:
+                    s = input_dict[key].shape
+                    ones = [1] * (len(s) - 1)
+                    input_dict[key] = input_dict[key].repeat(self.batch_size, *ones)
 
         input_dict = self.config_obj.observation_normalizer(input_dict)
 
