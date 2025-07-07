@@ -44,6 +44,7 @@ class ONNXWrapper(nn.Module):
 
     def forward(
         self,
+        ego_agent_past,
         ego_current_state,
         neighbor_agents_past,
         static_objects,
@@ -53,6 +54,7 @@ class ONNXWrapper(nn.Module):
         route_lanes,
     ):
         inputs = {
+            "ego_agent_past": ego_agent_past,
             "ego_current_state": ego_current_state,
             "neighbor_agents_past": neighbor_agents_past,
             "static_objects": static_objects,
@@ -66,8 +68,10 @@ class ONNXWrapper(nn.Module):
 
 
 def create_input(input_dict, input_type="onnx"):
+    print(f"{input_dict.keys()=}")
     if input_type == "onnx":
         return {
+            "ego_agent_past": input_dict["ego_current_state"].cpu().numpy(),
             "ego_current_state": input_dict["ego_current_state"].cpu().numpy(),
             "neighbor_agents_past": input_dict["neighbor_agents_past"].cpu().numpy(),
             "static_objects": input_dict["static_objects"].cpu().numpy(),
@@ -75,9 +79,12 @@ def create_input(input_dict, input_type="onnx"):
             "lanes_speed_limit": input_dict["lanes_speed_limit"].cpu().numpy(),
             "lanes_has_speed_limit": input_dict["lanes_has_speed_limit"].cpu().numpy(),
             "route_lanes": input_dict["route_lanes"].cpu().numpy(),
+            "route_lanes_speed_limit": input_dict["route_lanes_speed_limit"].cpu().numpy(),
+            "route_lanes_has_speed_limit": input_dict["route_lanes_has_speed_limit"].cpu().numpy(),
         }
     elif input_type == "torch":
         return (
+            input_dict["ego_agent_past"],
             input_dict["ego_current_state"],
             input_dict["neighbor_agents_past"],
             input_dict["static_objects"],
@@ -85,6 +92,8 @@ def create_input(input_dict, input_type="onnx"):
             input_dict["lanes_speed_limit"],
             input_dict["lanes_has_speed_limit"],
             input_dict["route_lanes"],
+            input_dict["route_lanes_speed_limit"],
+            input_dict["route_lanes_has_speed_limit"],
         )
 
 
@@ -130,18 +139,18 @@ if __name__ == "__main__":
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    # # Dummy inputs
-    # dummy_inputs = {
-    #     'ego_current_state': torch.tensor(np.random.randn(10).astype(np.float32)).unsqueeze(0),
-    #     'neighbor_agents_past': torch.tensor(np.random.randn(32, 21, 11).astype(np.float32)).unsqueeze(0),
-    #     'static_objects': torch.tensor(np.random.randn(5, 10).astype(np.float32)).unsqueeze(0),
-    #     'lanes': torch.tensor(np.random.randn(70, 20, 12).astype(np.float32)).unsqueeze(0),
-    #     'lanes_speed_limit': torch.tensor(np.random.randn(70, 1).astype(np.float32)).unsqueeze(0),
-    #     'lanes_has_speed_limit': torch.tensor(np.random.randn(70, 1).astype(np.bool_)).unsqueeze(0),
-    #     'route_lanes': torch.tensor(np.random.randn(25, 20, 12).astype(np.float32)).unsqueeze(0),
-    # }
+    sample_input_file = np.load(sample_input_path)
+    dummy_inputs = {}
+    for key in sample_input_file.keys():
+        if key == "map_name":
+            continue
+        print(f"{key=}")
+        dummy_inputs[key] = torch.tensor(sample_input_file[key], dtype=torch.float32).unsqueeze(0)
+        print(f"{dummy_inputs[key].shape}, {dummy_inputs[key].dtype=}, {dummy_inputs[key].device=}")
 
+    # Dummy inputs
     dummy_inputs = {
+        "ego_agent_past": torch.full((1, 21, 3), 0.5, dtype=torch.float32),
         "ego_current_state": torch.full((1, 10), 0.5, dtype=torch.float32),
         "neighbor_agents_past": torch.full((1, 32, 21, 11), 0.5, dtype=torch.float32),
         "static_objects": torch.full((1, 5, 10), 0.5, dtype=torch.float32),
@@ -149,17 +158,11 @@ if __name__ == "__main__":
         "lanes_speed_limit": torch.full((1, 70, 1), 0.5, dtype=torch.float32),
         "lanes_has_speed_limit": torch.full((1, 70, 1), True, dtype=torch.bool),
         "route_lanes": torch.full((1, 25, 20, 12), 0.5, dtype=torch.float32),
+        "route_lanes_speed_limit": torch.full((1, 25, 1), 0.5, dtype=torch.float32),
+        "route_lanes_has_speed_limit": torch.full((1, 25, 1), True, dtype=torch.bool),
     }
 
-    input_names = [
-        "ego_current_state",
-        "neighbor_agents_past",
-        "static_objects",
-        "lanes",
-        "lanes_speed_limit",
-        "lanes_has_speed_limit",
-        "route_lanes",
-    ]
+    input_names = list(dummy_inputs.keys())
 
     # Export
     # Init model
@@ -214,7 +217,6 @@ if __name__ == "__main__":
 
     # TEST WITH SAMPLE INPUT
     # Load the sample input
-    sample_input_file = np.load(sample_input_path)
     sample_input = {}
     for key in input_names:
         sample_input[key] = torch.tensor(sample_input_file[key]).unsqueeze(0)
