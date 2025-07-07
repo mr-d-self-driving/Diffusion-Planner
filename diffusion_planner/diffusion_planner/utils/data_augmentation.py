@@ -2,7 +2,6 @@ from typing import List, Optional, Union
 
 import numpy as np
 import torch
-from nuplan.common.actor_state.vehicle_parameters import get_pacifica_parameters
 
 NUM_REFINE = 20
 REFINE_HORIZON = 2.0
@@ -52,6 +51,7 @@ class StatePerturbation:
         self,
         augment_prob: float = 0.5,
         normalize=True,
+        wheel_base: float = 2.75,
         device: Optional[torch.device] = "cpu",
     ) -> None:
         """
@@ -67,7 +67,7 @@ class StatePerturbation:
         hi: List[float] = ([0.0, +0.75, +0.35, +1, +0.5, +0.2, +0.1, 0.0, 0.0],)
         self._low = torch.tensor(lo).to(self._device) * 0.5
         self._high = torch.tensor(hi).to(self._device) * 0.5
-        self._wheel_base = get_pacifica_parameters().wheel_base
+        self._wheel_base = wheel_base
 
         self.refine_horizon = REFINE_HORIZON
         self.num_refine = NUM_REFINE
