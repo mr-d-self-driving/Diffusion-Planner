@@ -1,6 +1,8 @@
-# 1. Setup
+# README
 
-## (Optional) create venv
+## 1. Setup
+
+### (Optional) create venv
 
 ```bash
 sudo apt install python3-pip -y
@@ -9,7 +11,7 @@ python3 -m venv .venv
 source ./.venv/bin/activate
 ```
 
-## Install libraries
+### Install libraries
 
 ```bash
 # nuplan-devkit
@@ -34,9 +36,9 @@ python3 -c "import torch; print(torch.cuda.is_available())"
 ./ros_scripts/prepare_autoware.sh
 ```
 
-# 2. Create dataset
+## 2. Create dataset
 
-## 2.1. Prepare rosbags
+### 2.1. Prepare rosbags
 
 We assume the following directory structure:
 
@@ -68,7 +70,7 @@ driving_dataset$ tree . -L 2
      └── 2025-04-16
 ```
 
-## 2.2. Convert to diffusion_planner's format (npz)
+### 2.2. Convert to diffusion_planner's format (npz)
 
 ```bash
 ./ros_scripts/generate_all_data.sh
@@ -80,7 +82,7 @@ or use `parse_rosbag_for_directory.py` directly.
 python3 ./ros_scripts/parse_rosbag_for_directory.py <target_dir_list> --save_root <save_root> [--step <step>] [--limit <limit>]
 ```
 
-## 2.3. Generate path_list.json
+### 2.3. Generate path_list.json
 
 This script search `*.npz` files and create `path_list.json`.
 
@@ -88,7 +90,7 @@ This script search `*.npz` files and create `path_list.json`.
 python3 ./diffusion_planner/util_scripts/create_train_set_path.py <root_dir_list>
 ```
 
-# 3. Train
+## 3. Train
 
 Edit `train_run.sh` and run
 
