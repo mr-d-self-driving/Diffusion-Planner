@@ -6,7 +6,7 @@
     <param name="config_json_path" value="$(var model_dir)/args.json"/>
     <param name="ckpt_path" value="$(var model_dir)/latest.pth"/>
     <param name="onnx_path" value="$(var model_dir)/model.onnx"/>
-    <param name="backend" value="PYTORCH"/>
+    <param name="backend" value="ONNXRUNTIME"/>
     <param name="batch_size" value="1"/>
     <param name="use_sim_time" value="true"/>
   </node>
