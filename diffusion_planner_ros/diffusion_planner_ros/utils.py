@@ -271,6 +271,44 @@ def convert_tracked_objects_to_tensor(
     return neighbor
 
 
+def create_ego_agent_past(
+    ego_history: list, map2bl_matrix_4x4: np.array, max_timesteps: int = 21
+) -> torch.Tensor:
+    """
+    Create ego_agent_past tensor from ego history
+    Args:
+        ego_history: List of Odometry messages
+        map2bl_matrix_4x4: Transform matrix from map to base_link
+        max_timesteps: Maximum number of timesteps (default 21)
+    Returns:
+        ego_agent_past: Tensor of shape (1, T, 4) with (x, y, cos, sin)
+    """
+    ego_agent_past = torch.zeros((1, max_timesteps, 4))
+
+    # Process ego history from oldest to newest
+    start_idx = max(0, len(ego_history) - max_timesteps)
+    for i, idx in enumerate(range(start_idx, len(ego_history))):
+        msg = ego_history[idx]
+
+        # Get ego pose in map frame
+        pose_in_map_4x4 = pose_to_mat4x4(msg.pose.pose)
+
+        # Transform to base_link frame
+        pose_in_bl_4x4 = map2bl_matrix_4x4 @ pose_in_map_4x4
+
+        # Extract position and heading
+        x = pose_in_bl_4x4[0, 3]
+        y = pose_in_bl_4x4[1, 3]
+        cos, sin = rot3x3_to_heading_cos_sin(pose_in_bl_4x4[0:3, 0:3])
+
+        ego_agent_past[0, i, 0] = x
+        ego_agent_past[0, i, 1] = y
+        ego_agent_past[0, i, 2] = cos
+        ego_agent_past[0, i, 3] = sin
+
+    return ego_agent_past
+
+
 def convert_prediction_to_msg(pred: torch.Tensor, bl2map_matrix_4x4: np.array, stamp) -> Trajectory:
     # Convert to Trajectory message
     trajectory_msg = Trajectory()
