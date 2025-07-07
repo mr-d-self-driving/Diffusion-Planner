@@ -2,8 +2,6 @@ import copy
 
 import torch
 import torch.nn as nn
-from torch.fx import GraphModule, symbolic_trace
-from torch.fx.graph import Node
 
 from diffusion_planner.model.module.encoder import *
 
@@ -15,6 +13,7 @@ class ONNXWrapper(nn.Module):
 
     def forward(
         self,
+        ego_agent_past,
         ego_current_state,
         neighbor_agents_past,
         static_objects,
@@ -22,8 +21,12 @@ class ONNXWrapper(nn.Module):
         lanes_speed_limit,
         lanes_has_speed_limit,
         route_lanes,
+        route_lanes_speed_limit,
+        route_lanes_has_speed_limit,
+        goal_pose,
     ):
         inputs = {
+            "ego_agent_past": ego_agent_past,
             "ego_current_state": ego_current_state,
             "neighbor_agents_past": neighbor_agents_past,
             "static_objects": static_objects,
@@ -31,6 +34,9 @@ class ONNXWrapper(nn.Module):
             "lanes_speed_limit": lanes_speed_limit,
             "lanes_has_speed_limit": lanes_has_speed_limit,
             "route_lanes": route_lanes,
+            "route_lanes_speed_limit": route_lanes_speed_limit,
+            "route_lanes_has_speed_limit": route_lanes_has_speed_limit,
+            "goal_pose": goal_pose,
         }
         encoder_outputs, decoder_outputs = self.model(inputs)
         return decoder_outputs
@@ -158,6 +164,7 @@ class ONNXSafeModel(nn.Module):
 
     def _replace_with_onnx_safe_modules(self):
         for name, module in self.model.named_modules():
+            continue
             if isinstance(module, StaticEncoder):
                 parent_module = self._get_parent_module(name)
                 subname = name.split(".")[-1]

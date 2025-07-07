@@ -37,6 +37,24 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def heading_to_cos_sin(x):
+    """
+    Convert heading angle to cosine and sine.
+    Args:
+        x: [B, T, 3] where last dimension is (x, y, heading)
+    Output:
+        x: [B, T, 4] where last dimension is (x, y, cos(heading), sin(heading))
+    """
+    return torch.cat(
+        [
+            x[..., :2],
+            x[..., 2:3].cos(),
+            x[..., 2:3].sin(),
+        ],
+        dim=-1,
+    )
+
+
 class ONNXWrapper(nn.Module):
     def __init__(self, model):
         super().__init__()
@@ -52,6 +70,10 @@ class ONNXWrapper(nn.Module):
         lanes_speed_limit,
         lanes_has_speed_limit,
         route_lanes,
+        route_lanes_speed_limit,
+        route_lanes_has_speed_limit,
+        goal_pose,
+        ego_shape,
     ):
         inputs = {
             "ego_agent_past": ego_agent_past,
@@ -62,6 +84,10 @@ class ONNXWrapper(nn.Module):
             "lanes_speed_limit": lanes_speed_limit,
             "lanes_has_speed_limit": lanes_has_speed_limit,
             "route_lanes": route_lanes,
+            "route_lanes_speed_limit": route_lanes_speed_limit,
+            "route_lanes_has_speed_limit": route_lanes_has_speed_limit,
+            "goal_pose": goal_pose,
+            "ego_shape": ego_shape,
         }
         encoder_outputs, decoder_outputs = self.model(inputs)
         return decoder_outputs["prediction"], decoder_outputs["turn_indicator_logit"]
@@ -71,7 +97,7 @@ def create_input(input_dict, input_type="onnx"):
     print(f"{input_dict.keys()=}")
     if input_type == "onnx":
         return {
-            "ego_agent_past": input_dict["ego_current_state"].cpu().numpy(),
+            "ego_agent_past": input_dict["ego_agent_past"].cpu().numpy(),
             "ego_current_state": input_dict["ego_current_state"].cpu().numpy(),
             "neighbor_agents_past": input_dict["neighbor_agents_past"].cpu().numpy(),
             "static_objects": input_dict["static_objects"].cpu().numpy(),
@@ -81,6 +107,8 @@ def create_input(input_dict, input_type="onnx"):
             "route_lanes": input_dict["route_lanes"].cpu().numpy(),
             "route_lanes_speed_limit": input_dict["route_lanes_speed_limit"].cpu().numpy(),
             "route_lanes_has_speed_limit": input_dict["route_lanes_has_speed_limit"].cpu().numpy(),
+            "goal_pose": input_dict["goal_pose"].cpu().numpy(),
+            "ego_shape": input_dict["ego_shape"].cpu().numpy(),
         }
     elif input_type == "torch":
         return (
@@ -94,6 +122,8 @@ def create_input(input_dict, input_type="onnx"):
             input_dict["route_lanes"],
             input_dict["route_lanes_speed_limit"],
             input_dict["route_lanes_has_speed_limit"],
+            input_dict["goal_pose"],
+            input_dict["ego_shape"],
         )
 
 
@@ -142,25 +172,24 @@ if __name__ == "__main__":
     sample_input_file = np.load(sample_input_path)
     dummy_inputs = {}
     for key in sample_input_file.keys():
-        if key == "map_name":
+        if key in [
+            "map_name",
+            "token",
+            "ego_agent_future",
+            "neighbor_agents_future",
+            "turn_indicator",
+        ]:
             continue
-        print(f"{key=}")
         dummy_inputs[key] = torch.tensor(sample_input_file[key], dtype=torch.float32).unsqueeze(0)
-        print(f"{dummy_inputs[key].shape}, {dummy_inputs[key].dtype=}, {dummy_inputs[key].device=}")
 
-    # Dummy inputs
-    dummy_inputs = {
-        "ego_agent_past": torch.full((1, 21, 3), 0.5, dtype=torch.float32),
-        "ego_current_state": torch.full((1, 10), 0.5, dtype=torch.float32),
-        "neighbor_agents_past": torch.full((1, 32, 21, 11), 0.5, dtype=torch.float32),
-        "static_objects": torch.full((1, 5, 10), 0.5, dtype=torch.float32),
-        "lanes": torch.full((1, 70, 20, 12), 0.5, dtype=torch.float32),
-        "lanes_speed_limit": torch.full((1, 70, 1), 0.5, dtype=torch.float32),
-        "lanes_has_speed_limit": torch.full((1, 70, 1), True, dtype=torch.bool),
-        "route_lanes": torch.full((1, 25, 20, 12), 0.5, dtype=torch.float32),
-        "route_lanes_speed_limit": torch.full((1, 25, 1), 0.5, dtype=torch.float32),
-        "route_lanes_has_speed_limit": torch.full((1, 25, 1), True, dtype=torch.bool),
-    }
+    dummy_inputs["ego_agent_past"] = heading_to_cos_sin(dummy_inputs["ego_agent_past"])
+    dummy_inputs["goal_pose"] = heading_to_cos_sin(dummy_inputs["goal_pose"])
+    dummy_inputs["ego_shape"] = torch.tensor([[2.75, 4.34, 1.70]], dtype=torch.float32)
+    dummy_inputs["lanes_has_speed_limit"] = dummy_inputs["lanes_has_speed_limit"].bool()
+    dummy_inputs["route_lanes_has_speed_limit"] = dummy_inputs["route_lanes_has_speed_limit"].bool()
+
+    for key in dummy_inputs.keys():
+        print(f"{key}: {dummy_inputs[key].shape}, {dummy_inputs[key].dtype}")
 
     input_names = list(dummy_inputs.keys())
 
@@ -186,6 +215,8 @@ if __name__ == "__main__":
 
     # Prepare input
     torch_input_tuple = create_input(dummy_inputs, "torch")
+    print(f"{len(torch_input_tuple)=}")
+    print(f"{input_names=}")
 
     if not test_only:
         print(f"creating a new onnx model: {onnx_path}")
