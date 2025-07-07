@@ -36,8 +36,8 @@ class ONNXWrapper(nn.Module):
         return decoder_outputs
 
 
-class LaneFusionEncoderONNX(nn.Module):
-    def __init__(self, original: LaneFusionEncoder):
+class LaneEncoderONNX(nn.Module):
+    def __init__(self, original: LaneEncoder):
         super().__init__()
 
         self._lane_len = original._lane_len
@@ -111,8 +111,8 @@ class LaneFusionEncoderONNX(nn.Module):
         return x_result.view(B, P, -1), mask_p.view(B, -1), pos.view(B, P, -1)
 
 
-class StaticFusionEncoderONNX(nn.Module):
-    def __init__(self, original: StaticFusionEncoder):
+class StaticEncoderONNX(nn.Module):
+    def __init__(self, original: StaticEncoder):
         super().__init__()
         self._hidden_dim = original._hidden_dim
         self.projection = original.projection  # Reuse original weights
@@ -158,14 +158,14 @@ class ONNXSafeModel(nn.Module):
 
     def _replace_with_onnx_safe_modules(self):
         for name, module in self.model.named_modules():
-            if isinstance(module, StaticFusionEncoder):
+            if isinstance(module, StaticEncoder):
                 parent_module = self._get_parent_module(name)
                 subname = name.split(".")[-1]
-                setattr(parent_module, subname, StaticFusionEncoderONNX(module))
-            if isinstance(module, LaneFusionEncoder):
+                setattr(parent_module, subname, StaticEncoderONNX(module))
+            if isinstance(module, LaneEncoder):
                 parent_module = self._get_parent_module(name)
                 subname = name.split(".")[-1]
-                setattr(parent_module, subname, LaneFusionEncoderONNX(module))
+                setattr(parent_module, subname, LaneEncoderONNX(module))
 
     def _get_parent_module(self, name):
         parts = name.split(".")[:-1]
