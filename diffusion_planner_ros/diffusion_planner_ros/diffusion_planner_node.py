@@ -75,9 +75,9 @@ class DiffusionPlannerNode(Node):
         print(f"{self.config_obj.state_normalizer=}")
 
         # param(3) checkpoint
-        self.backend = self.declare_parameter("backend", value="PYTHORCH").value
+        self.backend = self.declare_parameter("backend", value="PYTORCH").value
 
-        if self.backend == "PYTHORCH":
+        if self.backend == "PYTORCH":
             ckpt_path = self.declare_parameter("ckpt_path", value="None").value
             self.get_logger().info(f"Checkpoint path: {ckpt_path}")
             ckpt = torch.load(ckpt_path)
@@ -93,7 +93,7 @@ class DiffusionPlannerNode(Node):
             )
         else:
             self.get_logger().error(
-                f"backend must be PYTHORCH or ONNXRUNTIME, but {self.backend} was given"
+                f"backend must be PYTORCH or ONNXRUNTIME, but {self.backend} was given"
             )
             exit()
 
@@ -352,7 +352,7 @@ class DiffusionPlannerNode(Node):
         # )
 
         start = time.time()
-        if self.backend == "PYTHORCH":
+        if self.backend == "PYTORCH":
             with torch.no_grad():
                 out = self.diffusion_planner(input_dict)[1]
                 pred = out["prediction"].detach().cpu().numpy()
