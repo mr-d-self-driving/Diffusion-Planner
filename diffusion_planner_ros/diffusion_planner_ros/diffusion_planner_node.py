@@ -344,6 +344,9 @@ class DiffusionPlannerNode(Node):
             input_dict["lanes_has_speed_limit"] = input_dict["lanes_has_speed_limit"].astype(
                 np.bool_
             )
+            input_dict["route_lanes_has_speed_limit"] = input_dict[
+                "route_lanes_has_speed_limit"
+            ].astype(np.bool_)
         # visualize_inputs(
         #     input_dict, self.config_obj.observation_normalizer, "./input.png"
         # )
