@@ -36,7 +36,7 @@ def get_epoch_mean_loss(epoch_loss):
     return epoch_mean_loss
 
 
-def save_model(model, optimizer, scheduler, save_path, epoch, train_loss, wandb_id, ema):
+def save_model(model, optimizer, scheduler, save_path, epoch, loss, wandb_id, ema):
     """
     save the model to path
     """
@@ -46,13 +46,11 @@ def save_model(model, optimizer, scheduler, save_path, epoch, train_loss, wandb_
         "ema_state_dict": ema.state_dict(),
         "optimizer": optimizer.state_dict(),
         "schedule": scheduler.state_dict(),
-        "loss": train_loss,
+        "loss": loss,
         "wandb_id": wandb_id,
     }
 
-    torch.save(
-        save_model, f"{save_path}/model_epoch_{epoch + 1:06d}_trainloss_{train_loss:.4f}.pth"
-    )
+    torch.save(save_model, f"{save_path}/model_epoch_{epoch + 1:06d}_loss_{loss:.4f}.pth")
     torch.save(save_model, f"{save_path}/latest.pth")
 
 

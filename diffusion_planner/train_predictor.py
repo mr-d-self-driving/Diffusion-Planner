@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 
+import pandas as pd
 import torch
 import wandb
 from timm.utils import ModelEma
@@ -300,6 +301,8 @@ def model_training(args):
     if args.ddp:
         torch.distributed.barrier()
 
+    data_list = []
+
     # begin training
     for epoch in range(init_epoch, train_epochs):
         if global_rank == 0:
@@ -325,6 +328,17 @@ def model_training(args):
                 step=epoch + 1,
             )
 
+            data_list.append(
+                {
+                    "epoch": epoch + 1,
+                    "train_loss": train_total_loss,
+                    "valid_loss_ego": valid_loss_ego,
+                    "valid_loss_neighbor": valid_loss_neighbor,
+                }
+            )
+            df = pd.DataFrame(data_list)
+            df.to_csv(os.path.join(save_path, "train_log.tsv"), index=False, sep="\t")
+
             if (epoch + 1) % save_utd == 0:
                 # save model at the end of epoch
                 save_model(
@@ -333,7 +347,7 @@ def model_training(args):
                     scheduler,
                     save_path,
                     epoch,
-                    train_total_loss,
+                    valid_loss_ego,
                     wandb_id,
                     model_ema.ema,
                 )

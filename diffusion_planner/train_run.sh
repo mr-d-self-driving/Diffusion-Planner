@@ -26,4 +26,4 @@ python3 -m torch.distributed.run --nnodes 1 --nproc-per-node 8 --standalone trai
 2>&1 | tee logs/result_$(date +%Y%m%d_%H%M%S).txt
 
 save_dir_name=$(ls $SAVE_DIR | tail -n 1)
-./valid_run.sh ${save_dir_name}
+./valid_run.sh $SAVE_DIR/$save_dir_name
