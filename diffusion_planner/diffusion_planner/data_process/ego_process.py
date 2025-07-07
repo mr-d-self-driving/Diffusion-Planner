@@ -75,7 +75,7 @@ def get_ego_future_array_from_scenario(
 
 
 def calculate_additional_ego_states(ego_agent_past, time_stamp):
-    # transform haeding to cos h, sin h and calculate the steering_angle and yaw_rate for current state
+    # transform heading to cos h, sin h and calculate the steering_angle and yaw_rate for current state
 
     current_state = ego_agent_past[-1]
     prev_state = ego_agent_past[-2]
