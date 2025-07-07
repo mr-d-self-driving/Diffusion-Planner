@@ -246,21 +246,17 @@ if __name__ == "__main__":
     print("Compare outputs using the creation input")
     compare_outputs(torch_output, onnx_output)
 
-    # TEST WITH SAMPLE INPUT
-    # Load the sample input
-    sample_input = {}
-    for key in input_names:
-        sample_input[key] = torch.tensor(sample_input_file[key]).unsqueeze(0)
-
-    sample_input = config_obj.observation_normalizer(sample_input)
+    # TEST WITH NORMALIZED INPUT
+    # Reuse dummy_inputs and apply normalization
+    normalized_inputs = config_obj.observation_normalizer(dummy_inputs)
 
     # Run torch inference
-    torch_input_tuple = create_input(sample_input, "torch")
+    torch_input_tuple = create_input(normalized_inputs, "torch")
     with torch.no_grad():
         output = wrapper(*torch_input_tuple)
         torch_output = (output[0].cpu().numpy(), output[1].cpu().numpy())
-    onnx_inputs = create_input(sample_input, "onnx")
+    onnx_inputs = create_input(normalized_inputs, "onnx")
     onnx_output = ort_session.run(None, onnx_inputs)
 
-    print("Compare outputs using a sample input")
+    print("Compare outputs using normalized input")
     compare_outputs(torch_output, onnx_output)
