@@ -29,6 +29,9 @@ python3 -c "import torch; print(torch.cuda.is_available())"
 
 # install ros-humble
 ./ros_scripts/download_ros-humble.sh
+
+# prepare autoware
+./ros_scripts/prepare_autoware.sh
 ```
 
 # 2. Create dataset
