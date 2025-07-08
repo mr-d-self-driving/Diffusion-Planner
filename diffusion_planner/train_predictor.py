@@ -48,66 +48,38 @@ def get_args():
     parser.add_argument("--agent_state_dim", type=int, help="past state dim for agents", default=11)
     parser.add_argument("--agent_num", type=int, help="number of agents", default=32)
 
-    parser.add_argument(
-        "--static_objects_state_dim", type=int, help="state dim for static objects", default=10
-    )
-    parser.add_argument(
-        "--static_objects_num", type=int, help="number of static objects", default=5
-    )
+    parser.add_argument("--static_objects_state_dim", type=int, default=10)
+    parser.add_argument("--static_objects_num", type=int, default=5)
 
-    parser.add_argument("--lane_len", type=int, help="number of lane point", default=20)
-    parser.add_argument("--lane_state_dim", type=int, help="state dim for lane point", default=12)
+    parser.add_argument("--lane_len", type=int, help="number of lane points", default=20)
+    parser.add_argument("--lane_state_dim", type=int, help="state dim for lane points", default=12)
     parser.add_argument("--lane_num", type=int, help="number of lanes", default=70)
 
-    parser.add_argument("--route_len", type=int, help="number of route lane point", default=20)
-    parser.add_argument(
-        "--route_state_dim", type=int, help="state dim for route lane point", default=12
-    )
+    parser.add_argument("--route_len", type=int, help="number of route lane points", default=20)
+    parser.add_argument("--route_state_dim", type=int, help="state dim for route lanes", default=12)
     parser.add_argument("--route_num", type=int, help="number of route lanes", default=25)
 
     # DataLoader parameters
     parser.add_argument("--augment_prob", type=float, help="augmentation probability", default=0.5)
-    parser.add_argument(
-        "--normalization_file_path",
-        default="normalization.json",
-        help="filepath of normalizaiton.json",
-        type=str,
-    )
+    parser.add_argument("--normalization_file_path", default="normalization.json", type=str)
     parser.add_argument("--use_data_augment", default=True, type=boolean)
     parser.add_argument("--num_workers", default=4, type=int)
-    parser.add_argument(
-        "--pin-mem",
-        action="store_true",
-        help="Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.",
-    )
-    parser.add_argument("--no-pin-mem", action="store_false", dest="pin_mem", help="")
+    parser.add_argument("--pin-mem", action="store_true", help="Pin CPU memory in DataLoader")
+    parser.add_argument("--no-pin-mem", action="store_false", dest="pin_mem")
     parser.set_defaults(pin_mem=True)
 
     # Training
     parser.add_argument("--seed", type=int, help="fix random seed", default=3407)
     parser.add_argument("--train_epochs", type=int, help="epochs of training", default=500)
     parser.add_argument("--batch_size", type=int, help="batch size (default: 2048)", default=2048)
-    parser.add_argument(
-        "--learning_rate", type=float, help="learning rate (default: 5e-4)", default=5e-4
-    )
+    parser.add_argument("--learning_rate", type=float, help="learning rate", default=5e-4)
     parser.add_argument("--warm_up_epoch", type=int, help="number of warm up", default=5)
-    parser.add_argument(
-        "--encoder_drop_path_rate", type=float, help="encoder drop out rate", default=0.1
-    )
-    parser.add_argument(
-        "--decoder_drop_path_rate", type=float, help="decoder drop out rate", default=0.1
-    )
+    parser.add_argument("--encoder_drop_path_rate", type=float, default=0.1)
+    parser.add_argument("--decoder_drop_path_rate", type=float, default=0.1)
 
-    parser.add_argument(
-        "--alpha_planning_loss",
-        type=float,
-        help="coefficient of planning loss (default: 1.0)",
-        default=1.0,
-    )
+    parser.add_argument("--alpha_planning_loss", type=float, default=1.0)
 
-    parser.add_argument(
-        "--device", type=str, help="run on which device (default: cuda)", default="cuda"
-    )
+    parser.add_argument("--device", type=str, help="run on which device", default="cuda")
 
     parser.add_argument("--use_ema", default=True, type=boolean)
 
@@ -119,18 +91,11 @@ def get_args():
     parser.add_argument(
         "--diffusion_model_type",
         type=str,
-        help="type of diffusion model [x_start, score]",
         choices=["score", "x_start", "flow_matching"],
         default="x_start",
     )
+    parser.add_argument("--predicted_neighbor_num", type=int, default=32)
 
-    # decoder
-    parser.add_argument(
-        "--predicted_neighbor_num",
-        type=int,
-        help="number of neighbor agents to predict",
-        default=32,
-    )
     parser.add_argument("--resume_model_path", type=str, help="path to resume model", default=None)
 
     parser.add_argument("--use_wandb", default=False, type=boolean)
