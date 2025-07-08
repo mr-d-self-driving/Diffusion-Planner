@@ -267,6 +267,7 @@ def model_training(args):
         torch.distributed.barrier()
 
     data_list = []
+    best_loss = float("inf")
 
     # begin training
     for epoch in range(init_epoch, train_epochs):
@@ -313,10 +314,13 @@ def model_training(args):
                     save_path,
                     epoch,
                     valid_loss_ego,
+                    best_loss,
                     wandb_id,
                     model_ema.ema,
                 )
                 print(f"Model saved in {save_path}\n")
+
+            best_loss = min(best_loss, valid_loss_ego)
 
         scheduler.step()
         train_sampler.set_epoch(epoch + 1)
