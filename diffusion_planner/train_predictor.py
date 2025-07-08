@@ -71,6 +71,7 @@ def get_args():
     # Training
     parser.add_argument("--seed", type=int, help="fix random seed", default=3407)
     parser.add_argument("--train_epochs", type=int, help="epochs of training", default=500)
+    parser.add_argument("--early_stop_tolerance", type=int, help="early stop tolerance", default=50)
     parser.add_argument("--batch_size", type=int, help="batch size (default: 2048)", default=2048)
     parser.add_argument("--learning_rate", type=float, help="learning rate", default=5e-4)
     parser.add_argument("--warm_up_epoch", type=int, help="number of warm up", default=5)
@@ -268,6 +269,7 @@ def model_training(args):
 
     data_list = []
     best_loss = float("inf")
+    no_improvement_count = 0
 
     # begin training
     for epoch in range(init_epoch, train_epochs):
@@ -320,7 +322,15 @@ def model_training(args):
                 )
                 print(f"Model saved in {save_path}\n")
 
-            best_loss = min(best_loss, valid_loss_ego)
+            if valid_loss_ego < best_loss:
+                best_loss = valid_loss_ego
+                no_improvement_count = 0
+            else:
+                no_improvement_count += 1
+
+            if no_improvement_count >= args.early_stop_tolerance:
+                print(f"No improvement for {args.early_stop_tolerance} epochs, stopping training.")
+                break
 
         scheduler.step()
         train_sampler.set_epoch(epoch + 1)
