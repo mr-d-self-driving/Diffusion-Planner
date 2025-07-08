@@ -51,18 +51,18 @@ def get_args():
     parser.add_argument("--static_objects_state_dim", type=int, default=10)
     parser.add_argument("--static_objects_num", type=int, default=5)
 
+    parser.add_argument("--lane_num", type=int, help="number of lanes", default=70)
     parser.add_argument("--lane_len", type=int, help="number of lane points", default=20)
     parser.add_argument("--lane_state_dim", type=int, help="state dim for lane points", default=12)
-    parser.add_argument("--lane_num", type=int, help="number of lanes", default=70)
 
+    parser.add_argument("--route_num", type=int, help="number of route lanes", default=25)
     parser.add_argument("--route_len", type=int, help="number of route lane points", default=20)
     parser.add_argument("--route_state_dim", type=int, help="state dim for route lanes", default=12)
-    parser.add_argument("--route_num", type=int, help="number of route lanes", default=25)
 
     # DataLoader parameters
+    parser.add_argument("--use_data_augment", default=True, type=boolean)
     parser.add_argument("--augment_prob", type=float, help="augmentation probability", default=0.5)
     parser.add_argument("--normalization_file_path", default="normalization.json", type=str)
-    parser.add_argument("--use_data_augment", default=True, type=boolean)
     parser.add_argument("--num_workers", default=4, type=int)
     parser.add_argument("--pin-mem", action="store_true", help="Pin CPU memory in DataLoader")
     parser.add_argument("--no-pin-mem", action="store_false", dest="pin_mem")
