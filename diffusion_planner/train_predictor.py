@@ -320,11 +320,16 @@ def model_training(args):
             torch.save(model_dict, f"{save_path}/latest.pth")
 
             if (epoch + 1) % save_utd == 0:
-                torch.save(model_dict, f"{save_path}/model_epoch_{epoch + 1:06d}_loss_{valid_loss_ego:.4f}.pth")
+                torch.save(
+                    model_dict,
+                    f"{save_path}/model_epoch_{epoch + 1:06d}_loss_{valid_loss_ego:.4f}.pth",
+                )
 
             if valid_loss_ego < best_loss:
                 torch.save(model_dict, f"{save_path}/best_model.pth")
                 best_loss = valid_loss_ego
+                with open(os.path.join(save_path, "best_model_info.json"), "w") as f:
+                    json.dump({"epoch": epoch + 1, "best_loss": best_loss}, f, indent=4)
                 no_improvement_count = 0
             else:
                 no_improvement_count += 1
