@@ -122,7 +122,7 @@ class Decoder(nn.Module):
             turn_indicator_logit = self.turn_indicator_predictor(turn_indicator_input)
 
             return {
-                "score": self.dit(
+                "model_output": self.dit(
                     sampled_trajectories,
                     diffusion_time,
                     encoding,

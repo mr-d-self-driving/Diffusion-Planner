@@ -61,15 +61,15 @@ def diffusion_loss_func(
     }
 
     _, decoder_output = model(merged_inputs)  # [B, P, 1 + T, 4]
-    score = decoder_output["score"][:, :, 1:, :]  # [B, P, T, 4]
+    model_output = decoder_output["model_output"][:, :, 1:, :]  # [B, P, T, 4]
 
     if model_type == "score":
-        dpm_loss = torch.sum((score * std + z) ** 2, dim=-1)
+        dpm_loss = torch.sum((model_output * std + z) ** 2, dim=-1)
     elif model_type == "x_start":
-        dpm_loss = torch.sum((score - all_gt[:, :, 1:, :]) ** 2, dim=-1)
+        dpm_loss = torch.sum((model_output - all_gt[:, :, 1:, :]) ** 2, dim=-1)
     elif model_type == "flow_matching":
         target_v = all_gt[:, :, 1:, :] - z
-        dpm_loss = torch.sum((score - target_v) ** 2, dim=-1)
+        dpm_loss = torch.sum((model_output - target_v) ** 2, dim=-1)
 
     masked_prediction_loss = dpm_loss[:, 1:, :][neighbors_future_valid]
 
