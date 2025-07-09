@@ -6,7 +6,7 @@ cd $(dirname $0)/../
 
 set +eux
 source /opt/ros/humble/setup.bash
-source ./install/setup.bash
+source ../../install/setup.bash
 set -eux
 
 ros2 run diffusion_planner_ros diffusion_planner_node --ros-args \
