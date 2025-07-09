@@ -123,7 +123,17 @@ if __name__ == "__main__":
         prediction = output_dict["prediction"]  # (1 + P, T, D)
         turn_indicator = int(output_dict["turn_indicator"])  # ()
         valid_data_dict["turn_indicator_pred"] = turn_indicator
-        loss_ego, loss_nei, neighbors_future_valid = calc_loss(valid_data, prediction)
+        (
+            loss_ego,
+            loss_nei,
+            neighbors_future_valid,
+            lat_error_ego,
+            lon_error_ego,
+            angle_error_ego,
+            lat_error_nei,
+            lon_error_nei,
+            angle_error_nei,
+        ) = calc_loss(valid_data, prediction)
         # loss_ego (T, 4)
         # loss_nei (P, T, 4)
         loss_ego = np.sqrt(loss_ego)
@@ -151,7 +161,10 @@ if __name__ == "__main__":
             diff_m = np.sqrt(loss_ego[index, 0] ** 2 + loss_ego[index, 1] ** 2)
             ax[0].plot(prediction[0, index, 0], prediction[0, index, 1], color="black", marker="x")
             if timestep == 30:
-                title += f"\nloss{timestep // 10}sec={diff_m:.2f}[m]\n"
+                title += (
+                    f"\nloss{timestep // 10}sec={diff_m:.2f}[m]\n"
+                    f"lat={lat_error_ego[index]:.2f}[m], lon={lon_error_ego[index]:.2f}[m], angle={angle_error_ego[index]:.2f}[rad]"
+                )
 
         # Neighbors
         neighbors = valid_data_dict["neighbor_agents_past"][0]
