@@ -13,6 +13,7 @@ from autoware_new_planning_msgs.msg import Trajectories, Trajectory, TrajectoryG
 from autoware_perception_msgs.msg import TrackedObjects, TrafficLightGroupArray
 from autoware_planning_msgs.msg import LaneletRoute
 from autoware_planning_msgs.msg import Trajectory as PlanningTrajectory
+from autoware_vehicle_msgs.msg import TurnIndicatorsCommand
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from rclpy.executors import SingleThreadedExecutor
@@ -189,21 +190,28 @@ class DiffusionPlannerNode(Node):
             pub_qos,
         )
 
-        # pub(2)[debug] neighbor_marker
+        # pub(2)turn_indicator
+        self.pub_turn_indicator = self.create_publisher(
+            TurnIndicatorsCommand,
+            "/diffusion_planner/turn_indicators_cmd",
+            pub_qos,
+        )
+
+        # pub(3)[debug] neighbor_marker
         self.pub_neighbor_marker = self.create_publisher(
             MarkerArray,
             "/diffusion_planner/debug/neighbor_marker",
             pub_qos,
         )
 
-        # pub(3)[debug] route_marker
+        # pub(4)[debug] route_marker
         self.pub_route_marker = self.create_publisher(
             MarkerArray,
             "/diffusion_planner/debug/route_marker",
             pub_qos,
         )
 
-        # pub(4)[debug] trajectory_marker
+        # pub(5)[debug] trajectory_marker
         self.pub_trajectory_marker = self.create_publisher(
             MarkerArray,
             "/diffusion_planner/debug/trajectory_marker",
@@ -404,9 +412,12 @@ class DiffusionPlannerNode(Node):
             with torch.no_grad():
                 out = self.diffusion_planner(input_dict)[1]
                 pred = out["prediction"].detach().cpu().numpy()
+                turn_indicator_logit = out["turn_indicator_logit"].detach().cpu().numpy()
         elif self.backend == "ONNXRUNTIME":
-            out = self.ort_session.run(None, input_dict)[0]
-            pred = out
+            out = self.ort_session.run(None, input_dict)
+            pred, turn_indicator_logit = out
+        # print(f"{turn_indicator_logit=}")  # 4 class logits(numpy)
+        turn_indicator = int(np.argmax(turn_indicator_logit, axis=-1))
         end = time.time()
         elapsed_msec = (end - start) * 1000
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
@@ -453,6 +464,12 @@ class DiffusionPlannerNode(Node):
 
         self.pub_trajectories.publish(trajectories_msg)
         self.pub_trajectory_marker.publish(marker_array)
+
+        # Publish turn indicators
+        turn_indicator_msg = TurnIndicatorsCommand()
+        turn_indicator_msg.stamp = stamp
+        turn_indicator_msg.command = turn_indicator
+        self.pub_turn_indicator.publish(turn_indicator_msg)
 
 
 def main(args=None):
