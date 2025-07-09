@@ -45,7 +45,7 @@ def visualize_inputs(
     route_lanes_speed_limit=(1, 25, 1)
     route_lanes_has_speed_limit=(1, 25, 1)
     turn_indicator=(1,)
-    goal_pose=(1, 3)
+    goal_pose=(1, 4)
     """
 
     # initialize the figure

@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+from diffusion_planner.train_epoch import heading_to_cos_sin
 from diffusion_planner.utils.config import Config
 from diffusion_planner.utils.visualize_input import visualize_inputs
 
@@ -37,6 +38,7 @@ if __name__ == "__main__":
                 continue
             # add batch size axis
             data[key] = torch.tensor(np.expand_dims(value, axis=0))
+        data["goal_pose"] = heading_to_cos_sin(data["goal_pose"])
         data = config_obj.observation_normalizer(data)
 
         visualize_inputs(data, config_obj.observation_normalizer, save_path)
