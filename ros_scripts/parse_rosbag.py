@@ -361,7 +361,7 @@ def main(
             for j in range(len(route_msgs)):
                 route_msg = route_msgs[j]
                 route_stamp = parse_timestamp(route_msg.header.stamp)
-                if route_stamp <= timestamp and route_stamp > max_route_timestamp:
+                if max_route_timestamp <= route_stamp <= timestamp:
                     max_route_timestamp = route_stamp
                     max_route_index = j
             if max_route_index == -1:
