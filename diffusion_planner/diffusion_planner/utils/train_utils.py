@@ -36,30 +36,6 @@ def get_epoch_mean_loss(epoch_loss):
     return epoch_mean_loss
 
 
-def save_model(model, optimizer, scheduler, save_path, epoch, loss, best_loss, wandb_id, ema):
-    """
-    save the model to path
-    """
-    save_model = {
-        "epoch": epoch + 1,
-        "model": model.state_dict(),
-        "ema_state_dict": ema.state_dict(),
-        "optimizer": optimizer.state_dict(),
-        "schedule": scheduler.state_dict(),
-        "loss": loss,
-        "wandb_id": wandb_id,
-    }
-
-    torch.save(save_model, f"{save_path}/model_epoch_{epoch + 1:06d}_loss_{loss:.4f}.pth")
-    torch.save(save_model, f"{save_path}/latest.pth")
-
-    if loss < best_loss:
-        torch.save(save_model, f"{save_path}/best_model.pth")
-        with open(f"{save_path}/best_loss.txt", "w") as f:
-            f.write(f"Best loss: {loss:.4f}\n")
-            f.write(f"Epoch: {epoch + 1}\n")
-
-
 def resume_model(path: str, model, optimizer, scheduler, ema, device):
     """
     load ckpt from path

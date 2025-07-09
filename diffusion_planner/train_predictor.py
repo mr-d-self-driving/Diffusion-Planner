@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import sys
 
 import pandas as pd
 import torch
@@ -18,7 +19,7 @@ from diffusion_planner.utils.data_augmentation import StatePerturbation
 from diffusion_planner.utils.dataset import DiffusionPlannerData
 from diffusion_planner.utils.lr_schedule import CosineAnnealingWarmUpRestarts
 from diffusion_planner.utils.normalizer import ObservationNormalizer, StateNormalizer
-from diffusion_planner.utils.train_utils import resume_model, save_model, set_seed
+from diffusion_planner.utils.train_utils import resume_model, set_seed
 
 
 def boolean(v):
@@ -307,22 +308,22 @@ def model_training(args):
             df = pd.DataFrame(data_list)
             df.to_csv(os.path.join(save_path, "train_log.tsv"), index=False, sep="\t")
 
+            model_dict = {
+                "epoch": epoch + 1,
+                "model": diffusion_planner.state_dict(),
+                "ema_state_dict": model_ema.ema.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "schedule": scheduler.state_dict(),
+                "loss": valid_loss_ego,
+                "wandb_id": wandb_id,
+            }
+            torch.save(model_dict, f"{save_path}/latest.pth")
+
             if (epoch + 1) % save_utd == 0:
-                # save model at the end of epoch
-                save_model(
-                    diffusion_planner,
-                    optimizer,
-                    scheduler,
-                    save_path,
-                    epoch,
-                    valid_loss_ego,
-                    best_loss,
-                    wandb_id,
-                    model_ema.ema,
-                )
-                print(f"Model saved in {save_path}\n")
+                torch.save(model_dict, f"{save_path}/model_epoch_{epoch + 1:06d}_loss_{valid_loss_ego:.4f}.pth")
 
             if valid_loss_ego < best_loss:
+                torch.save(model_dict, f"{save_path}/best_model.pth")
                 best_loss = valid_loss_ego
                 no_improvement_count = 0
             else:
@@ -330,7 +331,11 @@ def model_training(args):
 
             if no_improvement_count >= args.early_stop_tolerance:
                 print(f"No improvement for {args.early_stop_tolerance} epochs, stopping training.")
-                break
+                if args.ddp:
+                    torch.cuda.synchronize()
+                    torch.distributed.destroy_process_group()
+                    torch.cuda.synchronize()
+                sys.exit(0)
 
         scheduler.step()
         train_sampler.set_epoch(epoch + 1)
