@@ -1,5 +1,6 @@
 import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,7 @@ from torch import optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
+from diffusion_planner.loss import loss_func
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.train_epoch import heading_to_cos_sin
 from diffusion_planner.utils import ddp
@@ -30,6 +32,8 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
     predictions = []
     turn_indicators = []
     loss_ego_list = []
+
+    total_result_dict = defaultdict(list)
 
     for batch in val_loader:
         # データの準備
@@ -107,18 +111,28 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
         total_loss_neighbor += loss_nei.mean().item() * B
         total_samples += B
 
-    loss_ego = torch.cat(loss_ego_list, dim=0)
+        loss_dict = loss_func(prediction, all_gt)
+        for key, val in loss_dict.items():
+            # val : (B, Pn + 1, T)
+            total_result_dict[f"ego_{key}"].append(val[:, 0, :])  # (B, T)
+
     avg_loss_ego = total_loss_ego / total_samples
     avg_loss_neighbor = total_loss_neighbor / total_samples
+    loss_ego = torch.cat(loss_ego_list, dim=0)
+
+    for key, val in total_result_dict.items():
+        total_result_dict[key] = torch.cat(val, dim=0)  # (total_samples, T)
+
     if return_pred:
         predictions = torch.cat(predictions, dim=0)
         turn_indicators = torch.cat(turn_indicators, dim=0)
     return {
-        "loss_ego": loss_ego,
         "avg_loss_ego": avg_loss_ego,
         "avg_loss_neighbor": avg_loss_neighbor,
+        "loss_ego": loss_ego,
         "predictions": predictions,
         "turn_indicators": turn_indicators,
+        **total_result_dict,
     }
 
 

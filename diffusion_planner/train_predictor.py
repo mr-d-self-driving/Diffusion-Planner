@@ -115,6 +115,14 @@ def get_args():
     return args
 
 
+def mean_ego_loss(loss_dict):
+    result = {}
+    for key, val in loss_dict.items():
+        if key.startswith("ego_"):
+            result[f"valid_loss/{key}"] = val.mean().item()
+    return result
+
+
 def model_training(args):
     # init ddp
     global_rank, rank, _ = ddp.ddp_setup_universal(True, args)
@@ -272,6 +280,12 @@ def model_training(args):
     best_loss = float("inf")
     no_improvement_count = 0
 
+    valid_dict = validate_model(diffusion_planner, valid_loader, args)
+    valid_loss_ego = valid_dict["avg_loss_ego"]
+    valid_loss_neighbor = valid_dict["avg_loss_neighbor"]
+    mean_ego_loss_dict = mean_ego_loss(valid_dict)
+    print(mean_ego_loss_dict)
+
     # begin training
     for epoch in range(init_epoch, train_epochs):
         if global_rank == 0:
@@ -283,7 +297,9 @@ def model_training(args):
         valid_dict = validate_model(diffusion_planner, valid_loader, args)
         valid_loss_ego = valid_dict["avg_loss_ego"]
         valid_loss_neighbor = valid_dict["avg_loss_neighbor"]
+        mean_ego_loss_dict = mean_ego_loss(valid_dict)
         print(f"{valid_loss_ego=:.3f}, {valid_loss_neighbor=:.3f}")
+        print(mean_ego_loss_dict)
 
         if global_rank == 0:
             lr_dict = {"lr": optimizer.param_groups[0]["lr"]}
@@ -293,6 +309,7 @@ def model_training(args):
                     **{f"lr/{k}": v for k, v in lr_dict.items()},
                     "valid_loss/ego": valid_loss_ego,
                     "valid_loss/neighbors": valid_loss_neighbor,
+                    **mean_ego_loss_dict,
                 },
                 step=epoch + 1,
             )
