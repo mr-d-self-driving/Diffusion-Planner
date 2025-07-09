@@ -93,15 +93,13 @@ def train_epoch(data_loader, model, optimizer, args, ema, aug: StatePerturbation
 
             # call the mdoel
             optimizer.zero_grad()
-            loss = {}
 
-            loss, _ = diffusion_loss_func(
+            loss = diffusion_loss_func(
                 model,
                 inputs,
                 ddp.get_model(model, args.ddp).sde.marginal_prob,
                 (ego_future, neighbors_future, mask),
                 args.state_normalizer,
-                loss,
                 args.diffusion_model_type,
             )
 

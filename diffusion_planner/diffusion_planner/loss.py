@@ -12,7 +12,6 @@ def diffusion_loss_func(
     marginal_prob: Callable[[torch.Tensor], torch.Tensor],
     futures: Tuple[torch.Tensor, torch.Tensor],
     norm: StateNormalizer,
-    loss: Dict[str, Any],
     model_type: str,
     eps: float = 1e-3,
 ):
@@ -74,6 +73,8 @@ def diffusion_loss_func(
 
     masked_prediction_loss = dpm_loss[:, 1:, :][neighbors_future_valid]
 
+    loss = {}
+
     if masked_prediction_loss.numel() > 0:
         loss["neighbor_prediction_loss"] = masked_prediction_loss.mean()
     else:
@@ -96,4 +97,4 @@ def diffusion_loss_func(
         )
         loss["turn_indicator_accuracy"] = turn_indicator_accuracy
 
-    return loss, decoder_output
+    return loss
