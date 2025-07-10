@@ -27,7 +27,8 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
     model.eval()
     total_loss_ego = 0.0
     total_loss_neighbor = 0.0
-    total_samples = 0
+    total_samples_ego = 0
+    total_samples_neighbor = 0
 
     predictions = []
     turn_indicators = []
@@ -108,16 +109,19 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
         loss_nei = loss_tensor[:, 1:, :]
         loss_nei = loss_nei[neighbors_future_valid]
         total_loss_ego += loss_ego.mean().item() * B
-        total_loss_neighbor += loss_nei.mean().item() * B
-        total_samples += B
+        total_samples_ego += B
+        if loss_nei.shape[0] > 0:
+            nei_B = loss_nei.shape[0]
+            total_loss_neighbor += loss_nei.mean().item() * nei_B
+            total_samples_neighbor += nei_B
 
         loss_dict = loss_func(prediction, all_gt)
         for key, val in loss_dict.items():
             # val : (B, Pn + 1, T)
             total_result_dict[f"ego_{key}"].append(val[:, 0, :])  # (B, T)
 
-    avg_loss_ego = total_loss_ego / total_samples
-    avg_loss_neighbor = total_loss_neighbor / total_samples
+    avg_loss_ego = total_loss_ego / total_samples_ego
+    avg_loss_neighbor = total_loss_neighbor / total_samples_neighbor
     loss_ego = torch.cat(loss_ego_list, dim=0)
 
     for key, val in total_result_dict.items():
