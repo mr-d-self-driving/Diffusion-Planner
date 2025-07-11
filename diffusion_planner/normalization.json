@@ -7,7 +7,7 @@
     "mean": [10, 0, 0, 0],
     "std": [20, 20, 1, 1]
   },
-  "ego_agents_past": {
+  "ego_agent_past": {
     "mean": [10, 0, 0, 0],
     "std": [20, 20, 1, 1]
   },
