@@ -109,7 +109,9 @@ if __name__ == "__main__":
         ego_x = info_data["x"]
         ego_y = info_data["y"]
 
-        time_str = valid_data_path.stem.split("_")[0]
+        # valid_data_path = (...)/2025-06-12/10-19-35/10-19-35_0000000000000021.npz
+        date_str = valid_data_path.parent.parent.name
+        time_str = valid_data_path.parent.name
 
         valid_data_dict = {}
         for key, value in valid_data.items():
@@ -117,6 +119,7 @@ if __name__ == "__main__":
                 continue
             # add batch size axis
             valid_data_dict[key] = torch.tensor(np.expand_dims(value, axis=0))
+        valid_data_dict["ego_agent_past"] = heading_to_cos_sin(valid_data_dict["ego_agent_past"])
         valid_data_dict["goal_pose"] = heading_to_cos_sin(valid_data_dict["goal_pose"])
         valid_data_dict = config_obj.observation_normalizer(valid_data_dict)
 
@@ -220,7 +223,7 @@ if __name__ == "__main__":
 
         plt.colorbar(ax[1].collections[0], ax=ax[1])
 
-        curr_save_dir = save_dir / time_str
+        curr_save_dir = save_dir / date_str / time_str
         curr_save_dir.mkdir(parents=True, exist_ok=True)
         plt.savefig(curr_save_dir / f"{valid_data_path.stem}.png")
         plt.close()
