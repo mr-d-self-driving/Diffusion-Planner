@@ -9,7 +9,11 @@ import numpy as np
 import onnxruntime as ort
 import rclpy
 import torch
-from autoware_new_planning_msgs.msg import Trajectories, Trajectory, TrajectoryGeneratorInfo
+from autoware_internal_planning_msgs.msg import (
+    CandidateTrajectories,
+    CandidateTrajectory,
+    GeneratorInfo,
+)
 from autoware_perception_msgs.msg import TrackedObjects, TrafficLightGroupArray
 from autoware_planning_msgs.msg import LaneletRoute
 from autoware_planning_msgs.msg import Trajectory as PlanningTrajectory
@@ -185,7 +189,7 @@ class DiffusionPlannerNode(Node):
         )
         # pub(1b)[new_planning_framework] trajectories
         self.pub_trajectories = self.create_publisher(
-            Trajectories,
+            CandidateTrajectories,
             "/diffusion_planner/trajectories",
             pub_qos,
         )
@@ -423,10 +427,10 @@ class DiffusionPlannerNode(Node):
         self.get_logger().info(f"Time Inference: {elapsed_msec:.4f} msec")
         # ([bs, 11, T, 4])
         # Publish new format Trajectories message
-        trajectories_msg = Trajectories()
+        trajectories_msg = CandidateTrajectories()
 
         # Create generator info
-        generator_info = TrajectoryGeneratorInfo()
+        generator_info = GeneratorInfo()
         uuid_obj = uuid.uuid4()
         generator_info.generator_id.uuid = list(uuid_obj.bytes)
         generator_info.generator_name.data = "diffusion_planner"
@@ -440,12 +444,11 @@ class DiffusionPlannerNode(Node):
             trajectory_msg = convert_prediction_to_msg(curr_pred, bl2map_matrix_4x4, stamp)
 
             # Create new format trajectory by copying from existing trajectory_msg
-            new_trajectory = Trajectory()
+            new_trajectory = CandidateTrajectory()
             new_trajectory.header = trajectory_msg.header
             new_trajectory.points = trajectory_msg.points
             new_trajectory.generator_id = generator_info.generator_id
-            new_trajectory.score = 1.0 / (b + 1)
-            trajectories_msg.trajectories.append(new_trajectory)
+            trajectories_msg.candidate_trajectories.append(new_trajectory)
 
             curr_marker_array = create_trajectory_marker(trajectory_msg)
             for i in range(len(curr_marker_array.markers)):
