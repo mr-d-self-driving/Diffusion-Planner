@@ -62,6 +62,7 @@ if __name__ == "__main__":
     trajectory_dict_x = defaultdict(list)
     trajectory_dict_y = defaultdict(list)
     loss_3sec_dict = defaultdict(list)
+    loss_ego_position_lat = defaultdict(list)
     loss_list = []
     for info_path, loss_path in zip(info_path_list, loss_path_list):
         assert info_path.is_file()
@@ -74,6 +75,7 @@ if __name__ == "__main__":
         loss_data = json.load(open(loss_path, "r"))
         loss_3sec_dict[time_str].append(loss_data["loss_ego_3sec"])
         loss_list.append(loss_data["loss_ego_3sec"])
+        loss_ego_position_lat[time_str].append(loss_data["ego_position_lat_loss"])
 
     assert len(prediction_path_list) == len(valid_data_path_list)
 
@@ -202,7 +204,7 @@ if __name__ == "__main__":
         ax[1].scatter(
             trajectory_dict_x[time_str],
             trajectory_dict_y[time_str],
-            c=loss_3sec_dict[time_str],
+            c=loss_ego_position_lat[time_str],
             marker="o",
             s=10,
         )
@@ -218,7 +220,7 @@ if __name__ == "__main__":
         ax[1].set_xticks([])
         ax[1].set_yticks([])
         ax[1].grid(True)
-        ax[1].set_title("loss3sec")
+        ax[1].set_title("loss_ego_position_lat")
         ax[1].set_aspect("equal")
 
         plt.colorbar(ax[1].collections[0], ax=ax[1])
