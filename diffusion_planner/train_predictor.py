@@ -61,7 +61,7 @@ def get_args():
     parser.add_argument("--route_state_dim", type=int, help="state dim for route lanes", default=12)
 
     # DataLoader parameters
-    parser.add_argument("--use_data_augment", default=True, type=boolean)
+    parser.add_argument("--use_data_augment", default=False, type=boolean)
     parser.add_argument("--augment_prob", type=float, help="augmentation probability", default=0.5)
     parser.add_argument("--normalization_file_path", default="normalization.json", type=str)
     parser.add_argument("--num_workers", default=4, type=int)
@@ -78,6 +78,7 @@ def get_args():
     parser.add_argument("--warm_up_epoch", type=int, help="number of warm up", default=5)
     parser.add_argument("--encoder_drop_path_rate", type=float, default=0.1)
     parser.add_argument("--decoder_drop_path_rate", type=float, default=0.1)
+    parser.add_argument("--use_ego_history", type=boolean, default=False)
 
     parser.add_argument("--alpha_planning_loss", type=float, default=1.0)
 

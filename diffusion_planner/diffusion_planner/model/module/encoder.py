@@ -37,6 +37,8 @@ class Encoder(nn.Module):
 
         self.hidden_dim = config.hidden_dim
 
+        self.use_ego_history = config.use_ego_history
+
         ego_num = 1
         goal_pose_num = 1
         ego_shape_num = 1
@@ -110,6 +112,8 @@ class Encoder(nn.Module):
 
         # ego agent
         ego = inputs["ego_agent_past"]  # (B, T=21, D=4)
+        if not self.use_ego_history:
+            ego = torch.zeros_like(ego)
 
         # agents
         neighbors = inputs["neighbor_agents_past"]  # (B, N=32, T=21, D=11)
