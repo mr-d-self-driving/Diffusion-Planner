@@ -316,10 +316,9 @@ if __name__ == "__main__":
     save_predictions_dir = Path(args.save_predictions_dir)
     save_predictions_dir.mkdir(parents=True, exist_ok=True)
     for i in range(predictions.shape[0]):
-        prediction = predictions[i].cpu().numpy()
         np.savez(
             save_predictions_dir / f"prediction{i:08d}.npz",
-            prediction=prediction,
+            prediction=predictions[i].cpu().numpy(),
             turn_indicator=turn_indicators[i].cpu().numpy(),
         )
         loss_dict = {
@@ -328,5 +327,9 @@ if __name__ == "__main__":
             "loss_ego_5sec": torch.sqrt(loss_ego[i, 50 - 1, :2].sum()).item(),
             "loss_ego_8sec": torch.sqrt(loss_ego[i, 80 - 1, :2].sum()).item(),
         }
+        for key, val in valid_dict.items():
+            if not key.startswith("ego_"):
+                continue
+            loss_dict[key] = val[i].mean().item()
         with open(save_predictions_dir / f"loss{i:08d}.json", "w") as f:
             json.dump(loss_dict, f, indent=4)
