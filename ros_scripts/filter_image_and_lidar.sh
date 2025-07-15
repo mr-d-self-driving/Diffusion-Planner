@@ -12,6 +12,7 @@ OUTPUT_ROSBAG_DIR=$2
 
 cd $SCRIPT_DIR
 set +eu
+source ~/pilot-auto.xx1/install/setup.bash
 source ./extension_ws/install/setup.bash
 set -eu
 
@@ -73,7 +74,10 @@ declare -a TOPICS=(
     "/sensing/lidar/front_right/pandar_packets"
 )
 
-PLAY_CMD="ros2 bag filter $INPUT_ROSBAG_DIR -o $OUTPUT_ROSBAG_DIR -x"
+METADATA=$INPUT_ROSBAG_DIR/metadata.yaml
+STORAGE=$(cat $METADATA | grep storage_identifier)  #  "  storage_identifier: mcap" or "  storage_identifier: sqlite3"
+EXT=$(echo $STORAGE | awk '{print $2}')
+PLAY_CMD="ros2 bag filter --storage=$EXT $INPUT_ROSBAG_DIR -o $OUTPUT_ROSBAG_DIR -x"
 
 for TOPIC in "${TOPICS[@]}"; do
     PLAY_CMD+=" $TOPIC"
