@@ -43,10 +43,10 @@ if __name__ == "__main__":
     input_dict = {
         "ego_current_state": torch.zeros((batch_size, 10), device=dev),
         "neighbor_agents_past": torch.zeros((batch_size, 32, 21, 11), device=dev),
-        "lanes": torch.zeros((batch_size, 70, 20, 12), dtype=torch.float32, device=dev),
+        "lanes": torch.zeros((batch_size, 70, 20, 13), dtype=torch.float32, device=dev),
         "lanes_speed_limit": torch.zeros((batch_size, 70, 1), device=dev),
         "lanes_has_speed_limit": torch.zeros((batch_size, 70, 1), dtype=torch.bool, device=dev),
-        "route_lanes": torch.zeros((batch_size, 25, 20, 12), dtype=torch.float32, device="cuda"),
+        "route_lanes": torch.zeros((batch_size, 25, 20, 13), dtype=torch.float32, device="cuda"),
         "route_lanes_speed_limit": torch.zeros((batch_size, 25, 1), device=dev),
         "route_lanes_has_speed_limit": torch.zeros(
             (batch_size, 25, 1), dtype=torch.bool, device=dev

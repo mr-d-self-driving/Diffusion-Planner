@@ -456,9 +456,9 @@ def process_segment(
     diff_centerlines = centerlines[1:] - centerlines[:-1]
     diff_centerlines = np.insert(diff_centerlines, diff_centerlines.shape[0], 0, axis=0)
 
-    traffic_light = [0, 0, 0, 0]  # (green, yellow, red, unknown)
+    traffic_light = [0, 0, 0, 0, 0]  # (green, yellow, red, unknown, no traffic light)
     if len(segment.traffic_lights) == 0:
-        traffic_light = [0, 0, 0, 1]  # unknown
+        traffic_light = [0, 0, 0, 0, 1]  # no traffic light
     else:
         if len(segment.traffic_lights) > 1:
             print(
@@ -540,7 +540,7 @@ def create_lane_tensor(
 
     result_list = result_list[0:num_segments]
 
-    lanes_tensor = torch.zeros((1, num_segments, 20, 12), dtype=torch.float32, device=dev)
+    lanes_tensor = torch.zeros((1, num_segments, 20, 13), dtype=torch.float32, device=dev)
     lanes_speed_limit = torch.zeros((1, num_segments, 1), dtype=torch.float32, device=dev)
     lanes_has_speed_limit = torch.zeros((1, num_segments, 1), dtype=torch.bool, device=dev)
 

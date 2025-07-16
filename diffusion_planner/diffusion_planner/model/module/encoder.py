@@ -122,12 +122,12 @@ class Encoder(nn.Module):
         static = inputs["static_objects"]  # (B, P=5, D=10)
 
         # vector maps
-        lanes = inputs["lanes"]  # (B, P=70, V=20, D=12)
+        lanes = inputs["lanes"]  # (B, P=70, V=20, D=13)
         lanes_speed_limit = inputs["lanes_speed_limit"]  # (B, P=70, V=20, D=1)
         lanes_has_speed_limit = inputs["lanes_has_speed_limit"]  # (B, P=70, V=20, D=1)
 
         # route
-        route = inputs["route_lanes"]  # (B, P=25, V=20, D=12)
+        route = inputs["route_lanes"]  # (B, P=25, V=20, D=13)
         route_speed_limit = inputs["route_lanes_speed_limit"]  # (B, P=25, V=20, D=1)
         route_has_speed_limit = inputs["route_lanes_has_speed_limit"]  # (B, P=25, V=20, D=1)
 
@@ -426,7 +426,7 @@ class LaneEncoder(nn.Module):
 
         self.speed_limit_emb = nn.Linear(1, channels_mlp_dim)
         self.unknown_speed_emb = nn.Embedding(1, channels_mlp_dim)
-        self.traffic_emb = nn.Linear(4, channels_mlp_dim)
+        self.traffic_emb = nn.Linear(5, channels_mlp_dim)
 
         self.channel_pre_project = Mlp(
             in_features=8,
@@ -458,7 +458,7 @@ class LaneEncoder(nn.Module):
 
     def forward(self, x, speed_limit, has_speed_limit):
         """
-        x: B, P, V, D (x, y, x'-x, y'-y, x_left-x, y_left-y, x_right-x, y_right-y, traffic(4))
+        x: B, P, V, D (x, y, x'-x, y'-y, x_left-x, y_left-y, x_right-x, y_right-y, traffic(5))
         speed_limit: B, P, 1
         has_speed_limit: B, P, 1
         """

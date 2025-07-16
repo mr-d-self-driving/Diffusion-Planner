@@ -68,15 +68,19 @@ def visualize_inputs_cv2(
     # ==== Lanes (draw first as background) ====
     lanes = inputs["lanes"][0]
     for i in range(lanes.shape[0]):
-        traffic_light = lanes[i, 0, 8:12]
+        traffic_light = lanes[i, 0, 8:13]
         if traffic_light[0] == 1:
             color = (0, 255, 0)  # Green
         elif traffic_light[1] == 1:
             color = (0, 255, 255)  # Yellow
         elif traffic_light[2] == 1:
             color = (0, 0, 255)  # Red
-        else:
+        elif traffic_light[3] == 1:
             color = (128, 128, 128)  # Gray
+        elif traffic_light[4] == 1:
+            color = (0, 0, 0)  # no traffic light
+        else:
+            color = (255, 0, 0)  # Default color (Blue)
 
         # Draw lane boundaries with low opacity
         points_left = []

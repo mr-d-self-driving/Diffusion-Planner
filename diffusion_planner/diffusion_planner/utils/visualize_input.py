@@ -38,10 +38,10 @@ def visualize_inputs(
     neighbor_agents_past=(1, 32, 21, 11)
     neighbor_agents_future=(1, 32, 80, 3)
     static_objects=(1, 5, 10)
-    lanes=(1, 70, 20, 12)
+    lanes=(1, 70, 20, 13)
     lanes_speed_limit=(1, 70, 1)
     lanes_has_speed_limit=(1, 70, 1)
-    route_lanes=(1, 25, 20, 12)
+    route_lanes=(1, 25, 20, 13)
     route_lanes_speed_limit=(1, 25, 1)
     route_lanes_has_speed_limit=(1, 25, 1)
     turn_indicator=(1,)
@@ -265,6 +265,8 @@ def visualize_inputs(
             return "red"
         elif traffic_light[3] == 1:
             return "gray"
+        elif traffic_light[4] == 1:
+            return "black"
         return "purple"
 
     # ==== Lanes ====
@@ -273,7 +275,7 @@ def visualize_inputs(
     lanes_has_speed_limit = inputs["lanes_has_speed_limit"][0]
 
     for i in range(lanes.shape[0]):
-        traffic_light = lanes[i, 0, 8:12]
+        traffic_light = lanes[i, 0, 8:13]
         color = get_traffic_light_color(traffic_light)
 
         # center line
@@ -302,7 +304,7 @@ def visualize_inputs(
     route_lanes_has_speed_limit = inputs["route_lanes_has_speed_limit"][0]
 
     for i in range(route_lanes.shape[0]):
-        traffic_light = route_lanes[i, 0, 8:12]
+        traffic_light = route_lanes[i, 0, 8:13]
         color = get_traffic_light_color(traffic_light)
 
         # center line

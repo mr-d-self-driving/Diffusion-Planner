@@ -54,11 +54,9 @@ def get_args():
 
     parser.add_argument("--lane_num", type=int, help="number of lanes", default=70)
     parser.add_argument("--lane_len", type=int, help="number of lane points", default=20)
-    parser.add_argument("--lane_state_dim", type=int, help="state dim for lane points", default=12)
 
     parser.add_argument("--route_num", type=int, help="number of route lanes", default=25)
     parser.add_argument("--route_len", type=int, help="number of route lane points", default=20)
-    parser.add_argument("--route_state_dim", type=int, help="state dim for route lanes", default=12)
 
     # DataLoader parameters
     parser.add_argument("--use_data_augment", default=False, type=boolean)

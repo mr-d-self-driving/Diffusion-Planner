@@ -45,10 +45,10 @@ if __name__ == "__main__":
     neighbor_agents_past	float32	(10, 32, 21, 11)
     neighbor_agents_future	float32	(10, 32, 80, 3)
     static_objects	float32	(10, 5, 10)
-    lanes	float32	(10, 70, 20, 12)
+    lanes	float32	(10, 70, 20, 13)
     lanes_speed_limit	float32	(10, 70, 1)
     lanes_has_speed_limit	bool	(10, 70, 1)
-    route_lanes	float32	(10, 25, 20, 12)
+    route_lanes	float32	(10, 25, 20, 13)
     route_lanes_speed_limit	float32	(10, 25, 1)
     route_lanes_has_speed_limit	bool	(10, 25, 1)
     """
