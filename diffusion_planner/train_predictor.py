@@ -137,7 +137,7 @@ def model_training(args):
         print("Use device: {}".format(args.device))
 
         if args.resume_model_path is not None:
-            save_path = args.resume_model_path
+            save_path = os.path.dirname(args.resume_model_path)
         else:
             from datetime import datetime
 
