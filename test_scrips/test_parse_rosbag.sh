@@ -3,7 +3,7 @@ set -eux
 
 cd $(dirname $0)/..
 
-result_dir=/mnt/nvme0/sakoda/$(date +%Y%m%d_%H%M%S)_test_parse_rosbag
+result_dir=/mnt/nvme0/sakoda/test/$(date +%Y%m%d_%H%M%S)_test_parse_rosbag
 
 rm -rf ${result_dir}
 mkdir -p ${result_dir}/tmp
