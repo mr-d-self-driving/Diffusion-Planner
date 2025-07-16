@@ -346,13 +346,14 @@ def main(
                 ok = False
 
         # check kinematic_state
-        kinematic_state = latest_msgs["/localization/kinematic_state"]
-        covariance = kinematic_state.pose.covariance
-        covariance_xx = covariance[0]
-        covariance_yy = covariance[7]
-        if covariance_xx > 1e-1 or covariance_yy > 1e-1:
-            logger.info(f"Invalid kinematic_state {covariance_xx=:.5f}, {covariance_yy=:.5f}")
-            ok = False
+        if ok:
+            kinematic_state = latest_msgs["/localization/kinematic_state"]
+            covariance = kinematic_state.pose.covariance
+            covariance_xx = covariance[0]
+            covariance_yy = covariance[7]
+            if covariance_xx > 1e-1 or covariance_yy > 1e-1:
+                logger.info(f"Invalid kinematic_state {covariance_xx=:.5f}, {covariance_yy=:.5f}")
+                ok = False
 
         # check route
         if search_nearest_route:

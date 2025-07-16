@@ -37,7 +37,9 @@ def get_nearest_msg(msg_list: list, stamp):
     for i, msg in enumerate(msg_list):
         msg_stamp = msg.header.stamp if hasattr(msg, "header") else msg.stamp
         msg_stamp_int = parse_timestamp(msg_stamp)
-        time_diff = abs(msg_stamp_int - stamp_int)
+        time_diff = stamp_int - msg_stamp_int
+        if time_diff < 0:
+            break
         if time_diff < nearest_time_diff:
             nearest_time_diff = time_diff
             nearest_msg = msg
