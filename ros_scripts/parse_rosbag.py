@@ -108,13 +108,14 @@ def create_ego_sequence(data_list, i, future_time_steps, map2bl_matrix_4x4):
     ego_future_y = []
     ego_future_yaw = []
     for j in range(future_time_steps):
-        x = data_list[i + j + 1].kinematic_state.pose.pose.position.x
-        y = data_list[i + j + 1].kinematic_state.pose.pose.position.y
-        z = data_list[i + j + 1].kinematic_state.pose.pose.position.z
-        qx = data_list[i + j + 1].kinematic_state.pose.pose.orientation.x
-        qy = data_list[i + j + 1].kinematic_state.pose.pose.orientation.y
-        qz = data_list[i + j + 1].kinematic_state.pose.pose.orientation.z
-        qw = data_list[i + j + 1].kinematic_state.pose.pose.orientation.w
+        index = min(i + j + 1, len(data_list) - 1)
+        x = data_list[index].kinematic_state.pose.pose.position.x
+        y = data_list[index].kinematic_state.pose.pose.position.y
+        z = data_list[index].kinematic_state.pose.pose.position.z
+        qx = data_list[index].kinematic_state.pose.pose.orientation.x
+        qy = data_list[index].kinematic_state.pose.pose.orientation.y
+        qz = data_list[index].kinematic_state.pose.pose.orientation.z
+        qw = data_list[index].kinematic_state.pose.pose.orientation.w
         rot = Rotation.from_quat([qx, qy, qz, qw])
         pose_in_map = np.eye(4)
         pose_in_map[:3, :3] = rot.as_matrix()
@@ -446,7 +447,8 @@ def main(
 
         # list[FrameData] -> npz
         progress = tqdm(total=(n - PAST_TIME_STEPS - FUTURE_TIME_STEPS) // step)
-        for i in range(PAST_TIME_STEPS, n - FUTURE_TIME_STEPS, step):
+        stopping_count = 0
+        for i in range(PAST_TIME_STEPS, n, step):
             progress.update(1)
             token = f"{seq_id:08d}{i:08d}"
 
@@ -504,7 +506,25 @@ def main(
             # (2)目の前のlanelet segmentが赤信号である
             # (3)GTのTrajectoryが進むように出ている
             # このようなデータはスキップする
+
+            # まず停止判定
             is_stop = data_list[i].kinematic_state.twist.twist.linear.x < 0.1
+            if is_stop:
+                stopping_count += 1
+            else:
+                stopping_count = 0
+
+            # goal付近で1秒以上止まっていたら終了
+            distance_to_goal_pose = np.linalg.norm(
+                np.array([ego_future_np[-1, 0], ego_future_np[-1, 1]])
+                - np.array([goal_pose_bl[0], goal_pose_bl[1]])
+            )
+            if stopping_count >= 10 and distance_to_goal_pose < 5.0:
+                logger.info(
+                    f"finish at {i} because stopping_count={stopping_count} and distance_to_goal_pose={distance_to_goal_pose:.2f}"
+                )
+                break
+
             is_red_light = route_tensor[:, 1, 0, -2].item()  # next segment
             sum_mileage = 0.0
             for j in range(FUTURE_TIME_STEPS - 1):
