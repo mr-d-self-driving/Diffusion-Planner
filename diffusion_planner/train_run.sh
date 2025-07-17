@@ -18,8 +18,8 @@ SAVE_DIR="/mnt/nvme0/sakoda/training_result"
 
 python3 -m torch.distributed.run --nnodes 1 --nproc-per-node 8 --standalone train_predictor.py \
 --exp_name ${exp_name} \
---train_set_list "/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver16_realdata/path_list_train.json" \
---valid_set_list "/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver16_realdata/path_list_valid.json" \
+--train_set_list "/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver19_realdata/path_list_train_with_psim_data.json" \
+--valid_set_list "/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver19_realdata/path_list_valid.json" \
 --use_wandb True \
 --diffusion_model_type "x_start" \
 --save_dir $SAVE_DIR \
