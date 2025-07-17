@@ -341,8 +341,8 @@ def main(
             msg_stamp = curr_msg.header.stamp if hasattr(curr_msg, "header") else curr_msg.stamp
             msg_stamp_int = parse_timestamp(msg_stamp)
             diff = abs(timestamp - msg_stamp_int)
-            if diff > int(0.1 * 1e9):
-                logger.info(f"Over 100 msec: {key} {len(topic_name_to_data[key])=}, {diff=:,}")
+            if diff > int(0.2 * 1e9):
+                logger.info(f"Over 200 msec: {key} {len(topic_name_to_data[key])=}, {diff=:,}")
                 ok = False
 
         # check kinematic_state
