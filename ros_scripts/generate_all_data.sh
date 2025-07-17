@@ -7,7 +7,7 @@ set +eux
 source ~/pilot-auto.xx1/install/setup.bash
 set -eux
 
-data_root=/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver18_realdata
+data_root=/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver19_realdata
 
 python3 ./parse_rosbag_for_directory.py \
     /mnt/nvme0/sakoda/nas_copy/tieriv_dataset/driving_dataset/bag/ \
