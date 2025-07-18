@@ -401,26 +401,15 @@ def main(
         )
         progress_bar.update(1)
 
-    # おそらくFreeSpacePlannerの影響で、最後の方でgoal_poseだけ微妙に変わることがある
-    # それに伴ってprimitivesの細かい順番も変わるが、idをソートして比較すると一致している
+    # FreeSpacePlannerの影響で、最後の方でgoal_poseだけ微妙に変わることがある
     # そういうものは結合する
     for i in range(len(sequence_data_list) - 2, -1, -1):
         route_msg_l = sequence_data_list[i].route
         route_msg_r = sequence_data_list[i + 1].route
         if route_msg_l.start_pose != route_msg_r.start_pose:
-            continue
-        segments_l = route_msg_l.segments
-        segments_r = route_msg_r.segments
-        if len(segments_l) != len(segments_r):
-            continue
-        same = True
-        for sl, sr in zip(segments_l, segments_r):
-            primitives_l = sorted([i.id for i in sl.primitives])
-            primitives_r = sorted([i.id for i in sr.primitives])
-            if primitives_l != primitives_r:
-                same = False
-                break
-        if not same:
+            logger.info(
+                f"Route start pose mismatch: {route_msg_l.start_pose} != {route_msg_r.start_pose}"
+            )
             continue
         logger.info(f"Concatenate sequence {i} and {i + 1}")
         logger.info(f"Before {len(sequence_data_list[i].data_list)=} frames")
