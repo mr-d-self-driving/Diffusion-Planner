@@ -41,3 +41,23 @@ python3 ../diffusion_planner/util_scripts/create_train_set_path.py \
     $data_root/2025-06-12 \
     $data_root/2025-06-16 \
     --save_path $data_root/path_list_valid.json
+
+# psimdata
+data_root_psim=/mnt/nvme0/sakoda/nas_copy/private_workspace/diffusion_planner/preprocessed_ver20_psimdata
+
+python3 ./parse_rosbag_for_directory.py \
+    /mnt/nvme0/sakoda/nas_copy/psim_dataset/odaiba_20250709/bag \
+    --save_root $data_root_psim \
+    --step 1 \
+    --limit -1 \
+    --min_frames 1800 \
+    --search_nearest_route 0
+
+python3 ../diffusion_planner/util_scripts/create_train_set_path.py \
+    $data_root_psim \
+    --save_path $data_root_psim/path_list.json
+
+python3 ../diffusion_planner/util_scripts/concat_data_list_jsons.py \
+    $data_root_psim/path_list.json \
+    $data_root/path_list_train.json \
+    --save_path $data_root/path_list_train_with_psim_data.json
