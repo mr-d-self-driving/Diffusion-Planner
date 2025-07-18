@@ -586,6 +586,7 @@ def main(
 
             # save other info
             pose_dict = {
+                "timestamp": data_list[i].timestamp,
                 "x": data_list[i].kinematic_state.pose.pose.position.x,
                 "y": data_list[i].kinematic_state.pose.pose.position.y,
                 "z": data_list[i].kinematic_state.pose.pose.position.z,
