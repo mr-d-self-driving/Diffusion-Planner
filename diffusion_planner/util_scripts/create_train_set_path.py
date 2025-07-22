@@ -16,6 +16,10 @@ if __name__ == "__main__":
     args = parse_args()
     root_dir_list = args.root_dir_list
     save_path = args.save_path
+    if save_path is None:
+        save_path = root_dir_list[0].parent / "path_list.json"
+
+    log = open(save_path.with_suffix(".log"), "w")
 
     all_list = []
 
@@ -27,14 +31,14 @@ if __name__ == "__main__":
 
         npz_files = sorted(root_dir.rglob("*.npz"))
         print(f"Found {len(npz_files)} npz files in {root_dir}.")
+        log.write(f"Found {len(npz_files)} npz files in {root_dir}.\n")
 
         all_list.extend(npz_files)
 
     print(f"Found {len(all_list)} npz files in total.")
+    log.write(f"Found {len(all_list)} npz files in total.\n")
 
     root_dir = root_dir_list[0]
-    if save_path is None:
-        save_path = root_dir.parent / "path_list.json"
 
     with open(save_path, "w") as f:
         json.dump([str(npz_file) for npz_file in all_list], f, indent=4)
