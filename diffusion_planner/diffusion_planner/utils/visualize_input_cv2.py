@@ -26,7 +26,7 @@ def visualize_inputs_cv2(
     def world_to_image(x, y):
         """Convert world coordinates to image coordinates"""
         # Center the ego vehicle in the image
-        img_x = int((x - ego_x + view_range) * image_size[0] / (2 * view_range))
+        img_x = int(((x - ego_x) + view_range) * image_size[0] / (2 * view_range))
         img_y = int((view_range - (y - ego_y)) * image_size[1] / (2 * view_range))
         return img_x, img_y
 
@@ -72,8 +72,8 @@ def visualize_inputs_cv2(
             color = (255, 0, 0)  # Default color (Blue)
 
         # Draw lane boundaries with low opacity
-        points_left = []
-        points_right = []
+        points_l = []
+        points_r = []
 
         for j in range(lanes.shape[1]):
             if np.sum(np.abs(lanes[i, j, :2])) < 1e-6:
@@ -85,15 +85,15 @@ def visualize_inputs_cv2(
             rx = cx + lanes[i, j, 6]
             ry = cy + lanes[i, j, 7]
 
-            points_left.append(world_to_image(lx, ly))
-            points_right.append(world_to_image(rx, ry))
+            points_l.append(world_to_image(lx, ly))
+            points_r.append(world_to_image(rx, ry))
 
-        pts_left = np.array(points_left, np.int32)
-        pts_right = np.array(points_right, np.int32)
+        points_l = np.array(points_l, np.int32)
+        points_r = np.array(points_r, np.int32)
 
         # Draw directly without transparency
-        cv2.polylines(img, [pts_left], False, color, 1)
-        cv2.polylines(img, [pts_right], False, color, 1)
+        cv2.polylines(img, [points_l], False, color, 2)
+        cv2.polylines(img, [points_r], False, color, 2)
 
     # ==== Route lanes ====
     route_lanes = inputs["route_lanes"][0]
@@ -107,7 +107,7 @@ def visualize_inputs_cv2(
             points_center.append(world_to_image(cx, cy))
 
         pts_center = np.array(points_center, np.int32)
-        cv2.polylines(img, [pts_center], False, (255, 0, 255), 3)
+        cv2.polylines(img, [pts_center], False, (255, 0, 255), 8)
 
     # ==== Static objects ====
     static_objects = inputs["static_objects"][0]
@@ -180,16 +180,18 @@ def visualize_inputs_cv2(
         # Draw future trajectory (simplified - single color)
         if "neighbor_agents_future" in inputs:
             neighbor_future = inputs["neighbor_agents_future"][0][i]
-            for j in range(
-                0, neighbor_future.shape[0], 10
-            ):  # Sample every 10 points for performance
+            neighbor_future_points = []
+            for j in range(0, neighbor_future.shape[0], 5):
                 future_x = neighbor_future[j, 0]
                 future_y = neighbor_future[j, 1]
                 if future_x == 0 and future_y == 0:
                     break
 
                 pt = world_to_image(future_x, future_y)
-                cv2.circle(img, pt, 2, (128, 0, 128), -1)  # Purple color
+                neighbor_future_points.append(pt)
+
+            if neighbor_future_points:
+                cv2.polylines(img, [np.array(neighbor_future_points, np.int32)], False, (128, 0, 128), 2)
 
     # ==== Ego past trajectory ====
     if "ego_agent_past" in inputs:
@@ -211,11 +213,6 @@ def visualize_inputs_cv2(
     # Draw ego vehicle as a filled rectangle
     draw_rotated_rect(img, ego_x, ego_y, car_length, car_width, ego_heading, (0, 0, 255))
 
-    # Draw direction arrow
-    arrow_end_x = ego_x + car_length * 0.7 * np.cos(ego_heading)
-    arrow_end_y = ego_y + car_length * 0.7 * np.sin(ego_heading)
-    draw_arrow(img, ego_x, ego_y, arrow_end_x, arrow_end_y, (255, 255, 255), 3)
-
     # ==== Ego future trajectory ====
     if "ego_agent_future" in inputs:
         ego_future = inputs["ego_agent_future"][0]
@@ -232,6 +229,8 @@ def visualize_inputs_cv2(
         goal_end_x = goal_x + 3 * np.cos(goal_yaw)
         goal_end_y = goal_y + 3 * np.sin(goal_yaw)
         draw_arrow(img, goal_x, goal_y, goal_end_x, goal_end_y, (255, 0, 0), 3)
+
+    img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
     # Return the image array (BGR format)
     return img
