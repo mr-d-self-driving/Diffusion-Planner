@@ -2,12 +2,9 @@ import cv2
 import numpy as np
 import torch
 
-from diffusion_planner.utils.normalizer import ObservationNormalizer
-
 
 def visualize_inputs_cv2(
     inputs: dict,
-    obs_normalizer: ObservationNormalizer,
     image_size: tuple = (600, 600),
     view_range: float = 55.0,
 ) -> np.ndarray:
@@ -15,16 +12,8 @@ def visualize_inputs_cv2(
     Draw the input data of the diffusion_planner model as a cv2 image
     Returns the image as a numpy array suitable for neural network input
     """
-    inputs = obs_normalizer.inverse(inputs)
-
-    # Function to convert PyTorch tensors to NumPy arrays
-    def to_numpy(tensor):
-        if isinstance(tensor, torch.Tensor):
-            return tensor.detach().cpu().numpy()
-        return tensor
-
     for key in inputs:
-        inputs[key] = to_numpy(inputs[key])
+        inputs[key] = inputs[key].detach().cpu().numpy()
 
     # Create a blank image
     img = np.ones((image_size[0], image_size[1], 3), dtype=np.uint8) * 255
@@ -244,24 +233,19 @@ def visualize_inputs_cv2(
         goal_end_y = goal_y + 3 * np.sin(goal_yaw)
         draw_arrow(img, goal_x, goal_y, goal_end_x, goal_end_y, (255, 0, 0), 3)
 
-
     # Return the image array (BGR format)
     return img
+
 
 if __name__ == "__main__":
     import argparse
     from pathlib import Path
 
-    from diffusion_planner.utils.config import Config
-
     parser = argparse.ArgumentParser()
     parser.add_argument("npz_path", type=Path)
-    parser.add_argument("args_json", type=Path)
     npz_path = parser.parse_args().npz_path
-    args_json = parser.parse_args().args_json
 
     loaded = np.load(npz_path)
-    config_obj = Config(args_json)
 
     data = {}
     for key, value in loaded.items():
@@ -269,9 +253,8 @@ if __name__ == "__main__":
             continue
         # add batch size axis
         data[key] = torch.tensor(np.expand_dims(value, axis=0))
-    data = config_obj.observation_normalizer(data)
 
-    img = visualize_inputs_cv2(data, config_obj.observation_normalizer)
+    img = visualize_inputs_cv2(data)
 
     # Save image instead of displaying due to OpenCV GUI support issue
     output_path = "visualization_output.png"
