@@ -6,7 +6,7 @@ import torch
 def visualize_inputs_cv2(
     inputs: dict,
     image_size: tuple = (600, 600),
-    view_range: float = 55.0,
+    view_range: float = 100.0,
 ) -> np.ndarray:
     """
     Draw the input data of the diffusion_planner model as a cv2 image
@@ -256,6 +256,6 @@ if __name__ == "__main__":
     img = visualize_inputs_cv2(data)
 
     # Save image instead of displaying due to OpenCV GUI support issue
-    output_path = "visualization_output.png"
+    output_path = npz_path.with_suffix(".png")
     cv2.imwrite(output_path, img)
     print(f"Visualization saved to: {output_path}")
