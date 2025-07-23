@@ -297,8 +297,8 @@ def model_training(args):
         valid_loss_ego = valid_dict["avg_loss_ego"]
         valid_loss_neighbor = valid_dict["avg_loss_neighbor"]
         mean_ego_loss_dict = mean_ego_loss(valid_dict)
-        print(f"{valid_loss_ego=:.3f}, {valid_loss_neighbor=:.3f}")
-        print(mean_ego_loss_dict)
+        valid_loss_ego_position_lat_loss = mean_ego_loss_dict["valid_loss/ego_position_lat_loss"]
+        print(f"{valid_loss_ego=:.3f}, {valid_loss_neighbor=:.3f}, {valid_loss_ego_position_lat_loss=:.3f}")
 
         if global_rank == 0:
             lr_dict = {"lr": optimizer.param_groups[0]["lr"]}
@@ -319,6 +319,7 @@ def model_training(args):
                     "train_loss": train_total_loss,
                     "valid_loss_ego": valid_loss_ego,
                     "valid_loss_neighbor": valid_loss_neighbor,
+                    "valid_loss_ego_position_lat_loss": valid_loss_ego_position_lat_loss,
                 }
             )
             df = pd.DataFrame(data_list)
@@ -341,9 +342,9 @@ def model_training(args):
                     f"{save_path}/model_epoch_{epoch + 1:06d}_loss_{valid_loss_ego:.4f}.pth",
                 )
 
-            if valid_loss_ego < best_loss:
+            if valid_loss_ego_position_lat_loss < best_loss:
                 torch.save(model_dict, f"{save_path}/best_model.pth")
-                best_loss = valid_loss_ego
+                best_loss = valid_loss_ego_position_lat_loss
                 with open(os.path.join(save_path, "best_model_info.json"), "w") as f:
                     json.dump({"epoch": epoch + 1, "best_loss": best_loss}, f, indent=4)
                 no_improvement_count = 0
