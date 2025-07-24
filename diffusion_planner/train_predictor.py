@@ -85,7 +85,8 @@ def get_args():
     parser.add_argument("--use_ema", default=True, type=boolean)
 
     # Model
-    parser.add_argument("--encoder_depth", type=int, help="number of encoding layers", default=3)
+    parser.add_argument("--encoder_mixer_depth", type=int, default=3)
+    parser.add_argument("--encoder_fusion_depth", type=int, default=3)
     parser.add_argument("--decoder_depth", type=int, help="number of decoding layers", default=3)
     parser.add_argument("--num_heads", type=int, help="number of multi-head", default=6)
     parser.add_argument("--hidden_dim", type=int, help="hidden dimension", default=192)

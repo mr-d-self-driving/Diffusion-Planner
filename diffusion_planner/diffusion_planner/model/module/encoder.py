@@ -56,13 +56,13 @@ class Encoder(nn.Module):
             config.time_len,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
-            depth=config.encoder_depth,
+            depth=config.encoder_mixer_depth,
         )
         self.neighbor_encoder = NeighborEncoder(
             config.time_len,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
-            depth=config.encoder_depth,
+            depth=config.encoder_mixer_depth,
         )
         self.static_encoder = StaticEncoder(
             config.static_objects_state_dim,
@@ -74,14 +74,14 @@ class Encoder(nn.Module):
             class_type=CLASS_TYPE_LANE,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
-            depth=config.encoder_depth,
+            depth=config.encoder_mixer_depth,
         )
         self.route_encoder = LaneEncoder(
             config.route_len,
             class_type=CLASS_TYPE_ROUTE,
             drop_path_rate=config.encoder_drop_path_rate,
             hidden_dim=config.hidden_dim,
-            depth=config.encoder_depth,
+            depth=config.encoder_mixer_depth,
         )
         self.goal_pose_encoder = GoalPoseEncoder(
             drop_path_rate=config.encoder_drop_path_rate,
@@ -96,7 +96,7 @@ class Encoder(nn.Module):
             hidden_dim=config.hidden_dim,
             num_heads=config.num_heads,
             drop_path_rate=config.encoder_drop_path_rate,
-            depth=config.encoder_depth,
+            depth=config.encoder_fusion_depth,
         )
 
         # position embedding encode x, y, cos, sin, type
