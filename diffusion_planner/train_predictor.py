@@ -298,7 +298,9 @@ def model_training(args):
         valid_loss_neighbor = valid_dict["avg_loss_neighbor"]
         mean_ego_loss_dict = mean_ego_loss(valid_dict)
         valid_loss_ego_position_lat_loss = mean_ego_loss_dict["valid_loss/ego_position_lat_loss"]
-        print(f"{valid_loss_ego=:.3f}, {valid_loss_neighbor=:.3f}, {valid_loss_ego_position_lat_loss=:.3f}")
+        print(
+            f"{valid_loss_ego=:.3f}, {valid_loss_neighbor=:.3f}, {valid_loss_ego_position_lat_loss=:.3f}"
+        )
 
         if global_rank == 0:
             lr_dict = {"lr": optimizer.param_groups[0]["lr"]}
@@ -313,15 +315,14 @@ def model_training(args):
                 step=epoch + 1,
             )
 
-            data_list.append(
-                {
-                    "epoch": epoch + 1,
-                    "train_loss": train_total_loss,
-                    "valid_loss_ego": valid_loss_ego,
-                    "valid_loss_neighbor": valid_loss_neighbor,
-                    "valid_loss_ego_position_lat_loss": valid_loss_ego_position_lat_loss,
-                }
-            )
+            curr_data = {
+                "epoch": epoch + 1,
+                "train_loss": train_total_loss,
+                "valid_loss_ego": valid_loss_ego,
+                "valid_loss_neighbor": valid_loss_neighbor,
+                "valid_loss_ego_position_lat_loss": valid_loss_ego_position_lat_loss,
+            }
+            data_list.append(curr_data)
             df = pd.DataFrame(data_list)
             df.to_csv(os.path.join(save_path, "train_log.tsv"), index=False, sep="\t")
 
@@ -345,8 +346,9 @@ def model_training(args):
             if valid_loss_ego_position_lat_loss < best_loss:
                 torch.save(model_dict, f"{save_path}/best_model.pth")
                 best_loss = valid_loss_ego_position_lat_loss
+                curr_data["best_loss"] = best_loss
                 with open(os.path.join(save_path, "best_model_info.json"), "w") as f:
-                    json.dump({"epoch": epoch + 1, "best_loss": best_loss}, f, indent=4)
+                    json.dump(curr_data, f, indent=4)
                 no_improvement_count = 0
             else:
                 no_improvement_count += 1
