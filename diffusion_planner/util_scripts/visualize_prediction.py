@@ -201,12 +201,21 @@ if __name__ == "__main__":
 
         ax[0].set_title(title)
 
+        # scaling sizes based on loss_values
+        loss_values = np.array(loss_ego_position_lat[time_str])
+        loss_min = 0.0
+        loss_max = 3.0
+        clipped_loss_values = np.clip(loss_values, loss_min, loss_max)
+        sizes = 10 + (clipped_loss_values - loss_min) / (loss_max - loss_min) * 10
+
         ax[1].scatter(
             trajectory_dict_x[time_str],
             trajectory_dict_y[time_str],
             c=loss_ego_position_lat[time_str],
             marker="o",
-            s=10,
+            s=sizes,
+            vmin=loss_min,
+            vmax=loss_max,
         )
         ax[1].scatter(
             ego_x,
@@ -220,7 +229,7 @@ if __name__ == "__main__":
         ax[1].set_xticks([])
         ax[1].set_yticks([])
         ax[1].grid(True)
-        ax[1].set_title("loss_ego_position_lat")
+        ax[1].set_title("lateral error")
         ax[1].set_aspect("equal")
 
         plt.colorbar(ax[1].collections[0], ax=ax[1])
