@@ -256,6 +256,12 @@ def model_training(args):
         diffusion_planner, optimizer, scheduler, init_epoch, wandb_id, model_ema = resume_model(
             args.resume_model_path, diffusion_planner, optimizer, scheduler, model_ema, args.device
         )
+
+        # Override learning rate with the new value
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.learning_rate
+        print(f"Learning rate reset to {args.learning_rate}")
+
     else:
         init_epoch = 0
         wandb_id = None
