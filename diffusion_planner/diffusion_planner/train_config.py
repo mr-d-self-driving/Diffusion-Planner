@@ -131,6 +131,12 @@ class TrainConfig:
     ddp: bool = True
     port: str = "22323"
 
+    # Optional validation-only temporal stability metrics. Replan consistency requires
+    # consecutive NPZ frames in valid_set_list.
+    enable_temporal_stability_eval: bool = False
+    enable_replan_consistency_eval: bool = False
+    replan_consistency_expected_gap: int = 0
+
     # ---------------------------------------------------------
     # Closed-loop validation (rendered rollout + wandb video), run on the checkpoint-save cadence
     # (``save_utd``). Disabled unless ``closed_loop_npz_root`` is set (dir tree of route NPZ frames,

@@ -23,3 +23,7 @@ class ValidConfig:
     predicted_neighbor_num: int = 32
     ddp: bool = True
     port: str = "22323"
+
+    enable_temporal_stability_eval: bool = False
+    enable_replan_consistency_eval: bool = False
+    replan_consistency_expected_gap: int = 0
