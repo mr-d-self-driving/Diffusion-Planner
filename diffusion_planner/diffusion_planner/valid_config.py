@@ -27,3 +27,7 @@ class ValidConfig:
     enable_temporal_stability_eval: bool = False
     enable_replan_consistency_eval: bool = False
     replan_consistency_expected_gap: int = 0
+    enable_epdms_eval: bool = True
+    enable_pdms_eval: bool = False
+    epdms_eval_use_agent_boxes: bool = True
+    epdms_eval_use_road_border: bool = True
