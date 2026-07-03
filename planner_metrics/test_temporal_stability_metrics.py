@@ -62,15 +62,3 @@ def test_single_trajectory_stability_is_zero_for_constant_speed_straight_plan():
     plan = _straight_plan().unsqueeze(0)
     assert torch.allclose(compute_mean_abs_jerk_batch(plan), torch.zeros(1), atol=1.0e-4)
     assert torch.allclose(compute_curvature_rate_batch(plan), torch.zeros(1), atol=1.0e-4)
-
-
-def test_trajectory_consistency_logs_legacy_jerk_key():
-    plan = _straight_plan().unsqueeze(0)
-    current = torch.tensor([[0.0, 0.0, 1.0, 0.0]])
-    past = torch.tensor([[[-2.0, 0.0, 1.0, 0.0], [-1.0, 0.0, 1.0, 0.0]]])
-
-    from planner_metrics.temporal_stability import compute_trajectory_consistency_batch
-
-    out = compute_trajectory_consistency_batch(plan, past, current)
-    assert "ego_trajectory_consistency_jerk" in out
-    assert torch.allclose(out["ego_trajectory_consistency_jerk"], torch.zeros(1), atol=1.0e-4)

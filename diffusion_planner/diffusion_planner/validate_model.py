@@ -21,7 +21,6 @@ from planner_metrics.temporal_stability import (
     compute_curvature_rate_batch,
     compute_mean_abs_jerk_batch,
     compute_replan_consistency_batch,
-    compute_trajectory_consistency_batch,
     inter_frame_transform,
 )
 
@@ -88,7 +87,6 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
 
         inputs["ego_agent_past"] = heading_to_cos_sin(inputs["ego_agent_past"])
         inputs["goal_pose"] = heading_to_cos_sin(inputs["goal_pose"])
-        ego_past_for_consistency = inputs["ego_agent_past"]
 
         ego_future = inputs["ego_agent_future"]
         ego_future = heading_to_cos_sin(ego_future)  # (B, T, 4)
@@ -164,11 +162,6 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
         if getattr(args, "enable_temporal_stability_eval", False) or getattr(
             args, "enable_replan_consistency_eval", False
         ):
-            consistency_dict = compute_trajectory_consistency_batch(
-                prediction[:, 0], ego_past_for_consistency, ego_current
-            )
-            for key, val in consistency_dict.items():
-                total_result_dict[key].append(val.cpu())
             total_result_dict["ego_mean_abs_jerk"].append(
                 compute_mean_abs_jerk_batch(prediction[:, 0]).cpu()
             )
