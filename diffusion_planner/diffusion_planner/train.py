@@ -48,8 +48,11 @@ def log_dataset_artifact(
     valid_path = Path(valid_set_list)
     artifact.add_file(str(train_path), name=train_path.name)
     artifact.add_file(str(valid_path), name=valid_path.name)
-    summary_csv = find_upward(train_set_list, "summary.csv")
-    artifact.add_file(str(summary_csv), name="summary.csv")
+    try:
+        summary_csv = find_upward(train_set_list, "summary.csv")
+        artifact.add_file(str(summary_csv), name="summary.csv")
+    except FileNotFoundError:
+        print("summary.csv not found, skipping.")
     try:
         rosbag_summary_csv = find_upward(train_set_list, "rosbag_summary.csv")
         artifact.add_file(str(rosbag_summary_csv), name="rosbag_summary.csv")
