@@ -24,7 +24,3 @@ python3 -m torch.distributed.run --nnodes 1 --nproc-per-node $NUM_GPUS --standal
 --resume_model_path $MODEL_PATH \
 --args_json_path $ARGS_JSON_PATH \
 --save_predictions_dir $SAVE_DIR \
-
-python3 util_scripts/visualize_prediction.py \
-  --predictions_dir $SAVE_DIR \
-  --valid_data_list $VALID_SET_LIST_PATH
