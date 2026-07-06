@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import math
 import os
 from collections import Counter
 from collections.abc import Iterator
 
 import torch
+
+from planner_metrics.geometry import _build_sg_diff_kernel
 
 __all__ = [
     "compute_curvature_rate_batch",
@@ -18,13 +19,26 @@ __all__ = [
 ]
 
 
-def _build_sg_diff_kernel(window: int, poly: int, deriv: int, delta: float, device) -> torch.Tensor:
-    half = window // 2
-    x = torch.arange(-half, half + 1, dtype=torch.float64, device=device)
-    powers = torch.arange(poly + 1, dtype=torch.float64, device=device)
-    design = x[:, None].pow(powers[None])
-    coeff = torch.linalg.pinv(design)[deriv] * (math.factorial(deriv) / (delta**deriv))
-    return coeff.to(dtype=torch.float32)
+_SG_KERNEL_CACHE: dict[tuple[int, int, int, float, str, torch.dtype], torch.Tensor] = {}
+
+
+def _sg_diff_kernel(
+    window: int,
+    poly: int,
+    deriv: int,
+    delta: float,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    key = (window, poly, deriv, float(delta), str(device), dtype)
+    kernel = _SG_KERNEL_CACHE.get(key)
+    if kernel is None:
+        kernel = _build_sg_diff_kernel(window=window, poly=poly, deriv=deriv, delta=delta).to(
+            device=device,
+            dtype=dtype,
+        )
+        _SG_KERNEL_CACHE[key] = kernel
+    return kernel
 
 
 def _odd_window(length: int, max_window: int = 11) -> int:
@@ -42,8 +56,8 @@ def compute_mean_abs_jerk_batch(ego_trajs: torch.Tensor, dt: float = 0.1) -> tor
     if window < 5:
         return torch.zeros(n, device=ego_trajs.device, dtype=ego_trajs.dtype)
 
-    kernel = _build_sg_diff_kernel(window, poly=3, deriv=3, delta=dt, device=ego_trajs.device).to(
-        dtype=ego_trajs.dtype
+    kernel = _sg_diff_kernel(
+        window, poly=3, deriv=3, delta=dt, device=ego_trajs.device, dtype=ego_trajs.dtype
     )
     pad = window // 2
     xy = ego_trajs[..., :2].detach().permute(0, 2, 1)
@@ -65,8 +79,8 @@ def compute_curvature_rate_batch(ego_trajs: torch.Tensor, dt: float = 0.1) -> to
 
     device = ego_trajs.device
     dtype = ego_trajs.dtype
-    vel_kernel = _build_sg_diff_kernel(window, poly=3, deriv=1, delta=dt, device=device).to(dtype)
-    acc_kernel = _build_sg_diff_kernel(window, poly=3, deriv=2, delta=dt, device=device).to(dtype)
+    vel_kernel = _sg_diff_kernel(window, poly=3, deriv=1, delta=dt, device=device, dtype=dtype)
+    acc_kernel = _sg_diff_kernel(window, poly=3, deriv=2, delta=dt, device=device, dtype=dtype)
     pad = window // 2
     xy = ego_trajs[..., :2].detach().permute(0, 2, 1)
     xy = torch.nn.functional.pad(xy, (pad, pad), mode="replicate")
