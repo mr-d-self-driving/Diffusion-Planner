@@ -62,6 +62,3 @@ python3 -m torch.distributed.run --nnodes 1 --nproc-per-node $NUM_GPUS --standal
 --closed_loop_npz_root ${CLOSED_LOOP_NPZ_ROOT:-""} \
 "${OPTIONAL_ARGS[@]}" \
 2>&1 | tee ${SAVE_PATH}/train_log.txt
-
-# Convert the trained PyTorch model to ONNX format
-python3 ../ros_scripts/torch2onnx.py ${SAVE_PATH}
