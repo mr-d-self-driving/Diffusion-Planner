@@ -1,6 +1,7 @@
 import argparse
 import json
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -34,9 +35,21 @@ from planner_metrics.temporal_stability import (
 )
 
 
-def _predict_ego_for_temporal_metrics(model, inputs, args, device, delay=0):
+@dataclass
+class _PreparedValidationBatch:
+    inputs: dict[str, torch.Tensor]
+    ego_future: torch.Tensor
+    neighbors_future: torch.Tensor
+    neighbor_future_mask: torch.Tensor
+    ego_current: torch.Tensor
+    neighbors_current: torch.Tensor
+    turn_indicator_seq: torch.Tensor
+
+
+def _prepare_validation_inputs(inputs, args, device, delay=0) -> _PreparedValidationBatch:
     inputs = {key: value.to(device) for key, value in inputs.items()}
     batch_size = inputs["ego_current_state"].shape[0]
+    turn_indicator_seq = inputs["turn_indicators"]
     inputs["sampled_trajectories"] = torch.zeros(
         batch_size,
         MAX_NUM_AGENTS,
@@ -49,9 +62,29 @@ def _predict_ego_for_temporal_metrics(model, inputs, args, device, delay=0):
     inputs["ego_agent_past"] = heading_to_cos_sin(inputs["ego_agent_past"])
     inputs["goal_pose"] = heading_to_cos_sin(inputs["goal_pose"])
     ego_future = heading_to_cos_sin(inputs["ego_agent_future"])
+    neighbors_future = inputs["neighbor_agents_future"]
+    neighbor_future_mask = torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
+    neighbors_future = heading_to_cos_sin(neighbors_future)
+    neighbors_future[neighbor_future_mask] = 0.0
+    _, predicted_neighbor_num, _, _ = neighbors_future.shape
+    ego_current = inputs["ego_current_state"][:, :4]
+    neighbors_current = inputs["neighbor_agents_past"][:, :predicted_neighbor_num, -1, :4]
     inputs = args.observation_normalizer(inputs)
-    _, outputs = model(inputs)
-    return outputs["prediction"][:, 0], ego_future
+    return _PreparedValidationBatch(
+        inputs=inputs,
+        ego_future=ego_future,
+        neighbors_future=neighbors_future,
+        neighbor_future_mask=neighbor_future_mask,
+        ego_current=ego_current,
+        neighbors_current=neighbors_current,
+        turn_indicator_seq=turn_indicator_seq,
+    )
+
+
+def _predict_ego_for_temporal_metrics(model, inputs, args, device, delay=0):
+    batch = _prepare_validation_inputs(inputs, args, device, delay)
+    _, outputs = model(batch.inputs)
+    return outputs["prediction"][:, 0], batch.ego_future
 
 
 EPDMS_DT = 0.1
@@ -270,34 +303,15 @@ def validate_model(model, val_loader, args, return_pred=False) -> tuple[float, f
     total_batches = len(val_loader)
     pbar = tqdm(total=total_batches, desc="validate (slowest rank)", disable=ddp.get_rank() != 0)
     for step, inputs in enumerate(val_loader):
-        inputs = {key: value.to(device) for key, value in inputs.items()}
-        B = inputs["ego_current_state"].shape[0]
-
-        turn_indicator_seq = inputs["turn_indicators"]
-
-        inputs["sampled_trajectories"] = torch.zeros(
-            B, MAX_NUM_AGENTS, OUTPUT_T + 1, POSE_DIM, dtype=torch.float32, device=device
-        )
-        inputs["delay"] = torch.full((B,), delay, dtype=torch.float32, device=device)
-
-        inputs["ego_agent_past"] = heading_to_cos_sin(inputs["ego_agent_past"])
-        inputs["goal_pose"] = heading_to_cos_sin(inputs["goal_pose"])
-
-        ego_future = inputs["ego_agent_future"]
-        ego_future = heading_to_cos_sin(ego_future)  # (B, T, 4)
-        neighbors_future = inputs["neighbor_agents_future"]
-        neighbor_future_mask = (
-            torch.sum(torch.ne(neighbors_future[..., :3], 0), dim=-1) == 0
-        )  # (B, Pn, T)
-        neighbors_future = heading_to_cos_sin(neighbors_future)  # (B, Pn, T, 4)
-        neighbors_future[neighbor_future_mask] = 0.0
-
+        prepared = _prepare_validation_inputs(inputs, args, device, delay)
+        inputs = prepared.inputs
+        ego_future = prepared.ego_future
+        neighbors_future = prepared.neighbors_future
+        neighbor_future_mask = prepared.neighbor_future_mask
+        ego_current = prepared.ego_current
+        neighbors_current = prepared.neighbors_current
+        turn_indicator_seq = prepared.turn_indicator_seq
         B, Pn, T, _ = neighbors_future.shape
-        ego_current, neighbors_current = (
-            inputs["ego_current_state"][:, :4],
-            inputs["neighbor_agents_past"][:, :Pn, -1, :4],
-        )
-        inputs = args.observation_normalizer(inputs)
 
         _, outputs = model(inputs)
 
