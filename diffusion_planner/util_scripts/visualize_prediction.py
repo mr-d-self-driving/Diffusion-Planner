@@ -1,6 +1,8 @@
 import argparse
 import json
 import os
+import subprocess
+import tempfile
 from collections import defaultdict
 from multiprocessing import Pool
 from pathlib import Path
@@ -23,6 +25,47 @@ def parse_args():
     parser.add_argument("--save_dir", type=Path, default=None)
     parser.add_argument("--only_top_p", type=float, default=1.0)
     return parser.parse_args()
+
+
+def leaf_dir_and_png(valid_data_path: Path, save_dir: Path) -> tuple[Path, Path]:
+    """Reproduce the per-frame PNG path chosen in ``process_one_pair`` (kept in sync with it).
+
+    Returns ``(leaf_dir, png_path)`` where ``leaf_dir`` is the per-clip directory the frames land in
+    (``save_dir/<location>/<date>/<time>``); the clip's MP4 is written next to it as
+    ``<leaf_dir>.mp4``.
+    """
+    parts = valid_data_path.parts
+    split_idx = next((i for i, p in enumerate(parts) if p in ("valid", "train")), len(parts) - 4)
+    leaf_dir = save_dir / parts[split_idx - 1] / parts[split_idx + 1] / parts[split_idx + 2]
+    return leaf_dir, leaf_dir / f"{valid_data_path.stem}.png"
+
+
+def encode_mp4(png_paths: list[Path], mp4_path: Path, fps: int) -> None:
+    """Encode an ORDERED list of PNGs into an MP4, replacing the external ffmpeg_lib shell scripts.
+
+    Uses ffmpeg's concat demuxer so the exact given order is honored (no re-sorting). Encoding
+    params match the former make_mp4_from_unsequential_png.sh (libx264, yuv420p, even dimensions).
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        for p in png_paths:
+            f.write(f"file '{p.resolve()}'\n")
+        list_path = f.name
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-r", str(fps),
+                "-f", "concat", "-safe", "0", "-i", list_path,
+                "-vcodec", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                "-r", str(fps),
+                str(mp4_path),
+            ],
+            check=True,
+        )
+    finally:
+        os.unlink(list_path)
 
 
 if __name__ == "__main__":
@@ -259,3 +302,19 @@ if __name__ == "__main__":
             process_one_pair, zip(valid_data_path_list, prediction_path_list)
         ):
             pbar.update(1)
+
+    # Encode one MP4 per clip from the frames just rendered, in the (sorted) order they were
+    # accumulated -- no dependency on the external ffmpeg_lib shell scripts. valid_data_path_list is
+    # already sorted, so both the clip order and each clip's frame order follow it.
+    mp4_frame_lists: dict[Path, list[Path]] = defaultdict(list)
+    for valid_data_path in valid_data_path_list:
+        if valid_data_path not in use_set:
+            continue
+        leaf_dir, png_path = leaf_dir_and_png(Path(valid_data_path), save_dir)
+        mp4_frame_lists[leaf_dir].append(png_path)
+
+    for leaf_dir, png_paths in mp4_frame_lists.items():
+        frames = [p for p in png_paths if p.is_file()]
+        if not frames:
+            continue
+        encode_mp4(frames, leaf_dir.parent / f"{leaf_dir.name}.mp4", fps=10)

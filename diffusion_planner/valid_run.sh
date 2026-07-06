@@ -28,5 +28,3 @@ python3 -m torch.distributed.run --nnodes 1 --nproc-per-node $NUM_GPUS --standal
 python3 util_scripts/visualize_prediction.py \
   --predictions_dir $SAVE_DIR \
   --valid_data_list $VALID_SET_LIST_PATH
-
-~/misc/ffmpeg_lib/process_subdir.sh $SAVE_DIR/../visualization
