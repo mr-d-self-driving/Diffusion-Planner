@@ -89,7 +89,7 @@ void process_sequence(
               << ")" << std::endl;
     save_route_json(
       paths.save_dir, rosbag_dir_name, sequence_id_str, n, traveled_distance, start_ts, end_ts,
-      SkippingInfo::insufficient_frames(n, options.min_frames), timestamp_stats_map);
+      SkippingInfo::insufficient_frames(n, options.min_frames), timestamp_stats_map, false);
     return;
   }
 
@@ -100,16 +100,23 @@ void process_sequence(
     save_route_json(
       paths.save_dir, rosbag_dir_name, sequence_id_str, n, traveled_distance, start_ts, end_ts,
       SkippingInfo::insufficient_distance(traveled_distance, options.min_distance),
-      timestamp_stats_map);
+      timestamp_stats_map, false);
     return;
+  }
+
+  bool goal_pose_overwritten = false;
+  {
+    const auto & last_state = seq.data_list.back().kinematic_state;
+    const double last_speed = std::abs(last_state.twist.twist.linear.x);
+    if (last_speed < 0.5) {
+      seq.route.goal_pose = last_state.pose.pose;
+      goal_pose_overwritten = true;
+    }
   }
 
   save_route_json(
     paths.save_dir, rosbag_dir_name, sequence_id_str, n, traveled_distance, start_ts, end_ts,
-    SkippingInfo::accepted(), timestamp_stats_map);
-
-  // Replace the goal pose with the last frame's pose
-  seq.route.goal_pose = seq.data_list.back().kinematic_state.pose.pose;
+    SkippingInfo::accepted(), timestamp_stats_map, goal_pose_overwritten);
 
   // Pack-sequence accumulators: in pack mode every frame is collected here (gap-free) and
   // flushed once after the loop into a single npz + single json array for the sequence.
