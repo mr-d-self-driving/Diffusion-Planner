@@ -37,7 +37,7 @@ SkippingInfo decide_frame_skip(
   const std::vector<float> & ego_shape, const std::vector<float> & static_objects,
   const std::vector<float> & neighbor_future, const std::vector<float> & neighbor_past,
   const std::vector<float> & line_strings, const std::vector<float> & lanes,
-  const FrameFilterParams & filter_params)
+  const std::vector<float> & route_lanes, const FrameFilterParams & filter_params)
 {
   using autoware::diffusion_planner::INPUT_T;
 
@@ -61,6 +61,12 @@ SkippingInfo decide_frame_skip(
     if (frame_filters::is_accelerating(frame_filters::compute_future_accel(ego_future))) {
       return SkippingInfo::accelerating_at_traffic_light();
     }
+  }
+  if (
+    frame_filters::detect_red_light_run(
+      ego_future, route_lanes, line_strings, filter_params.red_light_run_radius_m,
+      filter_params.red_light_run_heading_tol_deg)) {
+    return SkippingInfo::detected_red_light_run();
   }
 
   if (inputs.stopping_count > (INPUT_T + 5) && inputs.is_red_or_yellow) {

@@ -48,6 +48,8 @@ struct FrameFilterParams
   int64_t collision_time_stride;
   float offlane_max_score;
   int64_t offlane_time_stride;
+  float red_light_run_radius_m;
+  float red_light_run_heading_tol_deg;
 };
 
 // Pure skip-reason computation — no I/O, no ROS time, no file system.
@@ -57,7 +59,7 @@ SkippingInfo decide_frame_skip(
   const std::vector<float> & ego_shape, const std::vector<float> & static_objects,
   const std::vector<float> & neighbor_future, const std::vector<float> & neighbor_past,
   const std::vector<float> & line_strings, const std::vector<float> & lanes,
-  const FrameFilterParams & filter_params);
+  const std::vector<float> & route_lanes, const FrameFilterParams & filter_params);
 
 }  // namespace frame_processor
 
