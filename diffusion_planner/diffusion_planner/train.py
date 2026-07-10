@@ -53,8 +53,11 @@ def log_dataset_artifact(
     valid_path = Path(valid_set_list)
     artifact.add_file(str(train_path), name=train_path.name)
     artifact.add_file(str(valid_path), name=valid_path.name)
-    summary_csv = find_upward(train_set_list, "summary.csv")
-    artifact.add_file(str(summary_csv), name="summary.csv")
+    try:
+        summary_csv = find_upward(train_set_list, "summary.csv")
+        artifact.add_file(str(summary_csv), name="summary.csv")
+    except FileNotFoundError:
+        print("summary.csv not found, skipping.")
     try:
         rosbag_summary_csv = find_upward(train_set_list, "rosbag_summary.csv")
         artifact.add_file(str(rosbag_summary_csv), name="rosbag_summary.csv")
@@ -174,6 +177,7 @@ def model_training(args: TrainConfig):
         print("Batch size: {}".format(args.batch_size))
         print("Learning rate: {}".format(args.learning_rate))
         print("Use device: {}".format(args.device))
+        print("Deterministic mode: {}".format(args.deterministic))
 
         save_path = args.save_dir
         os.makedirs(save_path, exist_ok=True)
@@ -194,6 +198,13 @@ def model_training(args: TrainConfig):
 
     # set seed
     set_seed(args.seed + global_rank)
+
+    # Deterministic
+    if args.deterministic:
+        # Set CUBLAS_WORKSPACE_CONFIG to ensure deterministic behavior for cuBLAS operations.
+        # 4096:8 means 24 MiB workspace with more memory, faster
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+        torch.use_deterministic_algorithms(True)
 
     # training parameters
     train_epochs = args.train_epochs

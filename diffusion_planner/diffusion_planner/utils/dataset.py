@@ -15,6 +15,7 @@ class DiffusionPlannerData(Dataset):
     def __getitem__(self, idx):
         data = np.load(self.data_list[idx], allow_pickle=True)
         data = dict(data)  # npz to dict
+        data.pop("version", None)
         return data
 
 

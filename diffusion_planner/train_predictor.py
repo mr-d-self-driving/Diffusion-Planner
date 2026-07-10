@@ -243,7 +243,7 @@ def get_args(args_list=None):
     parser.add_argument(
         "--closed_loop_replan_interval",
         type=int,
-        default=40,
+        default=4,
         help="re-plan every N steps; 1 = forward every step (slow, ~minutes/epoch). 40 default",
     )
     parser.add_argument(
@@ -259,6 +259,13 @@ def get_args(args_list=None):
     parser.add_argument("--closed_loop_unstick_after", type=int, default=300)
     parser.add_argument("--closed_loop_unstick_advance_m", type=float, default=5.0)
 
+    # Deterministic
+    parser.add_argument(
+        "--deterministic",
+        type=boolean,
+        default=True,
+        help="Set True to run PyTorch GPU kernels in deterministic mode (may be slightly slower).",
+    )
     args = parser.parse_args(args_list)
     return args
 
