@@ -165,4 +165,17 @@ if(BUILD_TESTING)
   if(TARGET test_bag_metadata)
     target_include_directories(test_bag_metadata PRIVATE include src)
   endif()
+
+  # processing/neighbor_processor — future array filling; needs autoware_diffusion_planner
+  ament_add_gtest(test_neighbor_processor
+    test/test_neighbor_processor.cpp
+    src/processing/neighbor_processor.cpp
+  )
+  if(TARGET test_neighbor_processor)
+    target_include_directories(test_neighbor_processor PRIVATE include src)
+    ament_target_dependencies(test_neighbor_processor SYSTEM
+      autoware_perception_msgs
+      autoware_diffusion_planner
+    )
+  endif()
 endif()
