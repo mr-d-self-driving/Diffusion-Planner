@@ -94,6 +94,14 @@ def mean_epdms_metric(loss_dict):
     return result
 
 
+def wandb_epdms_metrics(epdms_means):
+    return {
+        f"valid_epdms/{key}": value
+        for key, value in epdms_means.items()
+        if not key.endswith("_coverage")
+    }
+
+
 def closed_loop_validate(model, args, epoch: int, out_dir: str) -> None:
     """Closed-loop rendered rollout; logs metrics + the rollout video to wandb.
 
@@ -373,7 +381,7 @@ def model_training(args: TrainConfig):
         valid_loss_ego = agg["avg_loss_ego"]
         valid_loss_neighbor = agg["avg_loss_neighbor"]
         mean_ego_loss_dict = {f"valid_loss/{k}": v for k, v in agg["ego_means"].items()}
-        mean_epdms_dict = {f"valid_epdms/{k}": v for k, v in agg["epdms_means"].items()}
+        mean_epdms_dict = wandb_epdms_metrics(agg["epdms_means"])
         valid_loss_ego_position_lat_loss = mean_ego_loss_dict.get(
             "valid_loss/ego_position_lat_loss", 0.0
         )
@@ -438,7 +446,7 @@ def model_training(args: TrainConfig):
             valid_loss_neighbor = agg["avg_loss_neighbor"]
             mean_ego_loss_dict = {f"valid_loss/{k}": v for k, v in agg["ego_means"].items()}
             replan_loss_dict = {f"valid_loss/{k}": v for k, v in replan_agg.items()}
-            mean_epdms_dict = {f"valid_epdms/{k}": v for k, v in agg["epdms_means"].items()}
+            mean_epdms_dict = wandb_epdms_metrics(agg["epdms_means"])
             valid_loss_ego_position_lat_loss = mean_ego_loss_dict.get(
                 "valid_loss/ego_position_lat_loss", 0.0
             )
