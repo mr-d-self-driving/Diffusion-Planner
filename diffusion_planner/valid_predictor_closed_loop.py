@@ -134,6 +134,7 @@ def main() -> None:
         replan_interval=args.replan_interval,
         draw_every=args.draw_every,
         neighbor_history_mode="recorded",
+        tracker_mode="perfect",
     )
     summary["model_path"] = str(args.model_path)
 
