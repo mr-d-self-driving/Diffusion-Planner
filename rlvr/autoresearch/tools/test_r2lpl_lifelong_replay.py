@@ -512,6 +512,7 @@ def test_workflow_contract_preserves_repaired_target_validation_flag(tmp_path):
                     "enabled_labels": ["moving_collision"],
                 },
                 "repair_generation": {"ego_shape": "from_npz", "min_margin": 0.3},
+                "replay_memory": {"capacity": 200},
                 "training": {"val_scenes": "/tmp/valid.json"},
                 "validate_on_repaired_targets": True,
             }
@@ -1352,7 +1353,7 @@ def test_round_runner_requires_perception_mining_source(tmp_path):
                 "reward_config": "/tmp/reward.json",
                 "threshold_config": "/tmp/thresholds.json",
                 "credit_window_config": "/tmp/credit.json",
-                "replay_memory": {},
+                "replay_memory": {"capacity": 200},
                 "training_config": "/tmp/train.json",
                 "repair_config": {"ego_shape": "4.76,7.24,2.29", "min_margin": 0.3},
                 "perception_mining": {"tool": "direct_reproducer_chunks"},
@@ -1442,6 +1443,7 @@ def test_round_runner_defaults_enable_expert_disagreement_repair(tmp_path):
                     "ego_shape": "from_npz",
                     "min_margin": 0.3,
                 },
+                "replay_memory": {"capacity": 200},
                 "training": {"val_scenes": "/tmp/val.json"},
             }
         )
@@ -4000,3 +4002,661 @@ def test_repair_cmd_defaults_expert_knobs_on_and_honors_overrides(tmp_path):
     assert cmd2[cmd2.index("--expert_morph_w_max") + 1] == "0.8"
     assert cmd2[cmd2.index("--expert_morph_max_accel") + 1] == "1.5"
     assert cmd2[cmd2.index("--expert_morph_max_jerk") + 1] == "3.0"
+
+
+# ---------------------------------------------------------------------------
+# Post-round guard evaluation (report-only; includes removed-gate regression pins)
+# ---------------------------------------------------------------------------
+
+
+def _guard_assets(tmp_path):
+    manifest = tmp_path / "frozen_chunks.jsonl"
+    manifest.write_text('{"scene_path": "/tmp/a.npz"}\n')
+    benchmark = tmp_path / "patience_benchmark.json"
+    benchmark.write_text(json.dumps(["/tmp/waits_0.npz"]))
+    return manifest, benchmark
+
+
+def test_validate_guards_config_rejects_empty_and_unknown_keys(tmp_path):
+    with pytest.raises(ValueError, match="empty 'guards'"):
+        round_runner._validate_guards_config({"guards": {}})
+    with pytest.raises(ValueError, match="unknown keys"):
+        round_runner._validate_guards_config({"guards": {"frozen_manifest": "x"}})
+    # absent guards is fine with the default policy
+    round_runner._validate_guards_config({})
+
+
+def test_validate_guards_config_rejects_composite_policy(tmp_path):
+    manifest, benchmark = _guard_assets(tmp_path)
+    # the removed automatic gate must fail loudly, with or without guards
+    with pytest.raises(ValueError, match="report-only"):
+        round_runner._validate_guards_config({"checkpoint_policy": "composite"})
+    with pytest.raises(ValueError, match="report-only"):
+        round_runner._validate_guards_config(
+            {
+                "checkpoint_policy": "composite",
+                "guards": {
+                    "frozen_chunk_manifest": str(manifest),
+                    "patience_benchmark": str(benchmark),
+                },
+            }
+        )
+    # missing frozen assets fail loudly
+    with pytest.raises(ValueError, match="does not exist"):
+        round_runner._validate_guards_config(
+            {"guards": {"frozen_chunk_manifest": str(tmp_path / "missing.jsonl")}}
+        )
+    # empty benchmark / frozen manifest rejected
+    empty = tmp_path / "empty.json"
+    empty.write_text("[]")
+    with pytest.raises(ValueError, match="is empty"):
+        round_runner._validate_guards_config({"guards": {"patience_benchmark": str(empty)}})
+    empty_manifest = tmp_path / "empty.jsonl"
+    empty_manifest.write_text("")
+    with pytest.raises(ValueError, match="is empty"):
+        round_runner._validate_guards_config(
+            {"guards": {"frozen_chunk_manifest": str(empty_manifest)}}
+        )
+    # fully-specified report-only config passes
+    round_runner._validate_guards_config(
+        {
+            "checkpoint_policy": "latest",
+            "guards": {
+                "frozen_chunk_manifest": str(manifest),
+                "patience_benchmark": str(benchmark),
+            },
+        }
+    )
+
+
+def test_validate_guards_config_rejects_unknown_sections(tmp_path):
+    manifest, benchmark = _guard_assets(tmp_path)
+    # the removed composite tolerance section is now an unknown key
+    with pytest.raises(ValueError, match="unknown keys"):
+        round_runner._validate_guards_config(
+            {
+                "guards": {
+                    "frozen_chunk_manifest": str(manifest),
+                    "patience_benchmark": str(benchmark),
+                    "composite": {"event_tolerance_frac": 0.0},
+                }
+            }
+        )
+    # closed_loop knobs without the npz root are a misconfiguration
+    with pytest.raises(ValueError, match="closed_loop_npz_root"):
+        round_runner._validate_guards_config(
+            {"guards": {"patience_benchmark": str(benchmark), "closed_loop": {"seg_len": 600}}}
+        )
+
+
+def test_guard_mining_cmd_uses_frozen_manifest_and_neutralizes_subsampling(tmp_path):
+    manifest, benchmark = _guard_assets(tmp_path)
+    cfg = {
+        "reward_config": "/tmp/reward.json",
+        "threshold_config": "/tmp/thresholds.json",
+        "credit_window_config": "/tmp/credit.json",
+        "mine_labels": ["expert_disagreement"],
+        "guards": {
+            "frozen_chunk_manifest": str(manifest),
+            "patience_benchmark": str(benchmark),
+        },
+        "perception_mining": {
+            "scene_list": "/tmp/campaign_scenes.json",
+            "chunk_len": 80,
+            "sample_fraction": 0.25,
+            "sample_seed": 3,
+            "num_shards": 4,
+            "shard_index": 1,
+            "max_chunks": 100,
+            "allow_existing_out_dir": True,
+        },
+    }
+    gdir = tmp_path / "round" / "guards"
+    cmd = round_runner._guard_mining_cmd(cfg, tmp_path / "model.pth", gdir, gpu_id=0)
+    assert cmd[cmd.index("--chunk_manifest") + 1] == str(manifest)
+    # the frozen set is mined in full every round: no campaign subsampling,
+    # and stale guard windows must fail loudly even when the campaign allows
+    # reusing its own out dirs
+    for neutralized in ("--sample_fraction", "--sample_seed", "--num_shards", "--max_chunks"):
+        assert neutralized not in cmd
+    assert "--scene_list" not in cmd
+    assert "--allow_existing_out_dir" not in cmd
+    assert cmd[cmd.index("--out_jsonl") + 1] == str(gdir / "credit_windows.jsonl")
+
+    onset_cmd = round_runner._patience_onset_cmd(cfg, tmp_path / "model.pth", gdir)
+    assert onset_cmd[onset_cmd.index("--scenes") + 1] == str(benchmark)
+    assert onset_cmd[onset_cmd.index("--out") + 1] == str(gdir / "patience_onset.json")
+    assert onset_cmd[onset_cmd.index("--stop_speed") + 1] == "0.5"
+
+
+def test_workflow_contract_parses_guards(tmp_path):
+    manifest, benchmark = _guard_assets(tmp_path)
+    scene_list = tmp_path / "scenes.json"
+    scene_list.write_text("[]")
+    training = tmp_path / "training.json"
+    training.write_text(json.dumps({"backend": "base_sft", "train_args": {}}))
+
+    def _workflow(guards):
+        payload = {
+            "judgement": {
+                "reward_config": "/tmp/reward.json",
+                "threshold_config": "/tmp/thresholds.json",
+                "credit_window_config": "/tmp/credit.json",
+                "enabled_labels": ["moving_collision"],
+            },
+            "repair_generation": {"ego_shape": "from_npz", "min_margin": 0.3},
+            "replay_memory": {"capacity": 200},
+            "training": {"val_scenes": "/tmp/valid.json"},
+        }
+        if guards is not None:
+            payload["guards"] = guards
+        path = tmp_path / "workflow.json"
+        path.write_text(json.dumps(payload))
+        return path
+
+    guards = {
+        "frozen_chunk_manifest": str(manifest),
+        "patience_benchmark": str(benchmark),
+        "_comment": "stripped at parse time",
+    }
+    contract = {
+        "model_path": "/tmp/model.pth",
+        "scene_list": str(scene_list),
+        "workflow_config": str(_workflow(guards)),
+        "training_config": str(training),
+        "output_dir": str(tmp_path / "auto_research" / "out"),
+    }
+    cfg = round_runner._config_from_workflow_contract(contract)
+    assert cfg["guards"] == {
+        "frozen_chunk_manifest": str(manifest),
+        "patience_benchmark": str(benchmark),
+    }
+    round_runner._validate_guards_config(cfg)
+
+    # present-but-empty guards section is rejected at contract parse time
+    contract["workflow_config"] = str(_workflow({}))
+    with pytest.raises(ValueError, match="guards is present but empty"):
+        round_runner._config_from_workflow_contract(contract)
+
+
+def test_guard_mining_metrics_and_summary_derivation(tmp_path):
+    gdir = tmp_path / "guards"
+    gdir.mkdir()
+    rows = [
+        {"scene_path": "/tmp/a.npz", "label": "expert_disagreement", "event_key": "e1"},
+        {"scene_path": "/tmp/b.npz", "label": "expert_disagreement", "event_key": "e1"},
+        {"scene_path": "/tmp/c.npz", "label": "expert_disagreement", "event_key": "e2"},
+        {"scene_path": "/tmp/d.npz", "label": "road_border_crossing", "event_key": "e3"},
+    ]
+    with open(gdir / "credit_windows.jsonl", "w") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+    (gdir / "summary.json").write_text(json.dumps({"simulated_chunks": 500}))
+
+    metrics = round_runner._guard_mining_metrics(gdir)
+    assert metrics["event_count_by_label"] == {
+        "expert_disagreement": 2,
+        "road_border_crossing": 1,
+    }
+    assert metrics["total_events"] == 3
+    assert metrics["events_per_1000_chunks"] == 6.0
+
+    # zero simulated chunks means the frozen set is broken, not clean
+    (gdir / "summary.json").write_text(json.dumps({"simulated_chunks": 0}))
+    with pytest.raises(RuntimeError, match="simulated 0 chunks"):
+        round_runner._guard_mining_metrics(gdir)
+
+
+def test_shipped_template_guards_pass_validation(tmp_path):
+    """Round-trip the actual shipped template's guards/rounds sections.
+
+    Regression pin: the template carries "_"-prefixed JSON-comment keys inside
+    guards, which the whitelist validator must tolerate (and the contract
+    parser must strip)."""
+    template_path = (
+        Path(round_runner.__file__).resolve().parents[2]
+        / "configs"
+        / "r2lpl_workflow_template.json"
+    )
+    template = json.loads(template_path.read_text())
+    manifest, benchmark = _guard_assets(tmp_path)
+    guards = dict(template["guards"])
+    guards["frozen_chunk_manifest"] = str(manifest)
+    guards["patience_benchmark"] = str(benchmark)
+    cfg = {
+        "checkpoint_policy": template["rounds"]["checkpoint_selection_rule"],
+        "guards": guards,
+    }
+    round_runner._validate_guards_config(cfg)
+    assert template["rounds"]["checkpoint_selection_rule"] == "latest"
+    # the contract parser strips comment keys from the runtime config
+    stripped = round_runner._strip_comment_keys(guards)
+    assert not [k for k in stripped if k.startswith("_")]
+
+
+def test_main_runs_report_only_guards_per_round(tmp_path, monkeypatch):
+    """End-to-end main() wiring: guards run on the starting model (reference
+    row) and on every round checkpoint, metrics land in the round summaries,
+    and checkpoints always advance (no gating, no rollback)."""
+    manifest, benchmark = _guard_assets(tmp_path)
+    scene_list = tmp_path / "scenes.json"
+    scene_list.write_text(json.dumps(["/tmp/a.npz"]))
+    out_dir = tmp_path / "auto_research" / "out"
+    initial_model = tmp_path / "initial.pth"
+    initial_model.write_bytes(b"")
+    cfg = {
+        "rounds": 2,
+        "epochs_per_round": 1,
+        "model_path": str(initial_model),
+        "val_scenes": "/tmp/valid.json",
+        "reward_config": "/tmp/reward.json",
+        "threshold_config": "/tmp/thresholds.json",
+        "credit_window_config": "/tmp/credit.json",
+        "replay_memory": {"capacity": 10},
+        "training_config": {"train_args": {}},
+        "training_backend": "base_sft",
+        "output_dir": str(out_dir),
+        "checkpoint_policy": "latest",
+        "repair_config": {"ego_shape": "2.7,4.3,1.7", "min_margin": 0.3},
+        "mine_labels": ["expert_disagreement"],
+        "perception_mining": {"scene_list": str(scene_list), "chunk_len": 80},
+        "guards": {
+            "frozen_chunk_manifest": str(manifest),
+            "patience_benchmark": str(benchmark),
+        },
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(cfg))
+
+    mining_calls: list[str] = []
+
+    def fake_mining(cfg, model_path, rdir, gpu_ids):
+        mining_calls.append(str(model_path))
+        round_runner._write_jsonl(
+            rdir / "credit_windows.jsonl",
+            [{"scene_path": "/tmp/a.npz", "label": "expert_disagreement", "event_key": "e1"}],
+        )
+        round_runner._write_json(rdir / "perception_direct_summary.json", {"simulated_chunks": 1})
+        round_runner._write_json(rdir / "credit_windows_paths.json", ["/tmp/a.npz"])
+        return 0.0
+
+    def fake_repair(cfg, model_path, rdir, gpu_ids):
+        round_runner._write_json(rdir / "repaired_targets.json", ["/tmp/repaired_a.npz"])
+        round_runner._write_jsonl(
+            rdir / "repaired_targets.jsonl",
+            [{"scene_path": "/tmp/repaired_a.npz", "source_scene_path": "/tmp/a.npz"}],
+        )
+        return 0.0
+
+    def fake_run(cmd, log_path, *, cwd=None, env=None):
+        if "--out_memory" in cmd:
+            round_runner._write_json(Path(cmd[cmd.index("--out_memory") + 1]), {"entries": []})
+            round_runner._write_json(Path(cmd[cmd.index("--out_replay_scenes") + 1]), [])
+        return 0.0
+
+    train_warm_starts: list[str] = []
+
+    def fake_training(cfg, *, model_path, train_input_list, rdir, round_idx, gpu_ids):
+        train_warm_starts.append(str(model_path))
+        ckpt = rdir / "base_train" / "latest.pth"
+        ckpt.parent.mkdir(parents=True, exist_ok=True)
+        ckpt.write_bytes(b"")
+        return 0.0, ckpt
+
+    guarded: list[tuple[str, str]] = []
+
+    guard_metric_seq = [
+        {
+            "frozen_chunk_mining": {
+                "event_count_by_label": {"expert_disagreement": 5},
+                "total_events": 5,
+                "simulated_chunks": 40,
+            },
+            "patience_onset": {"fail_to_stop": 0, "fail_to_resume": 10},
+        },
+        {
+            "frozen_chunk_mining": {
+                "event_count_by_label": {"expert_disagreement": 6},
+                "total_events": 6,
+                "simulated_chunks": 40,
+            },
+            "patience_onset": {"fail_to_stop": 0, "fail_to_resume": 10},
+        },
+        {
+            "frozen_chunk_mining": {
+                "event_count_by_label": {"expert_disagreement": 3},
+                "total_events": 3,
+                "simulated_chunks": 40,
+            },
+            "patience_onset": {"fail_to_stop": 0, "fail_to_resume": 8},
+        },
+    ]
+
+    def fake_guards(cfg, model_path, gdir, gpu_ids, *, tag):
+        guarded.append((tag, str(model_path)))
+        return {"tag": tag, "model_path": str(model_path), **guard_metric_seq.pop(0)}
+
+    monkeypatch.setattr(round_runner, "_run_mining_phase", fake_mining)
+    monkeypatch.setattr(round_runner, "_run_repair_phase", fake_repair)
+    monkeypatch.setattr(round_runner, "_run", fake_run)
+    monkeypatch.setattr(round_runner, "_run_base_sft_training", fake_training)
+    monkeypatch.setattr(round_runner, "_run_guard_phase", fake_guards)
+    monkeypatch.setattr(sys, "argv", ["run_lifelong_r2lpl_rounds", "--config", str(cfg_path)])
+    round_runner.main()
+
+    round1_ckpt = str(out_dir / "r2lpl_round_001" / "base_train" / "latest.pth")
+    round2_ckpt = str(out_dir / "r2lpl_round_002" / "base_train" / "latest.pth")
+    # reference row + one guard pass per round checkpoint
+    assert guarded == [
+        ("round_000", str(initial_model)),
+        ("round_001", round1_ckpt),
+        ("round_002", round2_ckpt),
+    ]
+    # checkpoints always advance; each round mines with the previous checkpoint
+    assert train_warm_starts == [str(initial_model), round1_ckpt]
+    assert mining_calls == [str(initial_model), round1_ckpt]
+    round1 = json.loads((out_dir / "r2lpl_round_001" / "round_summary.json").read_text())
+    round2 = json.loads((out_dir / "r2lpl_round_002" / "round_summary.json").read_text())
+    assert round1["guards"]["tag"] == "round_001"
+    assert round1["next_model_path"] == round1_ckpt
+    assert "composite_decision" not in round1
+    assert round2["next_model_path"] == round2_ckpt
+    # advisory selection report: round 1 regressed (5->6 events) and is
+    # vetoed; round 2 improved and is recommended — with NO effect on the
+    # training chain (warm starts asserted above are still latest-chained)
+    report = json.loads((out_dir / "selection_report.json").read_text())
+    assert report["recommended"] == {"round_idx": 2, "checkpoint": round2_ckpt}
+    assert not [r for r in report["rounds"] if r["round_idx"] == 1][0]["eligible"]
+
+
+def test_ensure_4col_neighbor_futures_converts_only_3col(tmp_path):
+    """Anchor scenes (3-col logged) must be homogenized to the 4-col schema
+    before unioning with repaired scenes, or collate crashes on mixed batches."""
+    base = {
+        "ego_agent_future": np.zeros((80, 3), dtype=np.float32),
+        "turn_indicators": np.zeros(31, dtype=np.int64),
+    }
+    three = dict(base)
+    nf3 = np.zeros((4, 80, 3), dtype=np.float32)
+    nf3[0, :, 0] = np.arange(1, 81)  # nonzero xy: (0,0) rows are padding by contract
+    nf3[0, :, 2] = np.pi / 2  # heading -> cos 0 / sin 1
+    # rows 1..3 stay all-zero = padding, must remain zero after conversion
+    three["neighbor_agents_future"] = nf3
+    p3 = tmp_path / "logged_scene.npz"
+    np.savez(p3, **three)
+
+    four = dict(base)
+    four["neighbor_agents_future"] = np.zeros((4, 80, 4), dtype=np.float32)
+    p4 = tmp_path / "repaired_scene.npz"
+    np.savez(p4, **four)
+
+    out_dir = tmp_path / "converted"
+    result = round_runner._ensure_4col_neighbor_futures([str(p3), str(p4)], out_dir)
+
+    # 4-col passes through by original path
+    assert result[1] == str(p4)
+    # 3-col was rewritten to a copy
+    assert result[0] != str(p3)
+    with np.load(result[0]) as d:
+        nf = d["neighbor_agents_future"]
+        assert nf.shape == (4, 80, 4)
+        np.testing.assert_allclose(nf[0, :, 2], 0.0, atol=1e-6)  # cos(pi/2)
+        np.testing.assert_allclose(nf[0, :, 3], 1.0, atol=1e-6)  # sin(pi/2)
+        assert np.abs(nf[1:]).sum() == 0.0  # padding rows preserved as zero
+        assert d["ego_agent_future"].shape == (80, 3)  # other fields verbatim
+    # torch collate over the homogenized pair must now stack
+    batch = [dict(np.load(p)) for p in result]
+    stacked = torch.stack([torch.from_numpy(b["neighbor_agents_future"]) for b in batch])
+    assert stacked.shape == (2, 4, 80, 4)
+
+
+def test_replay_capacity_is_required():
+    with pytest.raises(ValueError, match="capacity is required"):
+        round_runner._required_replay_capacity({})
+    with pytest.raises(ValueError, match=">= 1"):
+        round_runner._required_replay_capacity({"capacity": 0})
+    assert round_runner._required_replay_capacity({"capacity": 5000}) == 5000
+
+
+def test_workflow_contract_forwards_prototypes_path_to_repair_cmd(tmp_path):
+    """Regression pin: the contract parser used to silently drop
+    repair_generation.prototypes_path, so anchor variants generated without
+    their prototype library."""
+    protos = tmp_path / "prototypes.npy"
+    protos.write_bytes(b"")
+    scene_list = tmp_path / "scenes.json"
+    scene_list.write_text("[]")
+    training = tmp_path / "training.json"
+    training.write_text(json.dumps({"backend": "base_sft", "train_args": {}}))
+    workflow = tmp_path / "workflow.json"
+    workflow.write_text(
+        json.dumps(
+            {
+                "judgement": {
+                    "reward_config": "/tmp/reward.json",
+                    "threshold_config": "/tmp/thresholds.json",
+                    "credit_window_config": "/tmp/credit.json",
+                    "enabled_labels": ["moving_collision"],
+                },
+                "repair_generation": {
+                    "ego_shape": "2.7,4.3,1.7",
+                    "min_margin": 0.3,
+                    "generation_mode": "guided_variant",
+                    "variant": "anchor_fan_16",
+                    "candidate_count_per_scene": 17,
+                    "prototypes_path": str(protos),
+                },
+                "replay_memory": {"capacity": 200},
+                "training": {"val_scenes": "/tmp/valid.json"},
+            }
+        )
+    )
+    cfg = round_runner._config_from_workflow_contract(
+        {
+            "model_path": "/tmp/model.pth",
+            "scene_list": str(scene_list),
+            "workflow_config": str(workflow),
+            "training_config": str(training),
+            "output_dir": str(tmp_path / "auto_research" / "out"),
+        }
+    )
+    assert cfg["repair_config"]["prototypes_path"] == str(protos)
+    round_runner._validate_repair_generation_config(cfg)
+    cmd = round_runner._repair_cmd(
+        cfg, tmp_path / "model.pth", tmp_path / "credit.jsonl", tmp_path / "round"
+    )
+    assert cmd[cmd.index("--prototypes_path") + 1] == str(protos)
+    assert cmd[cmd.index("--variant") + 1] == "anchor_fan_16"
+    assert cmd[cmd.index("--K") + 1] == "17"
+
+
+def test_validate_repair_generation_config_is_slot_derived():
+    """Anchor-slot variants need prototypes and enough K at STARTUP, for both
+    config paths — derived from the variant's slots, not its name."""
+    base = {"generation_mode": "guided_variant", "K": 17}
+    with pytest.raises(ValueError, match="prototypes_path"):
+        round_runner._validate_repair_generation_config(
+            {"repair_config": {**base, "variant": "anchor_fan_16"}}
+        )
+    with pytest.raises(ValueError, match="K >= 17"):
+        round_runner._validate_repair_generation_config(
+            {
+                "repair_config": {
+                    "generation_mode": "guided_variant",
+                    "K": 8,
+                    "variant": "anchor_fan_16",
+                    "prototypes_path": "/tmp/p.npy",
+                }
+            }
+        )
+    with pytest.raises(ValueError):  # unknown variant names fail at startup too
+        round_runner._validate_repair_generation_config(
+            {"repair_config": {**base, "variant": "no_such_variant"}}
+        )
+    # a null/empty variant means "not set", never the literal string "None"
+    round_runner._validate_repair_generation_config({"repair_config": {**base, "variant": None}})
+    round_runner._validate_repair_generation_config({"repair_config": {**base, "variant": " "}})
+    # valid anchor config passes; non-anchor variants need no prototypes
+    round_runner._validate_repair_generation_config(
+        {"repair_config": {**base, "variant": "anchor_fan_16", "prototypes_path": "/tmp/p.npy"}}
+    )
+    round_runner._validate_repair_generation_config(
+        {"repair_config": {"generation_mode": "grpo_temperature", "K": 8, "variant": "rsft_v2"}}
+    )
+
+
+def test_dry_run_round0_guards_respect_partial_configs(tmp_path, monkeypatch, capsys):
+    """A validator-passing guards section with only some probes must dry-run
+    without crashing, printing exactly the configured probes."""
+    _, benchmark = _guard_assets(tmp_path)
+    scene_list = tmp_path / "scenes.json"
+    scene_list.write_text(json.dumps(["/tmp/a.npz"]))
+    cfg = {
+        "rounds": 1,
+        "epochs_per_round": 1,
+        "model_path": "/tmp/model.pth",
+        "val_scenes": "/tmp/valid.json",
+        "reward_config": "/tmp/reward.json",
+        "threshold_config": "/tmp/thresholds.json",
+        "credit_window_config": "/tmp/credit.json",
+        "replay_memory": {"capacity": 10},
+        "training_config": {"train_args": {}},
+        "training_backend": "base_sft",
+        "output_dir": str(tmp_path / "auto_research" / "out"),
+        "repair_config": {"ego_shape": "2.7,4.3,1.7", "min_margin": 0.3},
+        "mine_labels": ["expert_disagreement"],
+        "perception_mining": {"scene_list": str(scene_list), "chunk_len": 80},
+        "guards": {"patience_benchmark": str(benchmark)},
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(cfg))
+    monkeypatch.setattr(
+        sys, "argv", ["run_lifelong_r2lpl_rounds", "--config", str(cfg_path), "--dry_run"]
+    )
+    round_runner.main()
+    output = capsys.readouterr().out
+    assert "[round 0] guard_onset:" in output
+    assert "guard_mine" not in output
+    assert "guard_closed_loop" not in output
+
+
+def test_patience_stop_metrics_cover_both_directions():
+    """fail_to_stop covers only the stopping direction; the take-off direction
+    (GT resumes, plan parks) must be measured too."""
+    from rlvr.autoresearch.tools.eval_patience_onset import _stop_metrics
+
+    dt = 0.1
+
+    def _xy(speeds):
+        x = np.concatenate([[0.0], np.cumsum(np.asarray(speeds) * dt)])
+        return np.column_stack([x, np.zeros_like(x)])
+
+    # stop at 2s, resume at 5s
+    gt = _stop_metrics(_xy([5.0] * 20 + [0.0] * 30 + [5.0] * 30), stop_speed=0.5)
+    assert gt["stops"] and gt["resumes"]
+    assert gt["stop_onset_s"] == pytest.approx(2.0)
+    assert gt["resume_onset_s"] == pytest.approx(5.0)
+    # stop and park forever
+    parker = _stop_metrics(_xy([5.0] * 20 + [0.0] * 60), stop_speed=0.5)
+    assert parker["stops"] and not parker["resumes"]
+    # never stops
+    cruiser = _stop_metrics(_xy([5.0] * 80), stop_speed=0.5)
+    assert not cruiser["stops"] and not cruiser["resumes"]
+
+
+def test_guard_mining_metrics_split_expert_disagreement_by_reason(tmp_path):
+    gdir = tmp_path / "guards"
+    gdir.mkdir()
+    rows = [
+        {
+            "scene_path": "/tmp/a.npz",
+            "label": "expert_disagreement",
+            "event_key": "e1",
+            "expert_disagreement_reason": "expert_wait_model_forward",
+        },
+        {
+            "scene_path": "/tmp/b.npz",
+            "label": "expert_disagreement",
+            "event_key": "e1",
+            "expert_disagreement_reason": "expert_wait_model_forward",
+        },
+        {
+            "scene_path": "/tmp/c.npz",
+            "label": "expert_disagreement",
+            "event_key": "e2",
+            "expert_disagreement_reason": "model_lagging_expert",
+        },
+        {"scene_path": "/tmp/d.npz", "label": "road_border_crossing", "event_key": "e3"},
+    ]
+    round_runner._write_jsonl(gdir / "credit_windows.jsonl", rows)
+    (gdir / "summary.json").write_text(json.dumps({"simulated_chunks": 40}))
+    metrics = round_runner._guard_mining_metrics(gdir)
+    # per-reason counts sum to the label aggregate; fail-to-take-off visible
+    assert metrics["expert_disagreement_by_reason"] == {
+        "expert_wait_model_forward": 1,
+        "model_lagging_expert": 1,
+    }
+    assert metrics["event_count_by_label"]["expert_disagreement"] == 2
+
+
+def test_closed_loop_guard_section_tolerates_comment_keys(tmp_path):
+    """The '_'-comment convention must hold in nested sections too: validator
+    tolerance and no --_comment* leaking into the probe command."""
+    manifest, benchmark = _guard_assets(tmp_path)
+    npz_root = tmp_path / "cl_root"
+    npz_root.mkdir()
+    guards = {
+        "frozen_chunk_manifest": str(manifest),
+        "patience_benchmark": str(benchmark),
+        "closed_loop_npz_root": str(npz_root),
+        "closed_loop": {"seg_len": 600, "_comment": "throttle rendering"},
+    }
+    round_runner._validate_guards_config({"guards": guards})
+    cmd = round_runner._closed_loop_probe_cmd({"guards": guards}, tmp_path / "model.pth")
+    assert "--seg_len" in cmd
+    assert not [arg for arg in cmd if arg.startswith("--_")]
+
+
+def test_ensure_4col_rejects_unexpected_channel_count(tmp_path):
+    bad = tmp_path / "bad.npz"
+    np.savez(bad, neighbor_agents_future=np.zeros((2, 80, 5), dtype=np.float32))
+    with pytest.raises(ValueError, match="5 channels"):
+        round_runner._ensure_4col_neighbor_futures([str(bad)], tmp_path / "out")
+
+
+def test_selection_report_vetoes_and_ranks():
+    def _m(path, events, fail_stop, fail_resume, sim=40):
+        return {
+            "model_path": path,
+            "frozen_chunk_mining": {
+                "event_count_by_label": dict(events),
+                "total_events": sum(events.values()),
+                "simulated_chunks": sim,
+            },
+            "patience_onset": {"fail_to_stop": fail_stop, "fail_to_resume": fail_resume},
+        }
+
+    reference = _m("/m/base.pth", {"moving_collision": 5, "road_border_crossing": 2}, 0, 16)
+    candidates = [
+        (1, _m("/m/r1.pth", {"moving_collision": 3, "road_border_crossing": 1}, 0, 5)),
+        (2, _m("/m/r2.pth", {"moving_collision": 3}, 0, 7)),
+        (3, _m("/m/r3.pth", {"moving_collision": 6}, 0, 7)),  # mc regression
+        (4, _m("/m/r4.pth", {"moving_collision": 3}, 1, 6)),  # fail_to_stop regression
+    ]
+    report = round_runner._selection_report(reference, candidates)
+    by_round = {r["round_idx"]: r for r in report["rounds"]}
+    assert by_round[1]["eligible"] and by_round[2]["eligible"]
+    assert not by_round[3]["eligible"] and any(
+        "moving_collision" in v for v in by_round[3]["veto_reasons"]
+    )
+    assert not by_round[4]["eligible"] and any(
+        "fail_to_stop" in v for v in by_round[4]["veto_reasons"]
+    )
+    # fewest total frozen events wins (r2: 3 < r1: 4)
+    assert report["recommended"] == {"round_idx": 2, "checkpoint": "/m/r2.pth"}
+
+    # denominator drift vetoes; nothing eligible -> no recommendation
+    drifted = [(1, _m("/m/r1.pth", {"moving_collision": 3}, 0, 5, sim=39))]
+    report = round_runner._selection_report(reference, drifted)
+    assert report["recommended"] is None
+    assert any("denominator" in v for v in report["rounds"][0]["veto_reasons"])
