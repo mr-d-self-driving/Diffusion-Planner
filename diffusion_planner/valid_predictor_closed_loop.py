@@ -17,9 +17,12 @@ aggregated into ``summary.json`` (both next to the checkpoint).
 
 Only ``--model_path`` and ``--npz_root`` are required; all outputs are written next to
 the checkpoint (``<model_path dir>/closed_loop/``) and the rollout knobs default to the
-closed-loop mining config. Example (1st epoch of a GRPO run)::
+closed-loop mining config. ``--npz_root`` is either one NPZ dir tree or a .json path list of
+route dirs; given a path list of multiple routes, the rollout automatically fans out one worker
+process per visible GPU (each its own model copy), which also parallelizes the matplotlib render.
+Example (1st epoch of a GRPO run)::
 
-    NPZ=/path/to/closed_loop_npz_dir
+    NPZ=/path/to/closed_loop_npz_dir   # or /path/to/path_list.json
 
     python3 valid_predictor_closed_loop.py \
         --model_path /mnt/nvme/training_result/20260622-083517_per_sample_noise_grpo/epoch0001/best_model.pth \
@@ -29,6 +32,8 @@ closed-loop mining config. Example (1st epoch of a GRPO run)::
 from __future__ import annotations
 
 import argparse
+import json
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -107,29 +112,21 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
-
-    from scenario_generation.closed_loop_eval import run_closed_loop_eval
+def _load_model(model_path: Path, device: str):
+    """Load either a torch checkpoint or an exported .onnx into the same (model, model_args)
+    contract. args.json must sit next to whichever file is given."""
     from scenario_generation.simulate import load_model, load_onnx_model
 
-    # Dispatch on the checkpoint suffix: a .onnx is loaded through the onnxruntime adapter
-    # (same (model, model_args) contract), anything else through the torch loader. args.json must
-    # sit next to whichever file is given.
-    if args.model_path.suffix == ".onnx":
-        model, model_args = load_onnx_model(args.model_path, args.device)
-    else:
-        model, model_args = load_model(args.model_path, args.device)
-    out_dir = args.model_path.parent / "closed_loop" / datetime.now().strftime("%Y%m%d_%H%M%S")
-    print(f"device: {args.device} | model: {args.model_path} | out: {out_dir}")
+    if model_path.suffix == ".onnx":
+        return load_onnx_model(model_path, device)
+    return load_model(model_path, device)
 
-    summary = run_closed_loop_eval(
-        model,
-        model_args,
-        args.npz_root,
-        out_dir,
+
+def _eval_knobs(args: argparse.Namespace) -> dict:
+    """The rollout tunables forwarded to run_closed_loop_eval (everything except model/npz/out/
+    device/shard), gathered once so the sequential and per-worker calls stay in lockstep."""
+    return dict(
         seg_len=args.seg_len,
-        device=args.device,
         near_miss_thresh=args.near_miss_thresh,
         search_radius=args.search_radius,
         warmup_steps=args.warmup_steps,
@@ -143,6 +140,92 @@ def main() -> None:
         neighbor_history_mode="recorded",
         tracker_mode="perfect",
     )
+
+
+def _run_shard(rank, num_workers, gpu_ids, model_path, npz_root, out_dir, knobs) -> None:
+    """Worker entrypoint (spawned): load the model on this worker's GPU and roll out the rank-th
+    route slice, writing segments_{rank}.jsonl plus its PNG dirs/MP4s into the shared out_dir."""
+    from scenario_generation.closed_loop_eval import run_closed_loop_eval
+
+    device = f"cuda:{gpu_ids[rank % len(gpu_ids)]}"
+    model, model_args = _load_model(Path(model_path), device)
+    run_closed_loop_eval(
+        model,
+        model_args,
+        npz_root,
+        out_dir,
+        device=device,
+        verbose=(rank == 0),
+        shard=(rank, num_workers),
+        **knobs,
+    )
+
+
+def _merge_shards(out_dir: Path, npz_root, near_miss_thresh: float) -> dict:
+    """Aggregate every worker's segments_{rank}.jsonl into one summary and write summary.json
+    (the videos already live in the shared out_dir, route keys being globally unique)."""
+    from scenario_generation.closed_loop_eval import aggregate
+
+    rows: list[dict] = []
+    for f in sorted(out_dir.glob("segments_*.jsonl")):
+        rows += [json.loads(ln) for ln in f.read_text().splitlines() if ln.strip()]
+
+    summary = aggregate(rows, near_miss_thresh)
+    summary["npz_root"] = str(npz_root)
+    summary["n_routes"] = len({r["route"] for r in rows})
+    summary["video_mp4s"] = sorted(str(p) for p in out_dir.glob("*.mp4"))
+    summary["segments"] = rows
+    with open(out_dir / "summary.json", "w") as f:
+        json.dump(
+            {k: v for k, v in summary.items() if k not in ("video_mp4s", "segments")}, f, indent=4
+        )
+    return summary
+
+
+def main() -> None:
+    args = parse_args()
+
+    out_dir = args.model_path.parent / "closed_loop" / datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    knobs = _eval_knobs(args)
+
+    import torch
+
+    from scenario_generation.closed_loop_eval import enumerate_routes, resolve_npz_roots
+
+    # One worker process per visible GPU (respecting CUDA_VISIBLE_DEVICES), capped at the route
+    # count so no worker gets an empty shard. Enumerate up front -- cheap globbing, no CUDA -- so the
+    # parent never initializes a CUDA context before spawn. 1 GPU or 1 route => plain sequential.
+    n_gpu = torch.cuda.device_count() if args.device.startswith("cuda") else 0
+    n_routes = sum(len(enumerate_routes(r)) for r in resolve_npz_roots(args.npz_root))
+    nproc = max(1, min(n_gpu, n_routes))
+
+    if nproc <= 1:
+        from scenario_generation.closed_loop_eval import run_closed_loop_eval
+
+        model, model_args = _load_model(args.model_path, args.device)
+        print(f"device: {args.device} | model: {args.model_path} | out: {out_dir}")
+        summary = run_closed_loop_eval(
+            model, model_args, args.npz_root, out_dir, device=args.device, verbose=True, **knobs
+        )
+    else:
+        import torch.multiprocessing as mp
+
+        gpu_ids = list(range(n_gpu))
+        print(
+            f"parallel closed-loop: {nproc} workers ({n_routes} routes) over GPUs {gpu_ids} | "
+            f"out: {out_dir}"
+        )
+        t0 = time.perf_counter()
+        mp.spawn(
+            _run_shard,
+            args=(nproc, gpu_ids, str(args.model_path), str(args.npz_root), str(out_dir), knobs),
+            nprocs=nproc,
+            join=True,
+        )
+        summary = _merge_shards(out_dir, args.npz_root, args.near_miss_thresh)
+        summary["elapsed_sec"] = time.perf_counter() - t0
+
     summary["model_path"] = str(args.model_path)
 
     n_seg = summary["n_segments"]

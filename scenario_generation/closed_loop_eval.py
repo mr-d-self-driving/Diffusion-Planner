@@ -14,6 +14,7 @@ the per-segment MP4 paths (for wandb upload).
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -23,6 +24,24 @@ import numpy as np
 from scenario_generation.perf_timer import Timers
 from scenario_generation.reproducer_rollout import render_segment
 from scenario_generation.route_timeline import RouteTimeline, group_routes
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def route_label(npz_path: Path, key: str) -> str:
+    """Human-readable route label ``<location>_<date>_<key>`` for video/PNG names.
+
+    Dataset routes are laid out ``.../<location>/<split>/<date>/<time>/routes/<time>_<idx>_<frame>``
+    -- the bag-prefix ``key`` (``<time>_<idx>``) alone drops the depot/site and date, which makes the
+    per-segment MP4 names ambiguous. This prepends ``<location>`` (the dir two levels above the
+    ``YYYY-MM-DD`` date component) and ``<date>``. Falls back to bare ``key`` for any path that does
+    not match that layout (e.g. a flat single-dir npz tree).
+    """
+    parts = npz_path.parts
+    date_idx = next((i for i, p in enumerate(parts) if _DATE_RE.match(p)), None)
+    if date_idx is not None and date_idx >= 2:
+        return f"{parts[date_idx - 2]}_{parts[date_idx]}_{key}"
+    return key
 
 
 def enumerate_routes(npz_root: Path) -> dict[str, list[Path]]:
@@ -149,8 +168,16 @@ def run_closed_loop_eval(
     unstick_teleport_after: int = 300,
     tracker_mode: str = "mpc",
     verbose: bool = True,
+    shard: tuple[int, int] | None = None,
 ) -> dict:
     """Render closed-loop rollouts over every route under ``npz_root`` and aggregate metrics.
+
+    ``shard=(rank, world_size)`` restricts this call to the ``rank``-th slice of the sorted route
+    list (``route_keys[rank::world_size]``) and writes its rows to ``segments_{rank}.jsonl`` instead
+    of the merged ``segments.jsonl``/``summary.json`` -- the route-level multi-GPU parallel driver in
+    ``valid_predictor_closed_loop.py`` spawns one such call per worker (route keys are globally
+    unique, so all shards share ``out_dir`` for the per-segment PNG dirs and MP4s without collision).
+    The returned summary is then per-shard; the parent merges the ``segments_*.jsonl`` rows.
 
     ``model`` must be an eval-mode Diffusion-Planner (callable ``model(data) -> (_, outputs)`` with
     ``outputs["prediction"]``); ``model_args`` provides ``observation_normalizer`` /
@@ -176,19 +203,26 @@ def run_closed_loop_eval(
     route_sidecar_dir: dict[str, Path] = {}
     for root in roots:
         for key, paths in enumerate_routes(root).items():
-            uniq, n = key, 1
+            # Key each route by its <location>_<date>_<time>_<idx> label so the per-segment PNG dirs
+            # and MP4s carry the site + date, not just the ambiguous time-of-day bag prefix.
+            label = route_label(paths[0], key)
+            uniq, n = label, 1
             while uniq in routes:
-                uniq, n = f"{key}#{n}", n + 1
+                uniq, n = f"{label}#{n}", n + 1
             routes[uniq] = paths
             route_sidecar_dir[uniq] = root
     route_keys = sorted(routes)
+    if shard is not None:
+        rank, world_size = shard
+        route_keys = route_keys[rank::world_size]
 
     timers = Timers()
     rows: list[dict] = []
     video_mp4s: list[Path] = []
     t0 = time.perf_counter()
 
-    fout = open(out_dir / "segments.jsonl", "w")
+    segments_name = "segments.jsonl" if shard is None else f"segments_{shard[0]}.jsonl"
+    fout = open(out_dir / segments_name, "w")
     try:
         for ri, key in enumerate(route_keys):
             tl = RouteTimeline(routes[key], sidecar_dir=route_sidecar_dir[key], timers=timers)
@@ -251,9 +285,14 @@ def run_closed_loop_eval(
     summary["video_mp4s"] = video_mp4s
     summary["segments"] = rows
 
-    with open(out_dir / "summary.json", "w") as f:
-        json.dump(
-            {k: v for k, v in summary.items() if k not in ("video_mp4s", "segments")}, f, indent=4
-        )
+    # A sharded worker leaves the merged summary.json to the parent driver (which aggregates every
+    # shard's segments_*.jsonl); it only owns its own segments_{rank}.jsonl, written above.
+    if shard is None:
+        with open(out_dir / "summary.json", "w") as f:
+            json.dump(
+                {k: v for k, v in summary.items() if k not in ("video_mp4s", "segments")},
+                f,
+                indent=4,
+            )
 
     return summary
