@@ -47,8 +47,9 @@ def parse_args() -> argparse.Namespace:
         "--npz_root",
         type=Path,
         required=True,
-        help="dir tree of route NPZ frames (recursively globbed, grouped into routes). "
-        "Pose JSON sidecars are read from next to each .npz, falling back to this same tree.",
+        help="dir tree of route NPZ frames (recursively globbed, grouped into routes), OR a .json "
+        "path list of such dirs (one route dir per entry, like --train_set_list). Pose JSON "
+        "sidecars are read from next to each .npz, falling back to its own source tree.",
     )
     # --- tunable knobs (default to the closed-loop mining config) ---
     p.add_argument("--seg_len", type=int, default=6000, help="frames per segment (~60s @10Hz)")

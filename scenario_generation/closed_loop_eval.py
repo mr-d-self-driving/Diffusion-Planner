@@ -33,6 +33,25 @@ def enumerate_routes(npz_root: Path) -> dict[str, list[Path]]:
     return group_routes(paths)
 
 
+def resolve_npz_roots(npz_root) -> list[Path]:
+    """Resolve a closed-loop npz input into the list of root directories to enumerate.
+
+    The input is either a single directory tree of NPZ frames (globbed recursively), or a
+    ``.json`` file holding a list of such directory paths (one route dir per entry) -- the same
+    "path list" form as ``--train_set_list`` / ``--valid_set_list``. A directory is returned as a
+    one-element list; a JSON list is returned verbatim (each entry a ``Path``).
+    """
+    npz_root = Path(npz_root)
+    if npz_root.suffix == ".json":
+        entries = json.loads(npz_root.read_text())
+        if not isinstance(entries, list) or not all(isinstance(e, str) for e in entries):
+            raise ValueError(f"{npz_root} must be a JSON list of directory paths")
+        if not entries:
+            raise ValueError(f"{npz_root} is an empty path list")
+        return [Path(e) for e in entries]
+    return [npz_root]
+
+
 def aggregate(rows: list[dict], near_miss_thresh: float) -> dict:
     """Aggregate per-segment metric rows into a single closed-loop summary."""
     n_seg = len(rows)
@@ -146,11 +165,22 @@ def run_closed_loop_eval(
     Returns the summary dict with extra keys ``video_mp4s`` (list[Path] of every per-segment MP4),
     ``segments`` (list[row]), and ``elapsed_sec``.
     """
-    npz_root = Path(npz_root)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    routes = enumerate_routes(npz_root)
+    # npz_root is either one directory tree or a JSON path list of route dirs; enumerate each and
+    # merge, disambiguating any bag-prefix key that collides across roots and remembering the source
+    # root of each route so its pose-sidecar fallback stays scoped to that tree.
+    roots = resolve_npz_roots(npz_root)
+    routes: dict[str, list[Path]] = {}
+    route_sidecar_dir: dict[str, Path] = {}
+    for root in roots:
+        for key, paths in enumerate_routes(root).items():
+            uniq, n = key, 1
+            while uniq in routes:
+                uniq, n = f"{key}#{n}", n + 1
+            routes[uniq] = paths
+            route_sidecar_dir[uniq] = root
     route_keys = sorted(routes)
 
     timers = Timers()
@@ -161,7 +191,7 @@ def run_closed_loop_eval(
     fout = open(out_dir / "segments.jsonl", "w")
     try:
         for ri, key in enumerate(route_keys):
-            tl = RouteTimeline(routes[key], sidecar_dir=npz_root, timers=timers)
+            tl = RouteTimeline(routes[key], sidecar_dir=route_sidecar_dir[key], timers=timers)
             n_seg_videos = 0
             for start, end in tl.iter_segments(seg_len):
                 png_dir = out_dir / f"{key}_{start}_{end}"
