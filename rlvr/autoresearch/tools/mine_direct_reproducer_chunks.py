@@ -789,7 +789,7 @@ def main() -> None:
         if realized_reward_finalize is not None:
             realized_reward_finalize()
         for chunk, result in zip(kept_chunks, results):
-            row = {**_chunk_row(chunk), **result.metrics}
+            row = {**_chunk_row(chunk), **result}
             fout.write(json.dumps(row, sort_keys=True, default=float) + "\n")
             n_simulated += 1
         fout.flush()
