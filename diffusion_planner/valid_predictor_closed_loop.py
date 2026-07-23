@@ -95,8 +95,9 @@ def parse_args() -> argparse.Namespace:
         "--yaw_gate",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="drop recorded frames whose heading differs from live ego by more than pi/2 "
-        "(threshold fixed at pi/2; --no-yaw_gate disables)",
+        help="pose mode only: drop recorded frames whose heading differs from live ego by "
+        "more than pi/2 (threshold fixed at pi/2; --no-yaw-gate disables). No-op in clock "
+        "mode, which never calls cursor.step (closed-loop/R2LPL default)",
     )
     p.add_argument("--fps", type=int, default=10, help="output video frame rate (10 = realtime)")
     p.add_argument(

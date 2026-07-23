@@ -245,6 +245,53 @@ def test_clock_mode_unstick_is_speed_only(tmp_path):
     assert s.snap_count == 1
 
 
+def test_clock_mode_unstick_via_pre_step_loop(tmp_path, monkeypatch):
+    """End-to-end: stalled clock rollout through ``_pre_step`` + ``_advance_step`` teleports.
+
+    The previous clock-mode regression was that the run loop never escalated; driving
+    ``_advance_step`` alone does not cover that path. This locks the fix by going through
+    the clock branch of ``_pre_step`` (credits ``normal_steps``, never sets ``repeat``)
+    before each advance.
+    """
+    from scenario_generation import reproducer_rollout as rr
+
+    tl = _make_route(tmp_path)
+    timers = Timers()
+    s = _seed_state(
+        tl,
+        0,
+        N_FRAMES,
+        search_radius=1.5,
+        warmup_steps=1000,
+        near_miss_thresh=0.5,
+        goal_reach_m=0.0,
+        max_stuck_steps=0,
+        timers=timers,
+        max_steps=1000,
+        unstick_after=3,
+        unstick_advance_m=0.05,
+        unstick_radius_mult=1.0,  # skip widen; teleport at unstick_after
+        unstick_teleport_after=5,
+        replay_mode="clock",
+        neighbor_history_mode="recorded",
+    )
+    monkeypatch.setattr(
+        rr,
+        "build_input_np",
+        lambda *a, **k: ({"turn_indicators": np.zeros((1, 31), dtype=np.int64)}, np.zeros((1, 11))),
+    )
+    pred = np.zeros((80, 4), dtype=np.float32)
+    assert s.cursor.last_was_repeat is False
+    for i in range(3):
+        out = rr._pre_step(s)
+        assert out is not None
+        _np_dict, _neighbors_live, idx, *_rest = out
+        rr._advance_step(s, pred, idx=idx, device="cpu", timers=timers)
+    assert s.snap_count == 1
+    assert s.cursor.normal_steps == 3
+    assert s.cursor.repeat_steps == 0
+
+
 def test_clock_pre_step_counts_normal_steps(tmp_path, monkeypatch):
     """Each clock tick updates cursor normal_steps even though cursor.step is bypassed."""
     from scenario_generation import reproducer_rollout as rr
