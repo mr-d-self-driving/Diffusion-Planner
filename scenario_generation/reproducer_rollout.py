@@ -719,9 +719,7 @@ def _pre_step(s: _SegState, gpu_transform: bool = False):
         # advancement so normal_steps / repeat_steps match executed steps.
         s.cursor._update_base_state(repeat=False)
     else:
-        idx = s.cursor.step(
-            s.live_pose[:2], s.dyn.speed, s.sim_time, sim_yaw=float(s.live_pose[2])
-        )
+        idx = s.cursor.step(s.live_pose[:2], s.dyn.speed, s.sim_time, sim_yaw=float(s.live_pose[2]))
         if s.cursor.max_idx_reached > s.prev_max_idx:
             s.prev_max_idx, s.stuck = s.cursor.max_idx_reached, 0
         else:
