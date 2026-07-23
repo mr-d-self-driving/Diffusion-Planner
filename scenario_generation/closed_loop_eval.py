@@ -137,7 +137,8 @@ def _pool_clearance(rows: list[dict], category: str) -> dict[str, float]:
         mean = block["clearance_mean_m"]
         p5 = block["clearance_p5_m"]
         digest = block.get(TDIGEST_KEY)
-        n = int(r["n_steps_run"])
+        # Weight by finite clearance samples only (not n_steps_run, which includes inf steps).
+        n = int(block.get("clearance_finite_steps", 0))
         if np.isfinite(mn):
             mins.append(float(mn))
         if np.isfinite(mean) and n > 0:
@@ -172,6 +173,16 @@ def metrics_for_json(metrics: dict) -> dict:
         return obj
 
     return _clean(metrics)
+
+
+def segment_row_for_json(metrics: dict, **extra) -> dict:
+    """Merge cleaned metrics with caller extras (no ``_tdigest``) for segments.jsonl.
+
+    Shared by closed-loop eval and R2LPL mining writers so human-readable rows stay
+    consistent. Digests still leave via ``tdigest_sidecar_row`` when the caller wants them.
+    Caller ``extra`` keys override cleaned metrics on collision (e.g. ``route=...``).
+    """
+    return {**metrics_for_json(metrics), **extra}
 
 
 def tdigest_sidecar_row(metrics: dict) -> dict | None:
@@ -485,7 +496,7 @@ def run_closed_loop_eval(
             row = {"route": key, **metrics}
             # Human-readable segments.jsonl (no _tdigest blobs). Digests go to a sidecar so
             # multi-GPU parents can still merge approximate global clearance p5.
-            fout.write(json.dumps(metrics_for_json(row), default=float) + "\n")
+            fout.write(json.dumps(segment_row_for_json(metrics, route=key), default=float) + "\n")
             fout.flush()
             side = tdigest_sidecar_row(row)
             if side is not None:

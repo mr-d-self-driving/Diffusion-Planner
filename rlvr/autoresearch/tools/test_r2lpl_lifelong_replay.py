@@ -658,11 +658,9 @@ def test_mine_direct_main_forwards_realized_hard_event_scorer(monkeypatch, tmp_p
         captured["realized_event_scorer"] = kwargs.get("realized_event_scorer")
         captured["danger_scorer"] = kwargs.get("danger_scorer")
         return [
-            SimpleNamespace(
-                metrics={
-                    "object": {"collision_steps": 1, "clearance_min_m": -0.1},
-                }
-            )
+            {
+                "object": {"collision_steps": 1, "clearance_min_m": -0.1},
+            }
         ]
 
     chunk = Chunk(
@@ -1749,6 +1747,12 @@ def test_verify_credit_rollout_saves_first_realized_event_window(monkeypatch, tm
             ego_shape=np.ones(3, dtype=np.float32),
             clearances=np.full(8, np.inf, dtype=np.float32),
             collisions=np.zeros(8, dtype=bool),
+            rb_dists=np.full(8, np.inf, dtype=np.float32),
+            red_light=np.zeros(8, dtype=bool),
+            accels=np.zeros(8, dtype=np.float32),
+            strong_brake_mps2=-2.5,
+            dyn=SimpleNamespace(speed=0.0),
+            ego_hist=np.zeros((31, 3), dtype=np.float64),
             k=0,
             done=False,
             terminated="max_steps",
@@ -1802,8 +1806,8 @@ def test_verify_credit_rollout_saves_first_realized_event_window(monkeypatch, tm
     def _fake_advance_step(s, pred, idx, device, timers):
         s.k += 1
 
-    def _fake_finalize(s, timers):
-        return SimpleNamespace(metrics={"n_steps_run": s.k})
+    def _fake_finalize(s, *args, **kwargs):
+        return {"n_steps_run": s.k}
 
     def _fake_dump_credit_window(*args, **kwargs):
         calls.append(
@@ -1904,6 +1908,12 @@ def test_direct_danger_window_saves_realized_moving_collision(monkeypatch, tmp_p
             replay_mode="clock",
             clearances=np.full(max_steps + 1, np.inf, dtype=np.float32),
             collisions=np.zeros(max_steps + 1, dtype=bool),
+            rb_dists=np.full(max_steps + 1, np.inf, dtype=np.float32),
+            red_light=np.zeros(max_steps + 1, dtype=bool),
+            accels=np.zeros(max_steps + 1, dtype=np.float32),
+            strong_brake_mps2=-2.5,
+            dyn=SimpleNamespace(speed=0.0),
+            ego_hist=np.zeros((31, 3), dtype=np.float64),
             near_miss_thresh=near_miss_thresh,
             ego_shape=np.ones(3, dtype=np.float32),
             live_pose=np.zeros(3, dtype=np.float32),
@@ -1962,8 +1972,8 @@ def test_direct_danger_window_saves_realized_moving_collision(monkeypatch, tmp_p
     def _fake_advance_step(s, pred, idx, device, timers):
         s.k += 1
 
-    def _fake_finalize(s, timers):
-        return SimpleNamespace(metrics={"n_steps_run": s.k})
+    def _fake_finalize(s, *args, **kwargs):
+        return {"n_steps_run": s.k}
 
     def _fake_dump_credit_window(*args, **kwargs):
         calls.append(
@@ -2049,6 +2059,12 @@ def test_direct_danger_window_saves_raw_collision_when_scorers_miss(monkeypatch,
             replay_mode="clock",
             clearances=np.full(max_steps + 1, np.inf, dtype=np.float32),
             collisions=np.zeros(max_steps + 1, dtype=bool),
+            rb_dists=np.full(max_steps + 1, np.inf, dtype=np.float32),
+            red_light=np.zeros(max_steps + 1, dtype=bool),
+            accels=np.zeros(max_steps + 1, dtype=np.float32),
+            strong_brake_mps2=-2.5,
+            dyn=SimpleNamespace(speed=0.0),
+            ego_hist=np.zeros((31, 3), dtype=np.float64),
             near_miss_thresh=near_miss_thresh,
             ego_shape=np.ones(3, dtype=np.float32),
             live_pose=np.zeros(3, dtype=np.float32),
@@ -2093,8 +2109,8 @@ def test_direct_danger_window_saves_raw_collision_when_scorers_miss(monkeypatch,
     def _fake_advance_step(s, pred, idx, device, timers):
         s.k += 1
 
-    def _fake_finalize(s, timers):
-        return SimpleNamespace(metrics={"n_steps_run": s.k})
+    def _fake_finalize(s, *args, **kwargs):
+        return {"n_steps_run": s.k}
 
     def _fake_dump_credit_window(*args, **kwargs):
         calls.append({"out_dir": args[0], "label": args[10]})

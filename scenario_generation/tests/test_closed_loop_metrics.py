@@ -27,7 +27,54 @@ def test_clearance_stats_p5():
     assert stats["clearance_min_m"] == 1.0
     assert abs(stats["clearance_mean_m"] - 50.5) < 1e-5
     assert abs(stats["clearance_p5_m"] - 5.95) < 0.1
+    assert stats["clearance_finite_steps"] == 100
     assert "_tdigest" in stats
+    empty = _clearance_stats(np.full(4, np.inf, dtype=np.float32))
+    assert empty["clearance_finite_steps"] == 0
+    assert empty["clearance_mean_m"] == float("inf")
+
+
+def test_pool_clearance_weights_by_finite_steps():
+    """Pooled mean must weight by finite clearance samples, not n_steps_run."""
+    from scenario_generation.metrics.tdigest import TDIGEST_KEY, tdigest_dict_from_values
+
+    dense = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+    sparse = np.array([10.0], dtype=np.float32)
+    row_dense = _segment_row(
+        route="dense",
+        n_steps_run=100,
+        object={
+            "miss_thresh_m": 0.5,
+            "collision_steps": 0,
+            "collision_count": 0,
+            "miss_steps": 0,
+            "miss_count": 0,
+            "clearance_min_m": float(dense.min()),
+            "clearance_mean_m": float(dense.mean()),
+            "clearance_p5_m": float(np.percentile(dense, 5)),
+            "clearance_finite_steps": int(dense.size),
+            TDIGEST_KEY: tdigest_dict_from_values(dense),
+        },
+    )
+    row_sparse = _segment_row(
+        route="sparse",
+        n_steps_run=100,
+        object={
+            "miss_thresh_m": 0.5,
+            "collision_steps": 0,
+            "collision_count": 0,
+            "miss_steps": 0,
+            "miss_count": 0,
+            "clearance_min_m": float(sparse.min()),
+            "clearance_mean_m": float(sparse.mean()),
+            "clearance_p5_m": float(np.percentile(sparse, 5)),
+            "clearance_finite_steps": int(sparse.size),
+            TDIGEST_KEY: tdigest_dict_from_values(sparse),
+        },
+    )
+    summary = aggregate([row_dense, row_sparse], near_miss_thresh=0.5, strong_brake_mps2=-2.5)
+    # (1*4 + 10*1) / 5 = 2.8 — not the equal-weight 5.5 from n_steps_run.
+    assert abs(summary["object"]["clearance_mean_m"] - 2.8) < 1e-6
 
 
 def test_ego_traj_ego_frame_uses_real_hist():
@@ -136,6 +183,7 @@ def _segment_row(**overrides) -> dict:
             "clearance_min_m": 0.1,
             "clearance_mean_m": float(obj_vals.mean()),
             "clearance_p5_m": float(np.percentile(obj_vals, 5)),
+            "clearance_finite_steps": int(obj_vals.size),
             TDIGEST_KEY: tdigest_dict_from_values(obj_vals),
         },
         "road_border": {
@@ -147,6 +195,7 @@ def _segment_row(**overrides) -> dict:
             "clearance_min_m": 0.2,
             "clearance_mean_m": float(rb_vals.mean()),
             "clearance_p5_m": float(np.percentile(rb_vals, 5)),
+            "clearance_finite_steps": int(rb_vals.size),
             TDIGEST_KEY: tdigest_dict_from_values(rb_vals),
         },
         "red_light_violation": {"steps": 1, "count": 1},
@@ -259,6 +308,17 @@ def test_merge_shards_defers_summary_write(tmp_path):
     assert written["model_path"] == "/tmp/model.pth"
     assert written["strong_brake"]["thresh_mps2"] == -2.5
     assert np.isfinite(written["object"]["clearance_p5_m"])
+
+
+def test_segment_row_for_json_strips_tdigest():
+    from scenario_generation.closed_loop_eval import segment_row_for_json
+    from scenario_generation.metrics.tdigest import TDIGEST_KEY
+
+    row = segment_row_for_json(_segment_row(), route="r0", chunk_id="c1")
+    assert row["route"] == "r0"
+    assert row["chunk_id"] == "c1"
+    assert TDIGEST_KEY not in row["object"]
+    assert TDIGEST_KEY not in row["road_border"]
 
 
 def test_event_count_debounce_unchanged():

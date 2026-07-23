@@ -35,6 +35,7 @@ from rlvr.autoresearch.tools.reproducer_danger_scorer import (
     build_reproducer_danger_scorer,
     load_credit_windows,
 )
+from scenario_generation.closed_loop_eval import segment_row_for_json
 from scenario_generation.perf_timer import Timers
 from scenario_generation.reproducer_rollout import run_segments_batched
 from scenario_generation.route_timeline import RouteTimeline, group_routes
@@ -373,7 +374,7 @@ def main() -> None:
             danger_decluster_steps=args.danger_decluster_steps,
         )
         for key, res in zip(buf_keys, res_list):
-            row = {"route": key, **res}
+            row = segment_row_for_json(res, route=key)
             fout.write(json.dumps(row, default=float) + "\n")
             _keep(row)
             n_seg += 1

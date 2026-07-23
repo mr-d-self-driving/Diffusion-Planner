@@ -393,6 +393,37 @@ def test_finalize_strong_brake_steps_and_count(tmp_path):
     assert abs(metrics["strong_brake"]["strongest_mps2"] - (-4.5)) < 1e-6
 
 
+def test_finalize_road_border_collision_thresh(tmp_path):
+    """Unsigned curb distance < 0.1 m is a collision; (0.1, miss_thresh] is miss-only."""
+    from scenario_generation.reproducer_rollout import _finalize
+
+    tl = _make_route(tmp_path)
+    timers = Timers()
+    s = _seed_state(
+        tl,
+        0,
+        N_FRAMES,
+        search_radius=1.5,
+        warmup_steps=0,
+        near_miss_thresh=0.5,
+        goal_reach_m=0.0,
+        max_stuck_steps=0,
+        timers=timers,
+        max_steps=1000,
+        strong_brake_mps2=-2.5,
+    )
+    s.k = 4
+    # 0.05 -> collision+miss; 0.2 -> miss only; 0.6 -> neither; inf -> neither
+    s.rb_dists[:4] = np.array([0.05, 0.2, 0.6, np.inf], dtype=np.float32)
+    metrics = _finalize(s)
+    rb = metrics["road_border"]
+    assert rb["collision_steps"] == 1
+    assert rb["collision_count"] == 1
+    assert rb["miss_steps"] == 2
+    assert rb["miss_count"] == 1
+    assert "collision_thresh_m" not in rb
+
+
 def test_index_ahead_by_arc_length(tmp_path):
     """Teleport target index is chosen by cumulative BAG arc length, not Euclidean
     distance from the live ego (Autoware ``find_perturb_index_along_bag`` parity)."""

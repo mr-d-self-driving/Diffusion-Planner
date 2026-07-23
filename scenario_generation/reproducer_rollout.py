@@ -54,6 +54,9 @@ STUCK_SPEED_MPS = 0.5
 # Falling-edge debounce for ``*_count`` metrics: once an event starts, fewer than this many
 # consecutive False steps do not end it (threshold flicker does not re-count).
 EVENT_COUNT_CLEAR_FRAMES = 3
+# Unsigned curb distance below this (m) counts as a road-border collision in ``_finalize``.
+# Hardcoded (not RewardConfig.rb_cross_thresh): closed-loop metrics use unsigned clearance.
+RB_COLLISION_THRESH_M = 0.1
 
 
 def _credit_window_width_frames(spec: dict | None, fallback: int) -> int:
@@ -839,11 +842,13 @@ def _clearance_stats(values: np.ndarray) -> dict:
             "clearance_min_m": float("inf"),
             "clearance_mean_m": float("inf"),
             "clearance_p5_m": float("inf"),
+            "clearance_finite_steps": 0,
         }
     out = {
         "clearance_min_m": float(finite.min()),
         "clearance_mean_m": float(finite.mean()),
         "clearance_p5_m": float(np.percentile(finite, 5)),
+        "clearance_finite_steps": int(finite.size),
     }
     digest = tdigest_dict_from_values(finite)
     if digest is not None:
@@ -860,7 +865,7 @@ def _finalize(s: _SegState) -> dict:
     obj_coll = s.collisions[: s.k]
     obj_miss = finite & (cl <= s.near_miss_thresh)
     rb_finite = np.isfinite(rb)
-    rb_coll = rb_finite & (rb <= 0.0)
+    rb_coll = rb_finite & (rb < RB_COLLISION_THRESH_M)
     rb_miss = rb_finite & (rb <= s.near_miss_thresh)
     red_mask = s.red_light[: s.k]
     brake_mask = strong_brake_mask(accels, thresh_mps2=float(s.strong_brake_mps2))
