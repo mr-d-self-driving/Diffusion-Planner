@@ -1562,7 +1562,9 @@ def render_segment(
                     if np.isfinite(s.clearances[k])
                     else None,
                     "collision": bool(s.collisions[k]),
-                    "rb_dist_m": round(float(s.rb_dists[k]), 4) if np.isfinite(s.rb_dists[k]) else None,
+                    "rb_dist_m": round(float(s.rb_dists[k]), 4)
+                    if np.isfinite(s.rb_dists[k])
+                    else None,
                     "gt_deviation_m": round(gt_deviation_m, 3),
                 }
             )

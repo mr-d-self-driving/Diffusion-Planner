@@ -326,9 +326,7 @@ def aggregate(
         if np.isfinite(r.get("mean_gt_deviation_m", float("inf")))
     )
     dev_den = sum(
-        r["n_steps_run"]
-        for r in rows
-        if np.isfinite(r.get("mean_gt_deviation_m", float("inf")))
+        r["n_steps_run"] for r in rows if np.isfinite(r.get("mean_gt_deviation_m", float("inf")))
     )
 
     term_counts: dict[str, int] = {}
