@@ -19,12 +19,26 @@ from typing import Any
 
 import numpy as np
 
-METRIC_CHOICES = ("clearance", "collision", "near_miss", "speed", "road_border")
+METRIC_CHOICES = (
+    "clearance",
+    "collision",
+    "near_miss",
+    "speed",
+    "road_border",
+    "red_light",
+    "strong_brake",
+)
+
+# Fixed sim step (must match reproducer_rollout.DT) -- rollout.jsonl rows are one per sim step
+# regardless of draw_every/replan_interval, so consecutive "speed" samples are always DT apart.
+# Kept as a local constant (not imported from reproducer_rollout) so this module stays free of
+# reproducer_rollout's heavier deps (torch, etc.).
+_DT = 0.1
 
 # Binary metrics only ever take 2 colors (event happened / didn't) — a colorbar with 2 ticks
 # adds clutter without adding information the title ("metric: collision") doesn't already
 # give, so it's skipped for these.
-_BINARY_METRICS = ("collision", "near_miss")
+_BINARY_METRICS = ("collision", "near_miss", "red_light", "strong_brake")
 
 # Short colorbar axis label. The ticks themselves (see _risk_and_ticks) carry the actual
 # units/values — qualitative low/medium/high/very high labels alone aren't legible without
@@ -35,6 +49,8 @@ _METRIC_AXIS_LABELS = {
     "near_miss": "",
     "speed": "ego speed (m/s)",
     "road_border": "distance to road border (m)",
+    "red_light": "",
+    "strong_brake": "",
 }
 
 
@@ -63,7 +79,10 @@ def load_step_trace(png_dir: str | Path) -> list[dict[str, Any]]:
 
 
 def _risk_and_ticks(
-    rows: list[dict[str, Any]], metric: str, near_miss_thresh: float
+    rows: list[dict[str, Any]],
+    metric: str,
+    near_miss_thresh: float,
+    strong_brake_mps2: float = -2.5,
 ) -> tuple[np.ndarray, list[float], list[str]]:
     """Map each step's raw metric to a [0, 1] risk scalar (0=safe, 1=very high risk) for
     coloring, plus (tick_positions, tick_labels) carrying the actual real-world value at
@@ -115,6 +134,29 @@ def _risk_and_ticks(
         ticks = [0.0, 0.33, 0.66, 1.0]
         labels = [f"{cap * (1.0 - t):.2f}m" for t in ticks]
         return risk, ticks, labels
+    if metric == "red_light":
+        risk = np.array(
+            [1.0 if r.get("red_light_violation") else 0.0 for r in rows], dtype=np.float64
+        )
+        return risk, [0.0, 1.0], ["no violation", "red light violation"]
+    if metric == "strong_brake":
+        # accel isn't logged per-step directly -- derive it the same way reproducer_rollout
+        # does (accel = d(speed)/DT between consecutive steps), then reapply the same
+        # two-consecutive-frame rule as scenario_generation.metrics.strong_brake.strong_brake_mask
+        # (inlined rather than imported -- that module drags in scenario_generation.metrics'
+        # package __init__, which pulls in torch/diffusion_planner.model transitively, and this
+        # module stays import-light for wandb_closed_loop_workspace.py's standalone CLI).
+        speeds = np.array([r.get("speed", 0.0) for r in rows], dtype=np.float64)
+        accels = np.diff(speeds) / _DT if speeds.size > 1 else np.zeros(0, dtype=np.float64)
+        accels = np.append(accels, accels[-1] if accels.size else 0.0)  # align length with rows
+        raw = accels <= float(strong_brake_mps2)
+        risk = np.zeros_like(raw, dtype=np.float64)
+        risk[1:] = (raw[:-1] & raw[1:]).astype(np.float64)
+        return (
+            risk,
+            [0.0, 1.0],
+            ["no strong brake", f"accel <= {strong_brake_mps2:.2f} m/s²"],
+        )
     raise ValueError(f"Unknown colormap metric: {metric!r} (choices: {METRIC_CHOICES})")
 
 
@@ -124,6 +166,7 @@ def render_trajectory_colormap(
     *,
     metric: str = "clearance",
     near_miss_thresh: float = 0.5,
+    strong_brake_mps2: float = -2.5,
     title: str | None = None,
     dpi: int = 110,
 ) -> Path | None:
@@ -132,7 +175,8 @@ def render_trajectory_colormap(
     ``metric``: ``"clearance"`` (default; small clearance -> red/"very high"),
     ``"collision"`` (binary), ``"near_miss"`` (binary, clearance <= near_miss_thresh),
     ``"speed"``, ``"road_border"`` (distance to the nearest road/lane border, same scale
-    scheme as ``"clearance"``; ``None`` on frames with no lane geometry -> treated as safe).
+    scheme as ``"clearance"``; ``None`` on frames with no lane geometry -> treated as safe),
+    ``"red_light"`` (binary), ``"strong_brake"`` (binary, accel <= ``strong_brake_mps2``).
     Returns ``out_png`` on success, or ``None`` if there was no per-step trace to draw
     (e.g. a 0-frame segment, or an old run predating the trace fields).
     """
@@ -147,7 +191,9 @@ def render_trajectory_colormap(
     from matplotlib.collections import LineCollection
 
     xy = np.array([r["ego"] for r in rows], dtype=np.float64)
-    risk, tick_positions, tick_labels = _risk_and_ticks(rows, metric, near_miss_thresh)
+    risk, tick_positions, tick_labels = _risk_and_ticks(
+        rows, metric, near_miss_thresh, strong_brake_mps2
+    )
 
     segments = np.concatenate([xy[:-1, None, :], xy[1:, None, :]], axis=1)
     seg_risk = (risk[:-1] + risk[1:]) / 2.0
@@ -240,6 +286,7 @@ def render_trajectory_colormaps(
     *,
     metrics: tuple[str, ...] = METRIC_CHOICES,
     near_miss_thresh: float = 0.5,
+    strong_brake_mps2: float = -2.5,
     title: str | None = None,
     dpi: int = 110,
 ) -> dict[str, Path]:
@@ -259,6 +306,7 @@ def render_trajectory_colormaps(
             Path(out_dir) / f"{stem}_trajcolormap_{metric}.png",
             metric=metric,
             near_miss_thresh=near_miss_thresh,
+            strong_brake_mps2=strong_brake_mps2,
             title=title,
             dpi=dpi,
         )
