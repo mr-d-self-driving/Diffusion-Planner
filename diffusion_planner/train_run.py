@@ -14,6 +14,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from diffusion_planner.scenario_based_open_loop.open_loop import (
+    load_scenario_based_open_loop_settings,
+)
 from run_utils import NCCL_ENV, gpu_count, tee_run
 
 
@@ -32,6 +35,11 @@ def parse_args() -> argparse.Namespace:
         help="optional: dir tree of route NPZ frames for closed-loop validation, OR a .json path "
         "list of such dirs (like --train_set_list). Empty = disabled.",
     )
+    p.add_argument(
+        "--scenario_based_open_loop_list",
+        default="",
+        help="optional JSON mapping Scenario-based Open-loop metric names to NPZ path lists. Empty = disabled.",
+    )
     return p.parse_args()
 
 
@@ -39,6 +47,9 @@ def main() -> None:
     args = parse_args()
 
     here = Path(__file__).resolve().parent
+    if args.scenario_based_open_loop_list:
+        load_scenario_based_open_loop_settings(args.scenario_based_open_loop_list)
+
     save_path = Path(args.output_root) / f"{datetime.now():%Y%m%d-%H%M%S}_{args.exp_name}"
     save_path.mkdir(parents=True, exist_ok=True)
 
@@ -88,6 +99,10 @@ def main() -> None:
         "10",
         "--closed_loop_npz_root",
         str(Path(args.closed_loop_npz_root).resolve()) if args.closed_loop_npz_root else "",
+        "--scenario_based_open_loop_list",
+        str(Path(args.scenario_based_open_loop_list).resolve())
+        if args.scenario_based_open_loop_list
+        else "",
         *optional,
     ]
     rc = tee_run(

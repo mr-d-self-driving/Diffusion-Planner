@@ -261,6 +261,30 @@ def get_args(args_list=None):
     parser.add_argument("--closed_loop_unstick_after", type=int, default=300)
     parser.add_argument("--closed_loop_unstick_advance_m", type=float, default=5.0)
 
+    # Scenario-based Open-loop validation. The list selects samples per metric; metric parameters
+    # are regular TrainConfig fields.
+    parser.add_argument(
+        "--scenario_based_open_loop_list",
+        type=str,
+        default="",
+        help="JSON mapping Scenario-based Open-loop metric names to NPZ path lists. Empty = disabled.",
+    )
+    parser.add_argument(
+        "--scenario_centerline_horizon_seconds",
+        type=float,
+        default=_train_config_default("scenario_centerline_horizon_seconds"),
+    )
+    parser.add_argument(
+        "--scenario_departure_horizon_seconds",
+        type=float,
+        default=_train_config_default("scenario_departure_horizon_seconds"),
+    )
+    parser.add_argument(
+        "--scenario_departure_minimum_displacement_m",
+        type=float,
+        default=_train_config_default("scenario_departure_minimum_displacement_m"),
+    )
+
     # Deterministic
     parser.add_argument(
         "--deterministic",
