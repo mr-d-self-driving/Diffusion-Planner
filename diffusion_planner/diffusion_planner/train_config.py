@@ -195,7 +195,15 @@ class TrainConfig:
     # "first" / "longest".
     closed_loop_wandb_video_pick: str = "worst"
     closed_loop_colormap_metrics: list[str] = field(
-        default_factory=lambda: ["clearance", "collision", "near_miss", "speed", "road_border"]
+        default_factory=lambda: [
+            "clearance",
+            "collision",
+            "near_miss",
+            "speed",
+            "road_border",
+            "red_light",
+            "strong_brake",
+        ]
     )
     closed_loop_report_base_url: str = ""
 

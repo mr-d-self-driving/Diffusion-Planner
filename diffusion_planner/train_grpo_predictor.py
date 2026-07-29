@@ -408,8 +408,24 @@ def get_args():
     parser.add_argument(
         "--closed_loop_colormap_metrics",
         nargs="*",
-        choices=("clearance", "collision", "near_miss", "speed", "road_border"),
-        default=["clearance", "collision", "near_miss", "speed", "road_border"],
+        choices=(
+            "clearance",
+            "collision",
+            "near_miss",
+            "speed",
+            "road_border",
+            "red_light",
+            "strong_brake",
+        ),
+        default=[
+            "clearance",
+            "collision",
+            "near_miss",
+            "speed",
+            "road_border",
+            "red_light",
+            "strong_brake",
+        ],
         help="per-step metrics rendered as trajectory-colormap images for the wandb "
         "representative episode (one image each — cheap, unlike video/episode picking, so "
         "all of them render by default)",

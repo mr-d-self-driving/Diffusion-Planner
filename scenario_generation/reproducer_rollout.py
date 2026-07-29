@@ -1430,9 +1430,10 @@ def render_segment(
     fired this many times in one segment — repeated snapping is itself a sign of a bad rollout.
 
     Per-step ``rollout.jsonl`` lines (next to the PNGs) always include ``clearance_m``,
-    ``collision``, and ``rb_dist_m`` (ego-to-road-border distance; ``None`` when the frame
-    carries no lane geometry) alongside the ego pose — see
-    :mod:`scenario_generation.trajectory_colormap` for the trajectory-colormap consumer.
+    ``collision``, ``rb_dist_m`` (ego-to-road-border distance; ``None`` when the frame
+    carries no lane geometry), and ``red_light_violation`` alongside the ego pose — see
+    :mod:`scenario_generation.trajectory_colormap` for the trajectory-colormap consumer
+    (which also derives a "strong_brake" colormap from consecutive ``speed`` samples).
 
     ``drop_objects``: empty-world ablation — zero out ``neighbor_agents_past`` and
     ``static_objects`` (and the derived ``neighbors_live``) every step, so the model sees no
@@ -1605,6 +1606,7 @@ def render_segment(
                     "rb_dist_m": round(float(s.rb_dists[k]), 4)
                     if np.isfinite(s.rb_dists[k])
                     else None,
+                    "red_light_violation": bool(s.red_light[k]),
                     "gt_deviation_m": round(gt_deviation_m, 3),
                 }
             )
