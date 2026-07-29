@@ -51,6 +51,7 @@ def collect_site_data(
             continue
         s = json.loads(summary_path.read_text(encoding="utf-8"))
         near_miss_thresh = s.get("near_miss_thresh", 0.5)
+        strong_brake_mps2 = s.get("strong_brake", {}).get("thresh_mps2", -2.5)
         summaries.append(
             {
                 "site": site_name,
@@ -94,6 +95,7 @@ def collect_site_data(
                             stem,
                             metrics=missing_metrics,
                             near_miss_thresh=near_miss_thresh,
+                            strong_brake_mps2=strong_brake_mps2,
                             title=f"{site_name} {stem}",
                         )
                     except (

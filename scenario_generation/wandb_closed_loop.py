@@ -211,6 +211,7 @@ def build_full_closed_loop_wandb_log(
                 mp4_path.stem,
                 metrics=colormap_metrics,
                 near_miss_thresh=near_miss_thresh,
+                strong_brake_mps2=summary.get("strong_brake", {}).get("thresh_mps2", -2.5),
                 title=f"{site or ''} {mp4_path.stem}".strip(),
             )
         except Exception as e:  # pragma: no cover - rendering must never break training
