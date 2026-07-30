@@ -219,10 +219,22 @@ def _run_shard(rank, num_workers, gpu_ids, model_path, npz_root, out_dir, knobs)
 def _merge_shards(
     out_dir: Path, npz_root, near_miss_thresh: float, *, strong_brake_mps2: float
 ) -> dict:
-    """Aggregate every worker's segments_{rank}.jsonl (+ tdigests sidecars) into one summary."""
-    from scenario_generation.closed_loop_eval import aggregate, load_segment_rows_with_tdigests
+    """Aggregate every worker's segments_{rank}.jsonl (+ tdigests sidecars) into one summary.
+
+    Also writes a merged, human-readable ``segments.jsonl`` (same tdigest-stripped shape the
+    sequential path writes) -- downstream consumers like closed_loop_html_report only look for
+    the unsharded filename, so without this a parallel-run site's videos never show up there.
+    """
+    from scenario_generation.closed_loop_eval import (
+        aggregate,
+        load_segment_rows_with_tdigests,
+        segment_row_for_json,
+    )
 
     rows = load_segment_rows_with_tdigests(out_dir)
+    with open(out_dir / "segments.jsonl", "w") as f:
+        for r in sorted(rows, key=lambda r: r["route"]):
+            f.write(json.dumps(segment_row_for_json(r, route=r["route"]), default=float) + "\n")
     summary = aggregate(rows, near_miss_thresh, strong_brake_mps2=strong_brake_mps2)
     summary["npz_root"] = str(npz_root)
     summary["n_routes"] = len({r["route"] for r in rows})
