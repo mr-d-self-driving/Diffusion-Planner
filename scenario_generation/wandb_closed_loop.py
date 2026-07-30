@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 
 import wandb
+
 from scenario_generation.closed_loop_score_keys import (
     COMPARISON_OVERVIEW_SUM_KEYS,
     OBJECTS_ONLY_OVERVIEW_SUM_KEYS,
