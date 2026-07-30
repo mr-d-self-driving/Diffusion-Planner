@@ -255,6 +255,7 @@ def _log_to_wandb(
     a link to the local report instead of uploading every video).
     """
     import wandb
+
     from scenario_generation.wandb_closed_loop import (
         build_combined_episode_table,
         build_full_closed_loop_wandb_log,
