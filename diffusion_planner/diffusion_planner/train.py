@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pandas as pd
 import torch
+import wandb
 from timm.utils import ModelEma
 from torch import optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
-import wandb
 from diffusion_planner.dimensions import *
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
 from diffusion_planner.scenario_based_open_loop.validate import scenario_based_open_loop_validate

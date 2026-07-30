@@ -14,6 +14,7 @@ import os
 import numpy as np
 import pandas as pd
 import torch
+import wandb
 from diffusion_planner.dimensions import *
 from diffusion_planner.grpo_epoch import train_grpo_epoch
 from diffusion_planner.model.diffusion_planner import Diffusion_Planner
@@ -35,8 +36,6 @@ from torch import optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 from valid_predictor import aggregate_valid_metrics, validate_model
-
-import wandb
 
 
 def boolean(v):
