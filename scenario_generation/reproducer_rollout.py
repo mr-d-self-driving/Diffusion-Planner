@@ -1474,10 +1474,12 @@ def render_segment(
     )
     # Build per-track interpolation anchors over the frames this render visits.
     # The cursor maps sim steps to recorded frames in ~[start, end]; a small
-    # margin covers any overrun without scanning the whole route.
+    # margin covers any overrun without scanning the whole route. Skipped under drop_objects:
+    # every neighbor row is zeroed before _apply_neighbor_interp runs and that function skips
+    # all-zero rows, so the anchors cannot be read.
     interp = (
         _build_neighbor_interp(tl, start, min(end + 100, len(tl)))
-        if interpolate and neighbor_history_mode != "sim"
+        if interpolate and neighbor_history_mode != "sim" and not drop_objects
         else {}
     )
     plan_world = None  # cached (world_xy(T,2), world_h(T,)) from the most recent inference
