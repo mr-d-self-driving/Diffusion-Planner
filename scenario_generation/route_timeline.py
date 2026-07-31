@@ -267,6 +267,10 @@ class RouteTimeline:
         """World ego pose [x, y, yaw] at recorded frame ``idx``."""
         return self.poses[idx]
 
+    def sidecar_path(self, idx: int) -> Path:
+        """The pose/track JSON this timeline resolved for recorded frame ``idx``."""
+        return self._sidecar_paths[idx]
+
     def neighbor_ids(self, idx: int) -> list[str]:
         """Per-neighbor track UUIDs (hex) for frame ``idx``, aligned to the
         neighbor_past slot order. Read from the sidecar's ``neighbor_ids`` field
